@@ -17,6 +17,11 @@ async function getRole(supabase: ReturnType<typeof createServerClient>, user: { 
 }
 
 export async function proxy(request: NextRequest) {
+  // If Supabase env vars aren't set (e.g. misconfigured deployment), pass through
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    return NextResponse.next({ request })
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
