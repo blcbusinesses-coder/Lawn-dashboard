@@ -16,7 +16,7 @@ export interface PropertyData {
 
 export async function lookupProperty(
   address: string,
-  actorId = 'maxcopell~zillow-scraper'
+  actorId = 'maxcopell~zillow-detail-scraper'
 ): Promise<PropertyData | null> {
   const apiKey = process.env.APIFY_API_KEY
   if (!apiKey) {

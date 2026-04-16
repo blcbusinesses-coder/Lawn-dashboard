@@ -24,7 +24,7 @@ INSERT INTO public.automation_settings (key, value, label) VALUES
   ('fallback_price',       '55'::jsonb,    'Fallback Price (unknown lot size)'),
   ('over_one_acre_price',  '165'::jsonb,   'Price for Lots Over 1 Acre'),
   ('sms_signature',        '"– Gray Wolf Workers 🐺"'::jsonb, 'SMS Signature'),
-  ('apify_actor',          '"maxcopell~zillow-scraper"'::jsonb, 'Apify Actor ID')
+  ('apify_actor',          '"maxcopell~zillow-detail-scraper"'::jsonb, 'Apify Actor ID')
 ON CONFLICT (key) DO NOTHING;
 
 -- Automation run logs
