@@ -1,12 +1,52 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { lookupProperty } from '@/lib/property/lookup'
-import { calculateQuote } from '@/lib/quote/calculate'
 import { openai } from '@/lib/openai/client'
 import { getTwilioClient, TWILIO_FROM } from '@/lib/twilio/client'
 import { NextRequest, NextResponse } from 'next/server'
 import { format } from 'date-fns'
+import type { Json } from '@/types/database'
 
-// POST /api/leads/[id]/quote — property lookup + quote calculation + SMS
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+interface PricingTier { max_sqft: number; price: number; label: string }
+
+function calculateQuoteFromTiers(
+  lotSizeSqft: number | null,
+  tiers: PricingTier[],
+  fallback: number,
+  overOneAcre: number
+): { amount: number; confidence: 'measured' | 'estimate'; tier: string } {
+  if (!lotSizeSqft || lotSizeSqft <= 0) {
+    return { amount: fallback, confidence: 'estimate', tier: 'unknown lot — default estimate' }
+  }
+  const sorted = [...tiers].sort((a, b) => a.max_sqft - b.max_sqft)
+  for (const tier of sorted) {
+    if (lotSizeSqft <= tier.max_sqft) {
+      return { amount: tier.price, confidence: 'measured', tier: tier.label }
+    }
+  }
+  return { amount: overOneAcre, confidence: 'measured', tier: 'over 1 acre' }
+}
+
+async function writeLog(
+  adminClient: Awaited<ReturnType<typeof createAdminClient>>,
+  leadId: string,
+  eventType: string,
+  status: 'success' | 'failed' | 'skipped',
+  details: Record<string, unknown>,
+  durationMs?: number
+) {
+  await adminClient.from('automation_logs').insert({
+    lead_id: leadId,
+    event_type: eventType,
+    status,
+    details: details as Json,
+    duration_ms: durationMs ?? null,
+  })
+}
+
+// ── POST /api/leads/[id]/quote ─────────────────────────────────────────────────
+
 export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -25,15 +65,48 @@ export async function POST(
     return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
   }
 
-  // ── 1. Property lookup ─────────────────────────────────────────────────────
-  const propertyData = await lookupProperty(lead.address)
-  const quote = calculateQuote(propertyData?.lotSizeSqft ?? null)
+  // ── Load settings from DB ──────────────────────────────────────────────────
+  const { data: settingsRows } = await adminClient
+    .from('automation_settings')
+    .select('key, value')
 
-  // ── 2. Get nearest available dates ─────────────────────────────────────────
+  const settings: Record<string, unknown> = {}
+  for (const row of settingsRows ?? []) settings[row.key] = row.value
+
+  const tiers: PricingTier[] = (settings.pricing_tiers as PricingTier[]) ?? []
+  const fallbackPrice: number = (settings.fallback_price as number) ?? 55
+  const overOneAcrePrice: number = (settings.over_one_acre_price as number) ?? 165
+  const smsSignature: string = (settings.sms_signature as string) ?? '– Gray Wolf Workers'
+  const apifyActor: string = (settings.apify_actor as string) ?? 'maxcopell~zillow-scraper'
+
+  // ── 1. Property lookup via Apify ───────────────────────────────────────────
+  const lookupStart = Date.now()
+  const propertyData = await lookupProperty(lead.address, apifyActor)
+  const lookupMs = Date.now() - lookupStart
+
+  await writeLog(adminClient, id, 'property_lookup',
+    propertyData ? 'success' : 'skipped',
+    {
+      address: lead.address,
+      lot_size_sqft: propertyData?.lotSizeSqft ?? null,
+      actor: apifyActor,
+    },
+    lookupMs
+  )
+
+  // ── 2. Calculate quote ─────────────────────────────────────────────────────
+  const quote = calculateQuoteFromTiers(
+    propertyData?.lotSizeSqft ?? null,
+    tiers,
+    fallbackPrice,
+    overOneAcrePrice
+  )
+
+  // ── 3. Get nearest available dates ─────────────────────────────────────────
   const today = format(new Date(), 'yyyy-MM-dd')
   const { data: availDates } = await adminClient
     .from('availability_dates')
-    .select('available_date, notes')
+    .select('available_date')
     .gte('available_date', today)
     .order('available_date')
     .limit(3)
@@ -43,21 +116,24 @@ export async function POST(
     : 'flexible'
 
   const preferredText = lead.preferred_date
-    ? format(new Date(lead.preferred_date + 'T12:00:00'), 'EEEE, MMM d')
+    ? format(new Date((lead.preferred_date as string) + 'T12:00:00'), 'EEEE, MMM d')
     : null
 
-  // ── 3. Generate AI SMS text ────────────────────────────────────────────────
+  // ── 4. Generate AI SMS ─────────────────────────────────────────────────────
   let smsBody: string
+  const firstName = (lead.name as string).split(' ')[0]
+
   try {
-    const prompt = `Write a friendly, natural SMS quote for a lawn mowing service. Keep it under 320 characters total.
+    const prompt = `Write a friendly, natural SMS quote message for a lawn mowing service. Keep the TOTAL message under 320 characters.
 
-Customer name: ${lead.name}
+Customer first name: ${firstName}
 Property address: ${lead.address}
-Quote price: $${quote.amount}/mow${quote.confidence === 'estimate' ? ' (estimated)' : ''}
-${preferredText ? `Preferred mow day: ${preferredText}` : ''}
-Our available dates: ${availText}
+Quote: $${quote.amount}/mow${quote.confidence === 'estimate' ? ' (estimated, exact lot size unavailable)' : ''}
+${preferredText ? `Their preferred day: ${preferredText}` : ''}
+Our next available dates: ${availText}
+Signature to append: ${smsSignature}
 
-The message should: greet them by first name, mention the price, ask if it sounds good, mention we can get started soon. Be warm and conversational. Sign off as "Gray Wolf Workers".`
+Include: friendly greeting, the price, ask if it sounds good, mention we can get started soon. No emojis in the body unless very subtle. Append the signature at the end.`
 
     const res = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -66,45 +142,60 @@ The message should: greet them by first name, mention the price, ask if it sound
     })
     smsBody = res.choices[0].message.content?.trim() ?? ''
   } catch {
-    // Fallback SMS if OpenAI fails
-    const firstName = lead.name.split(' ')[0]
-    smsBody = `Hi ${firstName}! This is Gray Wolf Workers 🐺 We'd love to mow your lawn at ${lead.address} for $${quote.amount}/visit. Does that sound good? We can get started ${availText !== 'flexible' ? `as soon as ${availDates![0].available_date}` : 'soon'}! Reply YES to confirm.`
+    smsBody = `Hi ${firstName}! Gray Wolf Workers here 🐺 We'd love to mow your lawn at ${lead.address} for $${quote.amount}/visit. Sound good? We can get started ${availDates?.length ? `as soon as ${format(new Date(availDates[0].available_date + 'T12:00:00'), 'MMM d')}` : 'soon'}! Reply YES to confirm. ${smsSignature}`
   }
 
-  // ── 4. Send SMS via Twilio ─────────────────────────────────────────────────
+  // ── 5. Send SMS ────────────────────────────────────────────────────────────
   let twilioSid: string | null = null
+  let smsSent = false
+  const smsStart = Date.now()
+
   try {
     const twilio = getTwilioClient()
     const message = await twilio.messages.create({
       from: TWILIO_FROM,
-      to: lead.phone,
+      to: lead.phone as string,
       body: smsBody,
     })
     twilioSid = message.sid
+    smsSent = true
+
+    await writeLog(adminClient, id, 'quote_sms_sent', 'success', {
+      phone: lead.phone,
+      body: smsBody,
+      twilio_sid: twilioSid,
+      quote_amount: quote.amount,
+      lot_size_sqft: propertyData?.lotSizeSqft ?? null,
+      tier: quote.tier,
+    }, Date.now() - smsStart)
   } catch (err) {
-    console.error('[leads/quote] Twilio send failed:', err)
+    const errMsg = err instanceof Error ? err.message : 'Unknown error'
+    await writeLog(adminClient, id, 'quote_sms_sent', 'failed', {
+      phone: lead.phone,
+      error: errMsg,
+    }, Date.now() - smsStart)
   }
 
-  // ── 5. Update lead + create conversation + log message ────────────────────
+  // ── 6. Persist results ─────────────────────────────────────────────────────
   await adminClient
     .from('leads')
     .update({
       status: 'quoted',
-      property_data: (propertyData?.raw ?? null) as import('@/types/database').Json | null,
+      property_data: (propertyData?.raw ?? null) as Json | null,
       lot_size_sqft: propertyData?.lotSizeSqft ?? null,
       quoted_amount: quote.amount,
       quote_sent_at: new Date().toISOString(),
     })
     .eq('id', id)
 
-  // Upsert conversation for this phone number
+  // Upsert conversation
   const { data: conversation } = await adminClient
     .from('conversations')
     .upsert(
       {
-        phone: lead.phone,
+        phone: lead.phone as string,
         lead_id: lead.id,
-        display_name: lead.name,
+        display_name: lead.name as string,
         ai_enabled: true,
         ai_state: 'quote_sent',
         last_message_at: new Date().toISOString(),
@@ -120,15 +211,17 @@ The message should: greet them by first name, mention the price, ask if it sound
       direction: 'outbound',
       body: smsBody,
       twilio_sid: twilioSid,
-      status: twilioSid ? 'sent' : 'failed',
+      status: smsSent ? 'sent' : 'failed',
     })
   }
 
   return NextResponse.json({
     success: true,
-    quote: quote.amount,
+    quote_amount: quote.amount,
     confidence: quote.confidence,
-    sms_sent: !!twilioSid,
+    tier: quote.tier,
     lot_size_sqft: propertyData?.lotSizeSqft ?? null,
+    sms_sent: smsSent,
+    sms_body: smsBody,
   })
 }

@@ -16,8 +16,9 @@ const navItems = [
   { href: '/dashboard/money', label: 'Money', icon: '💰' },
   { href: '/dashboard/employees', label: 'Employees', icon: '👷' },
   { href: '/dashboard/sms', label: 'SMS', icon: '💬' },
-  { href: '/dashboard/inbox', label: 'Inbox', icon: '💬' },
+  { href: '/dashboard/inbox', label: 'Inbox', icon: '📥' },
   { href: '/dashboard/important', label: 'Important', icon: '⭐' },
+  { href: '/dashboard/automation', label: 'Automation', icon: '⚙️' },
 ]
 
 export function OwnerSidebar() {

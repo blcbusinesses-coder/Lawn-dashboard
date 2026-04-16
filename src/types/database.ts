@@ -458,6 +458,37 @@ export interface Database {
           }
         ]
       }
+      automation_settings: {
+        Row: { key: string; value: Json; label: string | null; updated_at: string }
+        Insert: { key: string; value: Json; label?: string | null; updated_at?: string }
+        Update: { value?: Json; label?: string | null; updated_at?: string }
+        Relationships: []
+      }
+      automation_logs: {
+        Row: {
+          id: string
+          lead_id: string | null
+          event_type: string
+          status: 'success' | 'failed' | 'skipped'
+          details: Json | null
+          duration_ms: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          lead_id?: string | null
+          event_type: string
+          status: 'success' | 'failed' | 'skipped'
+          details?: Json | null
+          duration_ms?: number | null
+          created_at?: string
+        }
+        Update: {
+          status?: 'success' | 'failed' | 'skipped'
+          details?: Json | null
+        }
+        Relationships: []
+      }
       leads: {
         Row: {
           id: string
