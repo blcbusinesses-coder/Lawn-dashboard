@@ -1,5 +1,5 @@
 /**
- * Property data lookup via Apify (Zillow scraper).
+ * Property data lookup via Apify.
  * Set APIFY_API_KEY in env to enable.
  * Falls back gracefully if unavailable.
  */
@@ -14,13 +14,6 @@ export interface PropertyData {
   raw: Record<string, unknown>
 }
 
-function formatAddressForZillow(address: string): string {
-  return address
-    .replace(/,/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/[^a-zA-Z0-9-]/g, '')
-}
-
 export async function lookupProperty(
   address: string,
   actorId = 'maxcopell~zillow-scraper'
@@ -31,10 +24,7 @@ export async function lookupProperty(
     return null
   }
 
-  const zillowSlug = formatAddressForZillow(address)
-  const zillowUrl = `https://www.zillow.com/homes/${zillowSlug}_rb/`
-
-  console.log(`[property/lookup] actor=${actorId} url=${zillowUrl}`)
+  console.log(`[property/lookup] actor=${actorId} address=${address}`)
 
   try {
     const res = await fetch(
@@ -43,9 +33,8 @@ export async function lookupProperty(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          startUrls: [{ url: zillowUrl }],
-          type: 'url',
-          maxItems: 3,
+          addresses: [address],
+          extractBuildingUnits: 'all',
         }),
         signal: AbortSignal.timeout(50_000),
       }
@@ -59,26 +48,28 @@ export async function lookupProperty(
 
     const items: Record<string, unknown>[] = await res.json()
     console.log(`[property/lookup] got ${items?.length ?? 0} items`)
+    console.log('[property/lookup] raw item[0]:', JSON.stringify(items?.[0] ?? {}, null, 2))
     if (!items?.length) return null
 
-    // Return all items as raw so the automation dashboard can inspect them
     const item = items[0]
 
     // Extract lot size — handle sqft and acres
+    // Field names logged above so we can calibrate after first real run
     let lotSizeSqft: number | null = null
-    const lotVal = item.lotAreaValue as number | null
-    const lotUnit = (item.lotAreaUnit as string | null)?.toLowerCase() ?? ''
+    const lotVal = (item.lotAreaValue ?? item.lotSize ?? item.lot_size) as number | null
+    const lotUnit = ((item.lotAreaUnit ?? item.lotSizeUnit ?? '') as string).toLowerCase()
     if (typeof lotVal === 'number' && lotVal > 0) {
       lotSizeSqft = lotUnit.includes('acre') ? Math.round(lotVal * 43560) : Math.round(lotVal)
     }
 
     return {
       lotSizeSqft,
-      squareFootage: (item.livingArea as number | null) ?? (item.squareFootage as number | null) ?? null,
-      bedrooms: (item.bedrooms as number | null) ?? null,
-      bathrooms: (item.bathrooms as number | null) ?? null,
-      zestimate: (item.zestimate as number | null) ?? null,
-      yearBuilt: (item.yearBuilt as number | null) ?? null,
+      squareFootage:
+        (item.livingArea ?? item.squareFootage ?? item.living_area ?? item.square_feet) as number | null,
+      bedrooms: (item.bedrooms ?? item.beds) as number | null,
+      bathrooms: (item.bathrooms ?? item.baths) as number | null,
+      zestimate: (item.zestimate ?? item.estimatedValue ?? item.estimated_value) as number | null,
+      yearBuilt: (item.yearBuilt ?? item.year_built) as number | null,
       raw: item,
     }
   } catch (err) {
