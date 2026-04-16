@@ -19,10 +19,16 @@ export default function ClockPage() {
   const [elapsed, setElapsed] = useState<string>('')
 
   const load = useCallback(async () => {
-    const res = await fetch('/api/clock')
-    const { open_entry } = await res.json()
-    setOpenEntry(open_entry)
-    setLoading(false)
+    try {
+      const res = await fetch('/api/clock')
+      if (!res.ok) throw new Error(await res.text())
+      const { open_entry } = await res.json()
+      setOpenEntry(open_entry)
+      setLoading(false)
+    } catch (err) {
+      console.error(err)
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { load() }, [load])

@@ -88,14 +88,23 @@ export default function JobsPage() {
 
   // ── Load weekly jobs ────────────────────────────────────────────────────────
   const loadWeekly = useCallback(async () => {
-    const [propRes, jobRes] = await Promise.all([
-      fetch('/api/properties'),
-      fetch(`/api/jobs?week_start=${weekDateStr}`),
-    ])
-    setProperties(await propRes.json())
-    setJobLogs(await jobRes.json())
-    setLoading(false)
-    setOptimistic(new Map())
+    try {
+      const [propRes, jobRes] = await Promise.all([
+        fetch('/api/properties'),
+        fetch(`/api/jobs?week_start=${weekDateStr}`),
+      ])
+      if (!propRes.ok) throw new Error(await propRes.text())
+      if (!jobRes.ok) throw new Error(await jobRes.text())
+      const propData = await propRes.json()
+      const jobData = await jobRes.json()
+      setProperties(Array.isArray(propData) ? propData : [])
+      setJobLogs(Array.isArray(jobData) ? jobData : [])
+      setLoading(false)
+      setOptimistic(new Map())
+    } catch (err) {
+      console.error(err)
+      setLoading(false)
+    }
   }, [weekDateStr])
 
   useEffect(() => { setLoading(true); loadWeekly() }, [loadWeekly])

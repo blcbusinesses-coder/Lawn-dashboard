@@ -54,13 +54,22 @@ export default function PropertiesPage() {
   const [importing, setImporting] = useState(false)
 
   const load = useCallback(async () => {
-    const [propRes, custRes] = await Promise.all([
-      fetch('/api/properties'),
-      fetch('/api/customers'),
-    ])
-    setProperties(await propRes.json())
-    setCustomers(await custRes.json())
-    setLoading(false)
+    try {
+      const [propRes, custRes] = await Promise.all([
+        fetch('/api/properties'),
+        fetch('/api/customers'),
+      ])
+      if (!propRes.ok) throw new Error(await propRes.text())
+      if (!custRes.ok) throw new Error(await custRes.text())
+      const propData = await propRes.json()
+      const custData = await custRes.json()
+      setProperties(Array.isArray(propData) ? propData : [])
+      setCustomers(Array.isArray(custData) ? custData : [])
+      setLoading(false)
+    } catch (err) {
+      console.error(err)
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { load() }, [load])

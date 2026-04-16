@@ -67,10 +67,16 @@ export default function CustomersPage() {
   const [importing, setImporting] = useState(false)
 
   const load = useCallback(async () => {
-    const res = await fetch('/api/customers')
-    const data = await res.json()
-    setCustomers(data)
-    setLoading(false)
+    try {
+      const res = await fetch('/api/customers')
+      if (!res.ok) throw new Error(await res.text())
+      const data = await res.json()
+      setCustomers(Array.isArray(data) ? data : [])
+      setLoading(false)
+    } catch (err) {
+      console.error(err)
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { load() }, [load])

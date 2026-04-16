@@ -39,13 +39,22 @@ export default function EmployeeJobsPage() {
   }, [])
 
   const load = useCallback(async () => {
-    const [propRes, jobRes] = await Promise.all([
-      fetch('/api/properties'),
-      fetch(`/api/jobs?week_start=${weekDateStr}`),
-    ])
-    setProperties(await propRes.json())
-    setJobLogs(await jobRes.json())
-    setLoading(false)
+    try {
+      const [propRes, jobRes] = await Promise.all([
+        fetch('/api/properties'),
+        fetch(`/api/jobs?week_start=${weekDateStr}`),
+      ])
+      if (!propRes.ok) throw new Error(await propRes.text())
+      if (!jobRes.ok) throw new Error(await jobRes.text())
+      const propData = await propRes.json()
+      const jobData = await jobRes.json()
+      setProperties(Array.isArray(propData) ? propData : [])
+      setJobLogs(Array.isArray(jobData) ? jobData : [])
+      setLoading(false)
+    } catch (err) {
+      console.error(err)
+      setLoading(false)
+    }
   }, [weekDateStr])
 
   useEffect(() => { setLoading(true); load() }, [load])

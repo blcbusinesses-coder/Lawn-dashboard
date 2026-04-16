@@ -60,9 +60,16 @@ export default function ExpensesPage() {
   const fileRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/expenses?month=${selectedMonth}`)
-    setExpenses(await res.json())
-    setLoading(false)
+    try {
+      const res = await fetch(`/api/expenses?month=${selectedMonth}`)
+      if (!res.ok) throw new Error(await res.text())
+      const data = await res.json()
+      setExpenses(Array.isArray(data) ? data : [])
+      setLoading(false)
+    } catch (err) {
+      console.error(err)
+      setLoading(false)
+    }
   }, [selectedMonth])
 
   useEffect(() => { setLoading(true); load() }, [load])

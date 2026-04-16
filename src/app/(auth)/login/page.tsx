@@ -19,18 +19,24 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
 
-    const supabase = createClient()
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
-    if (error) {
-      toast.error(error.message)
+      if (error) {
+        toast.error(error.message)
+        setLoading(false)
+        return
+      }
+
+      const role = data.user?.app_metadata?.role
+      router.push(role === 'employee' ? '/employee/jobs' : '/dashboard/customers')
+      router.refresh()
+    } catch (err) {
+      toast.error('Could not connect to auth server. Check your connection or try again.')
+      console.error(err)
       setLoading(false)
-      return
     }
-
-    const role = data.user?.app_metadata?.role
-    router.push(role === 'employee' ? '/employee/jobs' : '/dashboard/customers')
-    router.refresh()
   }
 
   return (

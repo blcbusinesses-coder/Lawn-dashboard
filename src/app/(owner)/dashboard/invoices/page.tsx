@@ -61,9 +61,16 @@ export default function InvoicesPage() {
   const [filterStatus, setFilterStatus] = useState<string>('draft')
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/invoices?status=${filterStatus}`)
-    setInvoices(await res.json())
-    setLoading(false)
+    try {
+      const res = await fetch(`/api/invoices?status=${filterStatus}`)
+      if (!res.ok) throw new Error(await res.text())
+      const data = await res.json()
+      setInvoices(Array.isArray(data) ? data : [])
+      setLoading(false)
+    } catch (err) {
+      console.error(err)
+      setLoading(false)
+    }
   }, [filterStatus])
 
   useEffect(() => { setLoading(true); load() }, [load])

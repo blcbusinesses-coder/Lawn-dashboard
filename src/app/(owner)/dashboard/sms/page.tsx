@@ -40,14 +40,20 @@ export default function SmsPage() {
   const [search, setSearch] = useState('')
 
   const load = useCallback(async () => {
-    const [custRes, histRes] = await Promise.all([
-      fetch('/api/customers'),
-      fetch('/api/sms'),
-    ])
-    const custs = await custRes.json()
-    setCustomers(custs.filter((c: Customer) => c.phone))
-    if (histRes.ok) setHistory(await histRes.json())
-    setLoading(false)
+    try {
+      const [custRes, histRes] = await Promise.all([
+        fetch('/api/customers'),
+        fetch('/api/sms'),
+      ])
+      if (!custRes.ok) throw new Error(await custRes.text())
+      const custs = await custRes.json()
+      setCustomers(Array.isArray(custs) ? custs.filter((c: Customer) => c.phone) : [])
+      if (histRes.ok) setHistory(await histRes.json())
+      setLoading(false)
+    } catch (err) {
+      console.error(err)
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { load() }, [load])
