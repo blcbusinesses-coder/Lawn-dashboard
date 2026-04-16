@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { toast } from 'sonner'
 
 export default function LoginPage() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -30,8 +28,7 @@ export default function LoginPage() {
       }
 
       const role = data.user?.app_metadata?.role
-      router.push(role === 'employee' ? '/employee/jobs' : '/dashboard/customers')
-      router.refresh()
+      window.location.href = role === 'employee' ? '/employee/jobs' : '/dashboard/customers'
     } catch (err) {
       toast.error('Could not connect to auth server. Check your connection or try again.')
       console.error(err)
