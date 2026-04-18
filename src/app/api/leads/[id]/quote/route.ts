@@ -6,22 +6,53 @@ import { NextRequest, NextResponse } from 'next/server'
 import { format } from 'date-fns'
 import type { Json } from '@/types/database'
 
+// ── Types ──────────────────────────────────────────────────────────────────────
+
+interface PricingTier    { max_sqft: number; price: number; label: string }
+interface GrassRatioTier { max_sqft: number; ratio: number; label: string }
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-interface PricingTier { max_sqft: number; price: number; label: string }
+/**
+ * Calculate the mowable area of a property.
+ *
+ * Formula: (lot_sqft - living_sqft) × grass_ratio
+ *
+ * grass_ratio accounts for driveways, patios, sidewalks, gardens, etc.
+ * It scales UP with lot size — bigger lots have proportionally more grass
+ * and less hardscape relative to their total area.
+ */
+function calculateMowableArea(
+  lotSqft: number,
+  livingSqft: number | null,
+  ratioTiers: GrassRatioTier[]
+): { mowableSqft: number; grassRatio: number; ratioLabel: string } {
+  // Find the ratio for this lot size
+  const sorted = [...ratioTiers].sort((a, b) => a.max_sqft - b.max_sqft)
+  const tier = sorted.find((t) => lotSqft <= t.max_sqft) ?? sorted[sorted.length - 1]
+  const grassRatio = tier?.ratio ?? 0.70
+  const ratioLabel = tier?.label ?? 'unknown'
+
+  // Subtract house footprint, then apply grass ratio for hardscape
+  const footprint = livingSqft ?? 0
+  const outdoorArea = Math.max(lotSqft - footprint, 0)
+  const mowableSqft = Math.round(outdoorArea * grassRatio)
+
+  return { mowableSqft, grassRatio, ratioLabel }
+}
 
 function calculateQuoteFromTiers(
-  lotSizeSqft: number | null,
+  mowableSqft: number | null,
   tiers: PricingTier[],
   fallback: number,
   overOneAcre: number
 ): { amount: number; confidence: 'measured' | 'estimate'; tier: string } {
-  if (!lotSizeSqft || lotSizeSqft <= 0) {
+  if (!mowableSqft || mowableSqft <= 0) {
     return { amount: fallback, confidence: 'estimate', tier: 'unknown lot — default estimate' }
   }
   const sorted = [...tiers].sort((a, b) => a.max_sqft - b.max_sqft)
   for (const tier of sorted) {
-    if (lotSizeSqft <= tier.max_sqft) {
+    if (mowableSqft <= tier.max_sqft) {
       return { amount: tier.price, confidence: 'measured', tier: tier.label }
     }
   }
@@ -73,34 +104,48 @@ export async function POST(
   const settings: Record<string, unknown> = {}
   for (const row of settingsRows ?? []) settings[row.key] = row.value
 
-  const tiers: PricingTier[] = (settings.pricing_tiers as PricingTier[]) ?? []
-  const fallbackPrice: number = (settings.fallback_price as number) ?? 55
-  const overOneAcrePrice: number = (settings.over_one_acre_price as number) ?? 165
-  const smsSignature: string = (settings.sms_signature as string) ?? '– Gray Wolf Workers'
-  const apifyActor: string = (settings.apify_actor as string) ?? 'maxcopell~zillow-scraper'
+  const tiers: PricingTier[]         = (settings.pricing_tiers as PricingTier[]) ?? []
+  const ratioTiers: GrassRatioTier[] = (settings.grass_ratio_tiers as GrassRatioTier[]) ?? []
+  const fallbackPrice: number        = (settings.fallback_price as number) ?? 55
+  const overOneAcrePrice: number     = (settings.over_one_acre_price as number) ?? 165
+  const smsSignature: string         = (settings.sms_signature as string) ?? '– Gray Wolf Workers'
+  const apifyActor: string           = (settings.apify_actor as string) ?? 'maxcopell~zillow-detail-scraper'
 
   // ── 1. Property lookup via Apify ───────────────────────────────────────────
   const lookupStart = Date.now()
   const propertyData = await lookupProperty(lead.address, apifyActor)
   const lookupMs = Date.now() - lookupStart
 
+  const lotSqft     = propertyData?.lotSizeSqft ?? null
+  const livingSqft  = propertyData?.squareFootage ?? null
+
+  // ── 2. Calculate mowable area then quote ───────────────────────────────────
+  let mowableSqft: number | null = null
+  let grassRatio: number | null = null
+  let ratioLabel: string | null = null
+
+  if (lotSqft && lotSqft > 0) {
+    const result = calculateMowableArea(lotSqft, livingSqft, ratioTiers)
+    mowableSqft = result.mowableSqft
+    grassRatio  = result.grassRatio
+    ratioLabel  = result.ratioLabel
+  }
+
   await writeLog(adminClient, id, 'property_lookup',
     propertyData ? 'success' : 'skipped',
     {
-      address: lead.address,
-      lot_size_sqft: propertyData?.lotSizeSqft ?? null,
-      actor: apifyActor,
+      address:       lead.address,
+      actor:         apifyActor,
+      lot_size_sqft: lotSqft,
+      living_sqft:   livingSqft,
+      mowable_sqft:  mowableSqft,
+      grass_ratio:   grassRatio,
+      ratio_label:   ratioLabel,
     },
     lookupMs
   )
 
-  // ── 2. Calculate quote ─────────────────────────────────────────────────────
-  const quote = calculateQuoteFromTiers(
-    propertyData?.lotSizeSqft ?? null,
-    tiers,
-    fallbackPrice,
-    overOneAcrePrice
-  )
+  const quote = calculateQuoteFromTiers(mowableSqft, tiers, fallbackPrice, overOneAcrePrice)
 
   // ── 3. Get nearest available dates ─────────────────────────────────────────
   const today = format(new Date(), 'yyyy-MM-dd')
@@ -161,12 +206,15 @@ Include: friendly greeting, the price, ask if it sounds good, mention we can get
     smsSent = true
 
     await writeLog(adminClient, id, 'quote_sms_sent', 'success', {
-      phone: lead.phone,
-      body: smsBody,
-      twilio_sid: twilioSid,
-      quote_amount: quote.amount,
-      lot_size_sqft: propertyData?.lotSizeSqft ?? null,
-      tier: quote.tier,
+      phone:         lead.phone,
+      body:          smsBody,
+      twilio_sid:    twilioSid,
+      quote_amount:  quote.amount,
+      lot_size_sqft: lotSqft,
+      living_sqft:   livingSqft,
+      mowable_sqft:  mowableSqft,
+      grass_ratio:   grassRatio,
+      tier:          quote.tier,
     }, Date.now() - smsStart)
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : 'Unknown error'
@@ -180,11 +228,11 @@ Include: friendly greeting, the price, ask if it sounds good, mention we can get
   await adminClient
     .from('leads')
     .update({
-      status: 'quoted',
-      property_data: (propertyData?.raw ?? null) as Json | null,
-      lot_size_sqft: propertyData?.lotSizeSqft ?? null,
-      quoted_amount: quote.amount,
-      quote_sent_at: new Date().toISOString(),
+      status:          'quoted',
+      property_data:   (propertyData?.raw ?? null) as Json | null,
+      lot_size_sqft:   lotSqft,
+      quoted_amount:   quote.amount,
+      quote_sent_at:   new Date().toISOString(),
     })
     .eq('id', id)
 
@@ -193,12 +241,12 @@ Include: friendly greeting, the price, ask if it sounds good, mention we can get
     .from('conversations')
     .upsert(
       {
-        phone: lead.phone as string,
-        lead_id: lead.id,
-        display_name: lead.name as string,
-        ai_enabled: true,
-        ai_state: 'quote_sent',
-        last_message_at: new Date().toISOString(),
+        phone:            lead.phone as string,
+        lead_id:          lead.id,
+        display_name:     lead.name as string,
+        ai_enabled:       true,
+        ai_state:         'quote_sent',
+        last_message_at:  new Date().toISOString(),
       },
       { onConflict: 'phone' }
     )
@@ -208,20 +256,23 @@ Include: friendly greeting, the price, ask if it sounds good, mention we can get
   if (conversation && smsBody) {
     await adminClient.from('conversation_messages').insert({
       conversation_id: conversation.id,
-      direction: 'outbound',
-      body: smsBody,
-      twilio_sid: twilioSid,
-      status: smsSent ? 'sent' : 'failed',
+      direction:       'outbound',
+      body:            smsBody,
+      twilio_sid:      twilioSid,
+      status:          smsSent ? 'sent' : 'failed',
     })
   }
 
   return NextResponse.json({
-    success: true,
-    quote_amount: quote.amount,
-    confidence: quote.confidence,
-    tier: quote.tier,
-    lot_size_sqft: propertyData?.lotSizeSqft ?? null,
-    sms_sent: smsSent,
-    sms_body: smsBody,
+    success:       true,
+    quote_amount:  quote.amount,
+    confidence:    quote.confidence,
+    tier:          quote.tier,
+    lot_size_sqft: lotSqft,
+    living_sqft:   livingSqft,
+    mowable_sqft:  mowableSqft,
+    grass_ratio:   grassRatio,
+    sms_sent:      smsSent,
+    sms_body:      smsBody,
   })
 }

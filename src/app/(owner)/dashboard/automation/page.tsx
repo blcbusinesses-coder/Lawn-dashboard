@@ -16,8 +16,15 @@ interface PricingTier {
   label: string
 }
 
+interface GrassRatioTier {
+  max_sqft: number
+  ratio: number
+  label: string
+}
+
 interface SettingsMap {
   pricing_tiers: PricingTier[]
+  grass_ratio_tiers: GrassRatioTier[]
   fallback_price: number
   over_one_acre_price: number
   sms_signature: string
@@ -76,6 +83,7 @@ export default function AutomationPage() {
 
   // Editable copies of settings
   const [tiers, setTiers] = useState<PricingTier[]>([])
+  const [ratioTiers, setRatioTiers] = useState<GrassRatioTier[]>([])
   const [fallback, setFallback] = useState('')
   const [overAcre, setOverAcre] = useState('')
   const [signature, setSignature] = useState('')
@@ -94,6 +102,7 @@ export default function AutomationPage() {
       const { map } = await settRes.json() as { map: SettingsMap }
       setSettings(map)
       setTiers(map.pricing_tiers ?? [])
+      setRatioTiers(map.grass_ratio_tiers ?? [])
       setFallback(String(map.fallback_price ?? 55))
       setOverAcre(String(map.over_one_acre_price ?? 165))
       setSignature(String(map.sms_signature ?? ''))
@@ -133,6 +142,23 @@ export default function AutomationPage() {
 
   function removeTier(idx: number) {
     setTiers((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  function updateRatioTier(idx: number, field: keyof GrassRatioTier, raw: string) {
+    setRatioTiers((prev) => {
+      const next = [...prev]
+      if (field === 'label') next[idx] = { ...next[idx], label: raw }
+      else next[idx] = { ...next[idx], [field]: parseFloat(raw) || 0 }
+      return next
+    })
+  }
+
+  function addRatioTier() {
+    setRatioTiers((prev) => [...prev, { max_sqft: 0, ratio: 0.70, label: 'New tier' }])
+  }
+
+  function removeRatioTier(idx: number) {
+    setRatioTiers((prev) => prev.filter((_, i) => i !== idx))
   }
 
   // ── Stats ──────────────────────────────────────────────────────────────────
@@ -263,6 +289,81 @@ export default function AutomationPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Grass ratio tiers */}
+          <div className="bg-white rounded-xl border border-zinc-200 p-6">
+            <div className="flex items-center justify-between mb-1">
+              <div>
+                <h2 className="font-semibold text-zinc-900">Grass Area Ratio by Lot Size</h2>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Formula: <code className="bg-zinc-100 px-1 rounded">(lot − house footprint) × ratio = mowable sqft</code>
+                  &nbsp;— bigger lots get a higher ratio since driveways &amp; patios are a smaller share of total area.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={addRatioTier}>+ Add</Button>
+                <Button
+                  size="sm"
+                  onClick={() => saveSetting('grass_ratio_tiers', ratioTiers)}
+                  disabled={savingKey === 'grass_ratio_tiers'}
+                >
+                  {savingKey === 'grass_ratio_tiers' ? 'Saving…' : 'Save Ratios'}
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2 mt-4">
+              <div className="grid grid-cols-12 gap-2 px-1 text-xs text-zinc-400 font-medium uppercase tracking-wide">
+                <div className="col-span-4">Label</div>
+                <div className="col-span-3">Max Lot Size (sqft)</div>
+                <div className="col-span-3">Grass Ratio (0–1)</div>
+                <div className="col-span-2" />
+              </div>
+
+              {ratioTiers.map((tier, idx) => (
+                <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                  <div className="col-span-4">
+                    <Input
+                      value={tier.label}
+                      onChange={(e) => updateRatioTier(idx, 'label', e.target.value)}
+                      placeholder="e.g. Medium yard"
+                    />
+                  </div>
+                  <div className="col-span-3">
+                    <Input
+                      type="number"
+                      value={tier.max_sqft}
+                      onChange={(e) => updateRatioTier(idx, 'max_sqft', e.target.value)}
+                      placeholder="10000"
+                    />
+                  </div>
+                  <div className="col-span-3">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="1"
+                      value={tier.ratio}
+                      onChange={(e) => updateRatioTier(idx, 'ratio', e.target.value)}
+                      placeholder="0.70"
+                    />
+                  </div>
+                  <div className="col-span-2 flex justify-end">
+                    <button
+                      onClick={() => removeRatioTier(idx)}
+                      className="text-zinc-300 hover:text-red-400 transition-colors px-2"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {ratioTiers.length === 0 && (
+                <p className="text-xs text-zinc-400 px-1 py-2">No ratio tiers — add one or run the SQL seed below.</p>
+              )}
             </div>
           </div>
 
