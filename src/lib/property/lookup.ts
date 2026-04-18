@@ -24,11 +24,13 @@ export async function lookupProperty(
     return null
   }
 
-  console.log(`[property/lookup] actor=${actorId} address=${address}`)
+  // Apify API URLs require ~ as separator (not /)
+  const actorSlug = actorId.replace('/', '~')
+  console.log(`[property/lookup] actor=${actorSlug} address=${address}`)
 
   try {
     const res = await fetch(
-      `https://api.apify.com/v2/acts/${actorId}/run-sync-get-dataset-items?token=${apiKey}&timeout=45&memory=256`,
+      `https://api.apify.com/v2/acts/${actorSlug}/run-sync-get-dataset-items?token=${apiKey}&timeout=45&memory=256`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
