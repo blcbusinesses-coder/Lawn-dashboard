@@ -8,37 +8,58 @@ import type { Json } from '@/types/database'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-interface PricingTier    { max_sqft: number; price: number; label: string }
-interface GrassRatioTier { max_sqft: number; ratio: number; label: string }
+interface PricingTier        { max_sqft: number; price: number; label: string }
+interface GrassRatioTier     { max_sqft: number; ratio: number; label: string }
+interface FootprintEstTier   { max_sqft: number; pct: number;   label: string }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
  * Calculate the mowable area of a property.
  *
- * Formula: (lot_sqft - living_sqft) × grass_ratio
+ * Full formula (living area known):
+ *   mowable = (lot − living_sqft) × grass_ratio
  *
- * grass_ratio accounts for driveways, patios, sidewalks, gardens, etc.
- * It scales UP with lot size — bigger lots have proportionally more grass
- * and less hardscape relative to their total area.
+ * Fallback formula (living area not on Zillow):
+ *   estimated_footprint = lot × footprint_pct  (scales down as lot grows)
+ *   mowable = (lot − estimated_footprint) × grass_ratio
+ *
+ * grass_ratio accounts for driveway, patio, sidewalk, garden beds, etc.
+ * footprint_pct accounts for the house itself when Zillow has no living area.
  */
 function calculateMowableArea(
   lotSqft: number,
   livingSqft: number | null,
-  ratioTiers: GrassRatioTier[]
-): { mowableSqft: number; grassRatio: number; ratioLabel: string } {
-  // Find the ratio for this lot size
-  const sorted = [...ratioTiers].sort((a, b) => a.max_sqft - b.max_sqft)
-  const tier = sorted.find((t) => lotSqft <= t.max_sqft) ?? sorted[sorted.length - 1]
-  const grassRatio = tier?.ratio ?? 0.70
-  const ratioLabel = tier?.label ?? 'unknown'
+  ratioTiers: GrassRatioTier[],
+  footprintTiers: FootprintEstTier[]
+): { mowableSqft: number; grassRatio: number; ratioLabel: string; footprintMethod: 'actual' | 'estimated'; estimatedFootprint: number | null } {
+  const sortedRatio = [...ratioTiers].sort((a, b) => a.max_sqft - b.max_sqft)
+  const ratioTier   = sortedRatio.find((t) => lotSqft <= t.max_sqft) ?? sortedRatio[sortedRatio.length - 1]
+  const grassRatio  = ratioTier?.ratio ?? 0.70
+  const ratioLabel  = ratioTier?.label ?? 'unknown'
 
-  // Subtract house footprint, then apply grass ratio for hardscape
-  const footprint = livingSqft ?? 0
+  let footprint: number
+  let footprintMethod: 'actual' | 'estimated'
+  let estimatedFootprint: number | null = null
+
+  if (livingSqft && livingSqft > 0) {
+    // Zillow returned living area — use it directly
+    footprint = livingSqft
+    footprintMethod = 'actual'
+  } else {
+    // Zillow has no living area — estimate from lot size
+    const sortedFp = [...footprintTiers].sort((a, b) => a.max_sqft - b.max_sqft)
+    const fpTier   = sortedFp.find((t) => lotSqft <= t.max_sqft) ?? sortedFp[sortedFp.length - 1]
+    const fpPct    = fpTier?.pct ?? 0.20
+    footprint      = Math.round(lotSqft * fpPct)
+    footprintMethod = 'estimated'
+    estimatedFootprint = footprint
+  }
+
   const outdoorArea = Math.max(lotSqft - footprint, 0)
   const mowableSqft = Math.round(outdoorArea * grassRatio)
 
-  return { mowableSqft, grassRatio, ratioLabel }
+  return { mowableSqft, grassRatio, ratioLabel, footprintMethod, estimatedFootprint }
 }
 
 function calculateQuoteFromTiers(
@@ -104,12 +125,13 @@ export async function POST(
   const settings: Record<string, unknown> = {}
   for (const row of settingsRows ?? []) settings[row.key] = row.value
 
-  const tiers: PricingTier[]         = (settings.pricing_tiers as PricingTier[]) ?? []
-  const ratioTiers: GrassRatioTier[] = (settings.grass_ratio_tiers as GrassRatioTier[]) ?? []
-  const fallbackPrice: number        = (settings.fallback_price as number) ?? 55
-  const overOneAcrePrice: number     = (settings.over_one_acre_price as number) ?? 165
-  const smsSignature: string         = (settings.sms_signature as string) ?? '– Gray Wolf Workers'
-  const apifyActor: string           = (settings.apify_actor as string) ?? 'maxcopell~zillow-detail-scraper'
+  const tiers: PricingTier[]              = (settings.pricing_tiers as PricingTier[]) ?? []
+  const ratioTiers: GrassRatioTier[]      = (settings.grass_ratio_tiers as GrassRatioTier[]) ?? []
+  const footprintTiers: FootprintEstTier[]= (settings.footprint_estimate_tiers as FootprintEstTier[]) ?? []
+  const fallbackPrice: number             = (settings.fallback_price as number) ?? 25
+  const overOneAcrePrice: number          = (settings.over_one_acre_price as number) ?? 130
+  const smsSignature: string              = (settings.sms_signature as string) ?? '– Gray Wolf Workers'
+  const apifyActor: string                = (settings.apify_actor as string) ?? 'maxcopell~zillow-detail-scraper'
 
   // ── 1. Property lookup via Apify ───────────────────────────────────────────
   const lookupStart = Date.now()
@@ -124,23 +146,30 @@ export async function POST(
   let grassRatio: number | null = null
   let ratioLabel: string | null = null
 
+  let footprintMethod: 'actual' | 'estimated' | null = null
+  let estimatedFootprint: number | null = null
+
   if (lotSqft && lotSqft > 0) {
-    const result = calculateMowableArea(lotSqft, livingSqft, ratioTiers)
-    mowableSqft = result.mowableSqft
-    grassRatio  = result.grassRatio
-    ratioLabel  = result.ratioLabel
+    const result    = calculateMowableArea(lotSqft, livingSqft, ratioTiers, footprintTiers)
+    mowableSqft     = result.mowableSqft
+    grassRatio      = result.grassRatio
+    ratioLabel      = result.ratioLabel
+    footprintMethod = result.footprintMethod
+    estimatedFootprint = result.estimatedFootprint
   }
 
   await writeLog(adminClient, id, 'property_lookup',
     propertyData ? 'success' : 'skipped',
     {
-      address:       lead.address,
-      actor:         apifyActor,
-      lot_size_sqft: lotSqft,
-      living_sqft:   livingSqft,
-      mowable_sqft:  mowableSqft,
-      grass_ratio:   grassRatio,
-      ratio_label:   ratioLabel,
+      address:            lead.address,
+      actor:              apifyActor,
+      lot_size_sqft:      lotSqft,
+      living_sqft:        livingSqft,
+      footprint_method:   footprintMethod,
+      estimated_footprint:estimatedFootprint,
+      mowable_sqft:       mowableSqft,
+      grass_ratio:        grassRatio,
+      ratio_label:        ratioLabel,
     },
     lookupMs
   )
@@ -210,11 +239,13 @@ Include: friendly greeting, the price, ask if it sounds good, mention we can get
       body:          smsBody,
       twilio_sid:    twilioSid,
       quote_amount:  quote.amount,
-      lot_size_sqft: lotSqft,
-      living_sqft:   livingSqft,
-      mowable_sqft:  mowableSqft,
-      grass_ratio:   grassRatio,
-      tier:          quote.tier,
+      lot_size_sqft:       lotSqft,
+      living_sqft:         livingSqft,
+      footprint_method:    footprintMethod,
+      estimated_footprint: estimatedFootprint,
+      mowable_sqft:        mowableSqft,
+      grass_ratio:         grassRatio,
+      tier:                quote.tier,
     }, Date.now() - smsStart)
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : 'Unknown error'
@@ -268,11 +299,13 @@ Include: friendly greeting, the price, ask if it sounds good, mention we can get
     quote_amount:  quote.amount,
     confidence:    quote.confidence,
     tier:          quote.tier,
-    lot_size_sqft: lotSqft,
-    living_sqft:   livingSqft,
-    mowable_sqft:  mowableSqft,
-    grass_ratio:   grassRatio,
-    sms_sent:      smsSent,
-    sms_body:      smsBody,
+    lot_size_sqft:       lotSqft,
+    living_sqft:         livingSqft,
+    footprint_method:    footprintMethod,
+    estimated_footprint: estimatedFootprint,
+    mowable_sqft:        mowableSqft,
+    grass_ratio:         grassRatio,
+    sms_sent:            smsSent,
+    sms_body:            smsBody,
   })
 }
