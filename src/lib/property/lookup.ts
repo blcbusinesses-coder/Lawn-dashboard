@@ -55,19 +55,20 @@ export async function lookupProperty(
 
     const item = items[0]
 
-    // Extract lot size — handle sqft and acres
-    // Field names logged above so we can calibrate after first real run
+    // lotSize = sqft integer (e.g. 45302)
+    // lotAreaValue = acres float (e.g. 1.04) — fallback if lotSize missing
     let lotSizeSqft: number | null = null
-    const lotVal = (item.lotAreaValue ?? item.lotSize ?? item.lot_size) as number | null
-    const lotUnit = ((item.lotAreaUnit ?? item.lotSizeUnit ?? '') as string).toLowerCase()
-    if (typeof lotVal === 'number' && lotVal > 0) {
-      lotSizeSqft = lotUnit.includes('acre') ? Math.round(lotVal * 43560) : Math.round(lotVal)
+    const lotSizeDirect = item.lotSize as number | null
+    const lotAreaAcres = item.lotAreaValue as number | null
+    if (typeof lotSizeDirect === 'number' && lotSizeDirect > 0) {
+      lotSizeSqft = Math.round(lotSizeDirect)
+    } else if (typeof lotAreaAcres === 'number' && lotAreaAcres > 0) {
+      lotSizeSqft = Math.round(lotAreaAcres * 43560)
     }
 
     return {
       lotSizeSqft,
-      squareFootage:
-        (item.livingArea ?? item.squareFootage ?? item.living_area ?? item.square_feet) as number | null,
+      squareFootage: (item.livingArea ?? item.squareFootage) as number | null,
       bedrooms: (item.bedrooms ?? item.beds) as number | null,
       bathrooms: (item.bathrooms ?? item.baths) as number | null,
       zestimate: (item.zestimate ?? item.estimatedValue ?? item.estimated_value) as number | null,
