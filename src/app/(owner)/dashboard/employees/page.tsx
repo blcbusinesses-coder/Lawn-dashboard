@@ -34,6 +34,15 @@ interface TimeLog {
   profiles?: { full_name: string; hourly_rate: number | null }
 }
 
+interface Bonus {
+  id: string
+  employee_id: string
+  amount: number
+  description: string | null
+  entry_date: string
+  type: 'bonus' | 'payment'
+}
+
 interface ManualHours {
   id: string
   employee_id: string
@@ -50,6 +59,7 @@ export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [timeLogs, setTimeLogs] = useState<TimeLog[]>([])
   const [manualHours, setManualHours] = useState<ManualHours[]>([])
+  const [bonuses, setBonuses] = useState<Bonus[]>([])
   const [loading, setLoading] = useState(true)
   const [formOpen, setFormOpen] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -61,16 +71,23 @@ export default function EmployeesPage() {
   const [hoursForm, setHoursForm] = useState({ employee_id: '', month: '', hours: '', amount_paid: '', notes: '' })
   const [hoursSaving, setHoursSaving] = useState(false)
 
+  // Bonus / one-time payment dialog
+  const [bonusDialog, setBonusDialog] = useState(false)
+  const [bonusForm, setBonusForm] = useState({ employee_id: '', amount: '', description: '', entry_date: new Date().toISOString().split('T')[0], type: 'bonus' as 'bonus' | 'payment' })
+  const [bonusSaving, setBonusSaving] = useState(false)
+
   const load = useCallback(async () => {
     try {
-      const [empRes, tlRes, mhRes] = await Promise.all([
+      const [empRes, tlRes, mhRes, bonusRes] = await Promise.all([
         fetch('/api/employees'),
         fetch('/api/timelogs'),
         fetch('/api/employees/hours'),
+        fetch('/api/employees/bonuses'),
       ])
       if (empRes.ok) setEmployees(await empRes.json())
       if (tlRes.ok) setTimeLogs(await tlRes.json())
       if (mhRes.ok) setManualHours(await mhRes.json())
+      if (bonusRes.ok) setBonuses(await bonusRes.json())
     } catch (err) {
       console.error(err)
     }
@@ -132,6 +149,38 @@ export default function EmployeesPage() {
     load()
   }
 
+  async function handleSaveBonus() {
+    if (!bonusForm.employee_id || !bonusForm.amount) {
+      return toast.error('Employee and amount are required')
+    }
+    setBonusSaving(true)
+    try {
+      const res = await fetch('/api/employees/bonuses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bonusForm),
+      })
+      if (res.ok) {
+        toast.success(bonusForm.type === 'bonus' ? 'Bonus added' : 'Payment recorded')
+        setBonusDialog(false)
+        setBonusForm({ employee_id: '', amount: '', description: '', entry_date: new Date().toISOString().split('T')[0], type: 'bonus' })
+        load()
+      } else {
+        const body = await res.json().catch(() => ({}))
+        toast.error(body?.error ?? 'Failed to save')
+      }
+    } catch {
+      toast.error('Network error')
+    } finally {
+      setBonusSaving(false)
+    }
+  }
+
+  async function deleteBonus(id: string) {
+    await fetch(`/api/employees/bonuses?id=${id}`, { method: 'DELETE' })
+    load()
+  }
+
   function openEditHours(mh: ManualHours) {
     setHoursForm({
       employee_id: mh.employee_id,
@@ -169,7 +218,12 @@ export default function EmployeesPage() {
 
   type MonthlySummaryRow = {
     employee: Employee
-    rows: { month: string; label: string; clockHours: number; manualHours: number; totalHours: number; pay: number; amountPaid: number; stillOwes: number; manualId: string | null; manualEntry: ManualHours | null }[]
+    rows: {
+      month: string; label: string; clockHours: number; manualHours: number; totalHours: number
+      pay: number; bonusOwed: number; totalOwed: number; amountPaid: number; paymentsMade: number
+      totalPaid: number; stillOwes: number; manualId: string | null; manualEntry: ManualHours | null
+      monthBonuses: Bonus[]
+    }[]
   }
 
   const monthlySummary: MonthlySummaryRow[] = employees.map((emp) => ({
@@ -184,17 +238,21 @@ export default function EmployeesPage() {
       const total = clockHrs + manualHrs
       const pay = total * (emp.hourly_rate ?? 0)
       const amountPaid = manualEntry?.amount_paid ?? 0
+
+      // Bonuses & one-time payments for this employee + month
+      const monthBonuses = bonuses.filter(
+        (b) => b.employee_id === emp.id && b.entry_date.startsWith(key)
+      )
+      const bonusOwed = monthBonuses.filter((b) => b.type === 'bonus').reduce((s, b) => s + b.amount, 0)
+      const paymentsMade = monthBonuses.filter((b) => b.type === 'payment').reduce((s, b) => s + b.amount, 0)
+      const totalOwed = pay + bonusOwed
+      const totalPaid = amountPaid + paymentsMade
+
       return {
-        month: key,
-        label,
-        clockHours: clockHrs,
-        manualHours: manualHrs,
-        totalHours: total,
-        pay,
-        amountPaid,
-        stillOwes: Math.max(0, pay - amountPaid),
-        manualId: manualEntry?.id ?? null,
-        manualEntry,
+        month: key, label, clockHours: clockHrs, manualHours: manualHrs, totalHours: total,
+        pay, bonusOwed, totalOwed, amountPaid, paymentsMade, totalPaid,
+        stillOwes: Math.max(0, totalOwed - totalPaid),
+        manualId: manualEntry?.id ?? null, manualEntry, monthBonuses,
       }
     }),
   }))
@@ -207,6 +265,9 @@ export default function EmployeesPage() {
           <p className="text-sm text-zinc-500 mt-1">Manage your team and track time</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => { setBonusForm({ employee_id: '', amount: '', description: '', entry_date: new Date().toISOString().split('T')[0], type: 'bonus' }); setBonusDialog(true) }}>
+            + Bonus / Payment
+          </Button>
           <Button variant="outline" onClick={() => { setHoursForm({ employee_id: '', month: format(now, 'yyyy-MM'), hours: '', amount_paid: '', notes: '' }); setHoursDialog(true) }}>
             + Log Hours
           </Button>
@@ -304,45 +365,79 @@ export default function EmployeesPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {rows.filter((r) => r.totalHours > 0 || r.month === format(now, 'yyyy-MM')).map((row) => (
-                        <tr key={row.month} className="border-b border-zinc-50 hover:bg-zinc-50">
-                          <td className="px-4 py-2.5 text-zinc-700 font-medium">{row.label}</td>
-                          <td className="px-4 py-2.5 text-right text-zinc-500">{row.totalHours > 0 ? `${row.totalHours.toFixed(1)}h` : '—'}</td>
-                          <td className="px-4 py-2.5 text-right text-zinc-700">{row.pay > 0 ? formatCurrency(row.pay) : '—'}</td>
-                          <td className="px-4 py-2.5 text-right text-green-600 font-medium">{row.amountPaid > 0 ? formatCurrency(row.amountPaid) : '—'}</td>
-                          <td className="px-4 py-2.5 text-right font-semibold">
-                            {row.pay > 0 ? (
-                              row.stillOwes === 0
-                                ? <span className="text-green-600">Paid ✓</span>
-                                : <span className="text-red-500">{formatCurrency(row.stillOwes)}</span>
-                            ) : '—'}
-                          </td>
-                          <td className="px-4 py-2.5 text-right">
-                            <button
-                              onClick={() => openEditHours({
-                                id: row.manualId ?? '',
-                                employee_id: employee.id,
-                                month: row.month,
-                                hours: row.manualHours,
-                                amount_paid: row.amountPaid,
-                                notes: row.manualEntry?.notes ?? null,
-                              })}
-                              className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors"
-                            >
-                              {row.manualId ? 'Edit' : '+ Add'}
-                            </button>
-                            {row.manualId && (
+                      {rows.filter((r) => r.totalHours > 0 || r.monthBonuses.length > 0 || r.month === format(now, 'yyyy-MM')).map((row) => (
+                        <>
+                          <tr key={row.month} className="border-b border-zinc-50 hover:bg-zinc-50">
+                            <td className="px-4 py-2.5 text-zinc-700 font-medium">{row.label}</td>
+                            <td className="px-4 py-2.5 text-right text-zinc-500">{row.totalHours > 0 ? `${row.totalHours.toFixed(1)}h` : '—'}</td>
+                            <td className="px-4 py-2.5 text-right text-zinc-700">
+                              {row.totalOwed > 0 ? (
+                                <span>
+                                  {formatCurrency(row.totalOwed)}
+                                  {row.bonusOwed > 0 && (
+                                    <span className="ml-1 text-xs text-purple-500">(+{formatCurrency(row.bonusOwed)} bonus)</span>
+                                  )}
+                                </span>
+                              ) : '—'}
+                            </td>
+                            <td className="px-4 py-2.5 text-right text-green-600 font-medium">{row.totalPaid > 0 ? formatCurrency(row.totalPaid) : '—'}</td>
+                            <td className="px-4 py-2.5 text-right font-semibold">
+                              {row.totalOwed > 0 ? (
+                                row.stillOwes === 0
+                                  ? <span className="text-green-600">Paid ✓</span>
+                                  : <span className="text-red-500">{formatCurrency(row.stillOwes)}</span>
+                              ) : '—'}
+                            </td>
+                            <td className="px-4 py-2.5 text-right">
                               <button
-                                onClick={() => deleteHours(row.manualId!)}
-                                className="ml-2 text-xs text-zinc-300 hover:text-red-400 transition-colors"
+                                onClick={() => { setBonusForm({ employee_id: employee.id, amount: '', description: '', entry_date: `${row.month}-01`, type: 'bonus' }); setBonusDialog(true) }}
+                                className="text-xs text-purple-400 hover:text-purple-700 transition-colors mr-2"
                               >
-                                ✕
+                                + Bonus
                               </button>
-                            )}
-                          </td>
-                        </tr>
+                              <button
+                                onClick={() => openEditHours({
+                                  id: row.manualId ?? '',
+                                  employee_id: employee.id,
+                                  month: row.month,
+                                  hours: row.manualHours,
+                                  amount_paid: row.amountPaid,
+                                  notes: row.manualEntry?.notes ?? null,
+                                })}
+                                className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors"
+                              >
+                                {row.manualId ? 'Edit Hours' : '+ Hours'}
+                              </button>
+                              {row.manualId && (
+                                <button
+                                  onClick={() => deleteHours(row.manualId!)}
+                                  className="ml-2 text-xs text-zinc-300 hover:text-red-400 transition-colors"
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                          {row.monthBonuses.map((b) => (
+                            <tr key={b.id} className="border-b border-zinc-50 bg-zinc-50/50">
+                              <td className="pl-8 pr-4 py-1.5 text-xs text-zinc-400 italic">
+                                {b.type === 'bonus' ? '🎁 Bonus' : '💵 Payment'}{b.description ? ` — ${b.description}` : ''}
+                              </td>
+                              <td colSpan={2} className="px-4 py-1.5 text-right text-xs">
+                                {b.type === 'bonus'
+                                  ? <span className="text-purple-600 font-medium">+{formatCurrency(b.amount)} owed</span>
+                                  : <span className="text-green-600 font-medium">+{formatCurrency(b.amount)} paid</span>
+                                }
+                              </td>
+                              <td colSpan={2} className="px-4 py-1.5 text-xs text-zinc-400">{b.entry_date}</td>
+                              <td className="px-4 py-1.5 text-right">
+                                <button onClick={() => deleteBonus(b.id)} className="text-xs text-zinc-300 hover:text-red-400 transition-colors">✕</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </>
                       ))}
-                      {!hasData && (
+                      {!hasData && rows.every(r => r.monthBonuses.length === 0) && (
                         <tr><td colSpan={6} className="px-4 py-4 text-center text-zinc-300 text-xs">No hours logged yet</td></tr>
                       )}
                     </tbody>
@@ -404,6 +499,79 @@ export default function EmployeesPage() {
           </table>
         </div>
       )}
+
+      {/* ── BONUS / PAYMENT DIALOG ───────────────────────────────────────────── */}
+      <Dialog open={bonusDialog} onOpenChange={setBonusDialog}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add Bonus or One-Time Payment</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Type</Label>
+              <div className="flex gap-2">
+                {(['bonus', 'payment'] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setBonusForm({ ...bonusForm, type: t })}
+                    className={`flex-1 py-2 rounded-md text-sm font-medium border transition-colors ${
+                      bonusForm.type === t
+                        ? t === 'bonus' ? 'bg-purple-600 text-white border-purple-600' : 'bg-green-600 text-white border-green-600'
+                        : 'border-zinc-200 text-zinc-500 hover:border-zinc-400'
+                    }`}
+                  >
+                    {t === 'bonus' ? '🎁 Bonus (adds to owed)' : '💵 Payment (already paid)'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Employee *</Label>
+              <select
+                value={bonusForm.employee_id}
+                onChange={(e) => setBonusForm({ ...bonusForm, employee_id: e.target.value })}
+                className="w-full border border-zinc-200 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-zinc-400"
+              >
+                <option value="">Select employee…</option>
+                {employees.map((e) => (
+                  <option key={e.id} value={e.id}>{e.full_name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Amount ($) *</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  value={bonusForm.amount}
+                  onChange={(e) => setBonusForm({ ...bonusForm, amount: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Date</Label>
+                <Input
+                  type="date"
+                  value={bonusForm.entry_date}
+                  onChange={(e) => setBonusForm({ ...bonusForm, entry_date: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Description (optional)</Label>
+              <Input
+                placeholder={bonusForm.type === 'bonus' ? 'e.g. End of season bonus' : 'e.g. Cash paid on 4/15'}
+                value={bonusForm.description}
+                onChange={(e) => setBonusForm({ ...bonusForm, description: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBonusDialog(false)}>Cancel</Button>
+            <Button onClick={handleSaveBonus} disabled={bonusSaving}>{bonusSaving ? 'Saving…' : 'Save'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── ADD EMPLOYEE DIALOG ───────────────────────────────────────────────── */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
