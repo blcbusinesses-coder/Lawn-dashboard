@@ -505,7 +505,9 @@ export default function AutomationPage() {
                         <details>
                           <summary className="cursor-pointer hover:text-zinc-600 truncate">
                             {log.status === 'success'
-                              ? log.details.lot_size_sqft ? `${Number(log.details.lot_size_sqft).toLocaleString()} sqft → $${log.details.quote_amount ?? ''}` : 'view'
+                              ? (log.details.mowable_sqft ?? log.details.lot_size_sqft)
+                                ? `${Number(log.details.mowable_sqft ?? log.details.lot_size_sqft).toLocaleString()} mowable sqft → $${log.details.quote_amount ?? ''}`
+                                : 'view'
                               : String(log.details.error ?? 'view')}
                           </summary>
                           <pre className="mt-1 bg-zinc-50 rounded p-2 text-xs overflow-auto max-h-32 whitespace-pre-wrap">
