@@ -6,20 +6,24 @@ import { useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import {
+  Users, Home, ClipboardCheck, Receipt, FileText, Bot,
+  TrendingUp, HardHat, MessageSquare, Inbox, Star, Settings2, LogOut,
+} from 'lucide-react'
 
 const navItems = [
-  { href: '/dashboard/customers', label: 'Customers', icon: '👥' },
-  { href: '/dashboard/properties', label: 'Properties', icon: '🏡' },
-  { href: '/dashboard/jobs', label: 'Jobs', icon: '✅' },
-  { href: '/dashboard/expenses', label: 'Expenses', icon: '🧾' },
-  { href: '/dashboard/invoices', label: 'Invoices', icon: '📄' },
-  { href: '/dashboard/agent', label: 'Agent', icon: '🤖' },
-  { href: '/dashboard/money', label: 'Money', icon: '💰' },
-  { href: '/dashboard/employees', label: 'Employees', icon: '👷' },
-  { href: '/dashboard/sms', label: 'SMS', icon: '💬' },
-  { href: '/dashboard/inbox', label: 'Inbox', icon: '📥' },
-  { href: '/dashboard/important', label: 'Important', icon: '⭐' },
-  { href: '/dashboard/automation', label: 'Automation', icon: '⚙️' },
+  { href: '/dashboard/customers',  label: 'Customers',   Icon: Users },
+  { href: '/dashboard/properties', label: 'Properties',  Icon: Home },
+  { href: '/dashboard/jobs',       label: 'Jobs',        Icon: ClipboardCheck },
+  { href: '/dashboard/expenses',   label: 'Expenses',    Icon: Receipt },
+  { href: '/dashboard/invoices',   label: 'Invoices',    Icon: FileText },
+  { href: '/dashboard/agent',      label: 'Agent',       Icon: Bot },
+  { href: '/dashboard/money',      label: 'Money',       Icon: TrendingUp },
+  { href: '/dashboard/employees',  label: 'Employees',   Icon: HardHat },
+  { href: '/dashboard/sms',        label: 'SMS',         Icon: MessageSquare },
+  { href: '/dashboard/inbox',      label: 'Inbox',       Icon: Inbox },
+  { href: '/dashboard/important',  label: 'Important',   Icon: Star },
+  { href: '/dashboard/automation', label: 'Automation',  Icon: Settings2 },
 ]
 
 interface OwnerSidebarProps {
@@ -31,7 +35,6 @@ export function OwnerSidebar({ open = false, onClose }: OwnerSidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
 
-  // Auto-close on navigation (mobile)
   useEffect(() => { onClose?.() }, [pathname]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSignOut() {
@@ -45,28 +48,25 @@ export function OwnerSidebar({ open = false, onClose }: OwnerSidebarProps) {
   return (
     <aside
       className={cn(
-        // Mobile: fixed overlay drawer, slides in/out
-        'fixed inset-y-0 left-0 z-50 w-72 bg-zinc-900 flex flex-col transition-transform duration-200 ease-in-out',
-        // Desktop: static sidebar
-        'md:relative md:z-auto md:w-60 md:shrink-0 md:translate-x-0',
+        'fixed inset-y-0 left-0 z-50 w-64 bg-zinc-950 flex flex-col transition-transform duration-200 ease-in-out shadow-xl',
+        'md:relative md:z-auto md:translate-x-0 md:shadow-none md:border-r md:border-zinc-800',
         open ? 'translate-x-0' : '-translate-x-full',
       )}
     >
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-zinc-800 flex items-center justify-between">
+      <div className="flex items-center justify-between px-5 h-16 border-b border-zinc-800 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shrink-0">
-            <span className="text-zinc-900 font-bold text-xs">GW</span>
+          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shrink-0 shadow-sm">
+            <span className="text-zinc-900 font-bold text-xs tracking-wide">GW</span>
           </div>
-          <div>
-            <p className="text-white font-semibold text-sm leading-tight">Gray Wolf Workers</p>
+          <div className="leading-tight">
+            <p className="text-white font-semibold text-sm">Gray Wolf Workers</p>
             <p className="text-zinc-500 text-xs">Owner Portal</p>
           </div>
         </div>
-        {/* Close button — mobile only */}
         <button
           onClick={onClose}
-          className="md:hidden text-zinc-400 hover:text-white p-1 transition-colors"
+          className="md:hidden text-zinc-500 hover:text-white p-1 rounded transition-colors"
           aria-label="Close menu"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -76,34 +76,37 @@ export function OwnerSidebar({ open = false, onClose }: OwnerSidebarProps) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 py-4 overflow-y-auto">
-        <ul className="space-y-0.5 px-2">
-          {navItems.map((item) => (
-            <li key={item.href}>
-              <Link
-                href={item.href}
-                className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
-                  pathname === item.href
-                    ? 'bg-zinc-700 text-white font-medium'
-                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
-                )}
-              >
-                <span className="text-base">{item.icon}</span>
-                {item.label}
-              </Link>
-            </li>
-          ))}
+      <nav className="flex-1 overflow-y-auto py-3 px-3">
+        <ul className="space-y-0.5">
+          {navItems.map(({ href, label, Icon }) => {
+            const active = pathname === href
+            return (
+              <li key={href}>
+                <Link
+                  href={href}
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                    active
+                      ? 'bg-white/10 text-white'
+                      : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-100'
+                  )}
+                >
+                  <Icon size={16} strokeWidth={active ? 2.5 : 2} className={active ? 'text-white' : 'text-zinc-500'} />
+                  {label}
+                </Link>
+              </li>
+            )
+          })}
         </ul>
       </nav>
 
       {/* Sign out */}
-      <div className="px-2 py-4 border-t border-zinc-800">
+      <div className="px-3 py-4 border-t border-zinc-800 shrink-0">
         <button
           onClick={handleSignOut}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-zinc-400 hover:bg-white/5 hover:text-zinc-100 transition-colors"
         >
-          <span className="text-base">🚪</span>
+          <LogOut size={16} strokeWidth={2} className="text-zinc-500" />
           Sign Out
         </button>
       </div>

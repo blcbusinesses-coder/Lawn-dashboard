@@ -5,12 +5,13 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { ClipboardCheck, Clock, Wallet, Bot, LogOut } from 'lucide-react'
 
 const navItems = [
-  { href: '/employee/jobs', label: 'Jobs', icon: '✅' },
-  { href: '/employee/clock', label: 'Clock', icon: '⏱️' },
-  { href: '/employee/pay', label: 'My Pay', icon: '💵' },
-  { href: '/employee/agent', label: 'Agent', icon: '🤖' },
+  { href: '/employee/jobs',  label: 'Jobs',   Icon: ClipboardCheck },
+  { href: '/employee/clock', label: 'Clock',  Icon: Clock },
+  { href: '/employee/pay',   label: 'My Pay', Icon: Wallet },
+  { href: '/employee/agent', label: 'Agent',  Icon: Bot },
 ]
 
 export function EmployeeSidebar() {
@@ -27,78 +28,78 @@ export function EmployeeSidebar() {
 
   return (
     <>
-      {/* ── DESKTOP: left sidebar ─────────────────────────────────────────── */}
-      <aside className="hidden md:flex w-60 shrink-0 h-screen sticky top-0 bg-zinc-900 flex-col">
-        <div className="px-5 py-5 border-b border-zinc-800">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shrink-0">
-              <span className="text-zinc-900 font-bold text-xs">GW</span>
-            </div>
-            <div>
-              <p className="text-white font-semibold text-sm leading-tight">Gray Wolf Workers</p>
-              <p className="text-zinc-500 text-xs">Employee Portal</p>
-            </div>
+      {/* ── DESKTOP sidebar ───────────────────────────────────────────────── */}
+      <aside className="hidden md:flex w-60 shrink-0 h-screen sticky top-0 bg-zinc-950 flex-col border-r border-zinc-800">
+        <div className="flex items-center gap-3 px-5 h-16 border-b border-zinc-800 shrink-0">
+          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shrink-0 shadow-sm">
+            <span className="text-zinc-900 font-bold text-xs tracking-wide">GW</span>
+          </div>
+          <div className="leading-tight">
+            <p className="text-white font-semibold text-sm">Gray Wolf Workers</p>
+            <p className="text-zinc-500 text-xs">Employee Portal</p>
           </div>
         </div>
 
-        <nav className="flex-1 py-4 overflow-y-auto">
-          <ul className="space-y-0.5 px-2">
-            {navItems.map((item) => (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className={cn(
-                    'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
-                    pathname === item.href
-                      ? 'bg-zinc-700 text-white font-medium'
-                      : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
-                  )}
-                >
-                  <span className="text-base">{item.icon}</span>
-                  {item.label}
-                </Link>
-              </li>
-            ))}
+        <nav className="flex-1 overflow-y-auto py-3 px-3">
+          <ul className="space-y-0.5">
+            {navItems.map(({ href, label, Icon }) => {
+              const active = pathname === href
+              return (
+                <li key={href}>
+                  <Link
+                    href={href}
+                    className={cn(
+                      'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                      active
+                        ? 'bg-white/10 text-white'
+                        : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-100'
+                    )}
+                  >
+                    <Icon size={16} strokeWidth={active ? 2.5 : 2} className={active ? 'text-white' : 'text-zinc-500'} />
+                    {label}
+                  </Link>
+                </li>
+              )
+            })}
           </ul>
         </nav>
 
-        <div className="px-2 py-4 border-t border-zinc-800">
+        <div className="px-3 py-4 border-t border-zinc-800 shrink-0">
           <button
             onClick={handleSignOut}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-zinc-400 hover:bg-white/5 hover:text-zinc-100 transition-colors"
           >
-            <span className="text-base">🚪</span>
+            <LogOut size={16} strokeWidth={2} className="text-zinc-500" />
             Sign Out
           </button>
         </div>
       </aside>
 
-      {/* ── MOBILE: bottom tab bar ────────────────────────────────────────── */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-zinc-900 border-t border-zinc-800 flex">
-        {navItems.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              'flex-1 flex flex-col items-center justify-center gap-1 py-3 text-xs transition-colors',
-              pathname === item.href
-                ? 'text-white'
-                : 'text-zinc-500 hover:text-zinc-300'
-            )}
-          >
-            <span className="text-xl leading-none">{item.icon}</span>
-            <span className="font-medium">{item.label}</span>
-            {pathname === item.href && (
-              <span className="absolute top-0 h-0.5 w-8 bg-white rounded-full" />
-            )}
-          </Link>
-        ))}
+      {/* ── MOBILE bottom tab bar ─────────────────────────────────────────── */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-zinc-950 border-t border-zinc-800 flex safe-area-inset-bottom">
+        {navItems.map(({ href, label, Icon }) => {
+          const active = pathname === href
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                'flex-1 flex flex-col items-center justify-center gap-1 py-3 text-xs font-medium transition-colors',
+                active ? 'text-white' : 'text-zinc-500'
+              )}
+            >
+              <Icon size={20} strokeWidth={active ? 2.5 : 2} />
+              <span>{label}</span>
+              {active && <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-white rounded-full" />}
+            </Link>
+          )
+        })}
         <button
           onClick={handleSignOut}
-          className="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+          className="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-xs font-medium text-zinc-500 transition-colors"
         >
-          <span className="text-xl leading-none">🚪</span>
-          <span className="font-medium">Sign Out</span>
+          <LogOut size={20} strokeWidth={2} />
+          <span>Sign Out</span>
         </button>
       </nav>
     </>

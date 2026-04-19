@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { getWeekStart, prevWeek, nextWeek, formatWeekLabel, toDateString } from '@/lib/utils/dates'
 import { formatCurrency } from '@/lib/utils/currency'
+import { ChevronLeft, ChevronRight, CheckCircle2, MinusCircle, MapPin, User } from 'lucide-react'
 
 interface Property {
   id: string
@@ -76,7 +76,7 @@ export default function EmployeeJobsPage() {
           body: JSON.stringify({ property_id: propertyId, week_start: weekDateStr, status: 'done' }),
         })
         if (!res.ok) throw new Error((await res.json()).error)
-        toast.success('Job marked as done!')
+        toast.success('Marked as complete')
       }
       load()
     } catch (err) {
@@ -87,67 +87,111 @@ export default function EmployeeJobsPage() {
   }
 
   const doneCount = jobLogs.filter((j) => j.status === 'done').length
+  const total = properties.length
 
   return (
-    <div className="p-4">
-      <div className="flex items-center justify-between flex-wrap gap-y-2 mb-4 md:mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-zinc-900">My Jobs</h1>
-          <p className="text-sm text-zinc-500">{doneCount} of {properties.length} done this week</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setWeekStart(prevWeek(weekStart))}>← Prev</Button>
-          <span className="text-sm font-medium text-zinc-700 min-w-[160px] text-center">{formatWeekLabel(weekStart)}</span>
-          <Button variant="outline" size="sm" onClick={() => setWeekStart(nextWeek(weekStart))}>Next →</Button>
-        </div>
+    <div className="p-4 max-w-lg mx-auto">
+
+      {/* Header */}
+      <div className="pt-1 mb-4">
+        <h1 className="text-2xl font-bold text-zinc-900">My Jobs</h1>
+        {!loading && (
+          <p className="text-sm text-zinc-500 mt-0.5">
+            {doneCount} of {total} complete this week
+          </p>
+        )}
       </div>
 
-      <div className="space-y-3">
+      {/* Progress bar */}
+      {!loading && total > 0 && (
+        <div className="mb-4">
+          <div className="h-2 bg-zinc-100 rounded-full overflow-hidden border border-zinc-200">
+            <div
+              className="h-full bg-green-500 rounded-full transition-all duration-500"
+              style={{ width: `${(doneCount / total) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Week navigation */}
+      <div className="flex items-center justify-between bg-white rounded-xl border border-zinc-200 shadow-sm px-4 py-3 mb-4">
+        <button
+          onClick={() => setWeekStart(prevWeek(weekStart))}
+          className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-500 hover:text-zinc-900 transition-colors"
+        >
+          <ChevronLeft size={18} />
+        </button>
+        <span className="text-sm font-semibold text-zinc-800">{formatWeekLabel(weekStart)}</span>
+        <button
+          onClick={() => setWeekStart(nextWeek(weekStart))}
+          className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-500 hover:text-zinc-900 transition-colors"
+        >
+          <ChevronRight size={18} />
+        </button>
+      </div>
+
+      {/* Job cards */}
+      <div className="space-y-2.5">
         {loading ? (
           Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="bg-white rounded-xl border border-zinc-200 p-4">
-              <Skeleton className="h-5 w-48 mb-2" />
-              <Skeleton className="h-4 w-32" />
+            <div key={i} className="bg-white rounded-xl border border-zinc-200 p-4 shadow-sm">
+              <Skeleton className="h-4 w-48 mb-2" />
+              <Skeleton className="h-3 w-32" />
             </div>
           ))
         ) : properties.length === 0 ? (
-          <div className="bg-white rounded-xl border border-zinc-200 p-8 text-center text-zinc-400">
-            No properties assigned
+          <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-10 text-center">
+            <MapPin size={24} className="mx-auto mb-2 text-zinc-300" />
+            <p className="text-sm text-zinc-400">No properties assigned</p>
           </div>
         ) : (
           properties.map((p) => {
             const log = jobLogs.find((j) => j.property_id === p.id)
             const status = log?.status ?? null
             const isDone = status === 'done'
+            const isSkipped = status === 'skipped'
             const isMyDone = log?.completed_by === userId
 
             return (
               <div
                 key={p.id}
-                className={`bg-white rounded-xl border transition-all ${isDone ? 'border-green-200 bg-green-50' : 'border-zinc-200'} p-4`}
+                className={`bg-white rounded-xl border shadow-sm p-4 transition-all ${
+                  isDone ? 'border-green-200' : isSkipped ? 'border-zinc-200 opacity-60' : 'border-zinc-200'
+                }`}
               >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-semibold text-zinc-900">{p.address}</p>
-                    <p className="text-sm text-zinc-500">{p.customers?.full_name} · {formatCurrency(p.price_per_mow)}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {status === 'done' && (
-                      <Badge className="bg-green-100 text-green-700 border-green-200">
-                        {isMyDone ? '✓ Done by you' : '✓ Done'}
-                      </Badge>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      {isDone && <CheckCircle2 size={15} className="text-green-500 shrink-0" />}
+                      {isSkipped && <MinusCircle size={15} className="text-zinc-400 shrink-0" />}
+                      <p className={`font-semibold text-sm leading-snug truncate ${isDone ? 'text-green-800' : 'text-zinc-900'}`}>
+                        {p.address}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-zinc-400 mt-1 ml-0">
+                      <span className="flex items-center gap-1">
+                        <User size={11} />
+                        {p.customers?.full_name}
+                      </span>
+                      <span>{formatCurrency(p.price_per_mow)}</span>
+                    </div>
+                    {isDone && (
+                      <p className="text-xs text-green-600 mt-1 ml-0">
+                        {isMyDone ? 'Completed by you' : 'Completed'}
+                      </p>
                     )}
-                    {status === 'skipped' && <Badge variant="secondary">Skipped</Badge>}
-                    <Button
-                      size="sm"
-                      variant={isDone ? 'default' : 'outline'}
-                      className={isDone ? 'bg-green-600 hover:bg-green-700' : ''}
-                      disabled={pending.has(p.id)}
-                      onClick={() => markDone(p.id)}
-                    >
-                      {isDone ? '✓ Done' : 'Mark Done'}
-                    </Button>
                   </div>
+
+                  <Button
+                    size="sm"
+                    variant={isDone ? 'default' : 'outline'}
+                    className={`shrink-0 ${isDone ? 'bg-green-600 hover:bg-green-700 border-green-600 text-white' : ''}`}
+                    disabled={pending.has(p.id)}
+                    onClick={() => markDone(p.id)}
+                  >
+                    {isDone ? 'Done' : 'Mark Done'}
+                  </Button>
                 </div>
               </div>
             )
