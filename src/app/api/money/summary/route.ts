@@ -85,7 +85,18 @@ export async function GET(request: NextRequest) {
       return sum + (m.hours ?? 0) * rate
     }, 0)
 
-    const payroll = clockPayroll + manualPayroll
+    // ── Payroll: bonuses (both 'bonus' and 'payment' types are money out to employees)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: bonusData } = await (supabase as any)
+      .from('employee_bonuses')
+      .select('amount')
+      .gte('entry_date', start)
+      .lte('entry_date', end)
+
+    const bonusPayroll = ((bonusData ?? []) as Array<{ amount: number | null }>)
+      .reduce((sum, b) => sum + (b.amount ?? 0), 0)
+
+    const payroll = clockPayroll + manualPayroll + bonusPayroll
 
     result.push({
       month:           label,
