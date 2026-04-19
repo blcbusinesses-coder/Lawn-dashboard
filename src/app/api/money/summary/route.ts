@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
 
     const expenses = (expData ?? []).reduce((sum, e) => sum + (e.amount ?? 0), 0)
 
-    // ── Payroll ────────────────────────────────────────────────────────────────
+    // ── Payroll: clock-in/out logs ────────────────────────────────────────────
     const { data: timeData } = await supabase
       .from('time_logs')
       .select('duration_minutes, profiles(hourly_rate)')
@@ -64,12 +64,28 @@ export async function GET(request: NextRequest) {
       .lte('clock_in', `${end}T23:59:59`)
       .not('clock_out', 'is', null)
 
-    const payroll = (timeData ?? []).reduce((sum, t) => {
+    const clockPayroll = (timeData ?? []).reduce((sum, t) => {
       const profile = t.profiles as { hourly_rate: number | null } | null
       const rate = profile?.hourly_rate ?? 0
       const hours = (t.duration_minutes ?? 0) / 60
       return sum + hours * rate
     }, 0)
+
+    // ── Payroll: manual monthly hours ─────────────────────────────────────────
+    const monthKey = format(d, 'yyyy-MM')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: manualData } = await (supabase as any)
+      .from('employee_monthly_hours')
+      .select('hours, profiles(hourly_rate)')
+      .eq('month', monthKey)
+
+    const manualPayroll = ((manualData ?? []) as Array<{ hours: number | null; profiles: { hourly_rate: number | null } | null }>).reduce((sum, m) => {
+      const profile = m.profiles
+      const rate = profile?.hourly_rate ?? 0
+      return sum + (m.hours ?? 0) * rate
+    }, 0)
+
+    const payroll = clockPayroll + manualPayroll
 
     result.push({
       month:           label,

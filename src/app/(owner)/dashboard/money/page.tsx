@@ -59,7 +59,7 @@ export default function MoneyPage() {
           <p className="text-sm text-zinc-500 mt-1">Revenue, expenses, and profit overview</p>
         </div>
         <div className="flex gap-2">
-          {[3, 6, 12].map((r) => (
+          {[1, 3, 6, 12].map((r) => (
             <Button key={r} size="sm" variant={range === r ? 'default' : 'outline'} onClick={() => setRange(r)}>
               {r}M
             </Button>
