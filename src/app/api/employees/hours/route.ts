@@ -22,11 +22,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'employee_id, month, and hours are required' }, { status: 400 })
   }
 
+  const { amount_paid } = body
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from('employee_monthly_hours')
     .upsert(
-      { employee_id, month, hours: parseFloat(hours), notes: notes ?? null, updated_at: new Date().toISOString() },
+      {
+        employee_id,
+        month,
+        hours: parseFloat(hours),
+        notes: notes ?? null,
+        amount_paid: amount_paid != null ? parseFloat(amount_paid) : 0,
+        updated_at: new Date().toISOString(),
+      },
       { onConflict: 'employee_id,month' }
     )
     .select()

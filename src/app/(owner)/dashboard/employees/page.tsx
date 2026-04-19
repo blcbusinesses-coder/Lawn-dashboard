@@ -39,6 +39,7 @@ interface ManualHours {
   employee_id: string
   month: string
   hours: number
+  amount_paid: number
   notes: string | null
   profiles?: { full_name: string; hourly_rate: number | null }
 }
@@ -57,7 +58,7 @@ export default function EmployeesPage() {
 
   // Manual hours dialog
   const [hoursDialog, setHoursDialog] = useState(false)
-  const [hoursForm, setHoursForm] = useState({ employee_id: '', month: '', hours: '', notes: '' })
+  const [hoursForm, setHoursForm] = useState({ employee_id: '', month: '', hours: '', amount_paid: '', notes: '' })
   const [hoursSaving, setHoursSaving] = useState(false)
 
   const load = useCallback(async () => {
@@ -111,14 +112,15 @@ export default function EmployeesPage() {
         employee_id: hoursForm.employee_id,
         month: hoursForm.month,
         hours: parseFloat(hoursForm.hours),
+        amount_paid: hoursForm.amount_paid ? parseFloat(hoursForm.amount_paid) : 0,
         notes: hoursForm.notes || null,
       }),
     })
     setHoursSaving(false)
     if (res.ok) {
-      toast.success('Hours saved')
+      toast.success('Saved')
       setHoursDialog(false)
-      setHoursForm({ employee_id: '', month: '', hours: '', notes: '' })
+      setHoursForm({ employee_id: '', month: '', hours: '', amount_paid: '', notes: '' })
       load()
     } else {
       toast.error('Failed to save hours')
@@ -135,6 +137,7 @@ export default function EmployeesPage() {
       employee_id: mh.employee_id,
       month: mh.month,
       hours: String(mh.hours),
+      amount_paid: mh.amount_paid > 0 ? String(mh.amount_paid) : '',
       notes: mh.notes ?? '',
     })
     setHoursDialog(true)
@@ -166,7 +169,7 @@ export default function EmployeesPage() {
 
   type MonthlySummaryRow = {
     employee: Employee
-    rows: { month: string; label: string; clockHours: number; manualHours: number; totalHours: number; pay: number; manualId: string | null }[]
+    rows: { month: string; label: string; clockHours: number; manualHours: number; totalHours: number; pay: number; amountPaid: number; stillOwes: number; manualId: string | null; manualEntry: ManualHours | null }[]
   }
 
   const monthlySummary: MonthlySummaryRow[] = employees.map((emp) => ({
@@ -176,17 +179,22 @@ export default function EmployeesPage() {
         .filter((t) => t.employee_id === emp.id && t.clock_in.startsWith(key) && t.clock_out)
         .reduce((sum, t) => sum + (t.duration_minutes ?? 0), 0)
       const clockHrs = clockMins / 60
-      const manualEntry = manualHours.find((m) => m.employee_id === emp.id && m.month === key)
+      const manualEntry = manualHours.find((m) => m.employee_id === emp.id && m.month === key) ?? null
       const manualHrs = manualEntry?.hours ?? 0
       const total = clockHrs + manualHrs
+      const pay = total * (emp.hourly_rate ?? 0)
+      const amountPaid = manualEntry?.amount_paid ?? 0
       return {
         month: key,
         label,
         clockHours: clockHrs,
         manualHours: manualHrs,
         totalHours: total,
-        pay: total * (emp.hourly_rate ?? 0),
+        pay,
+        amountPaid,
+        stillOwes: Math.max(0, pay - amountPaid),
         manualId: manualEntry?.id ?? null,
+        manualEntry,
       }
     }),
   }))
@@ -199,7 +207,7 @@ export default function EmployeesPage() {
           <p className="text-sm text-zinc-500 mt-1">Manage your team and track time</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => { setHoursForm({ employee_id: '', month: format(now, 'yyyy-MM'), hours: '', notes: '' }); setHoursDialog(true) }}>
+          <Button variant="outline" onClick={() => { setHoursForm({ employee_id: '', month: format(now, 'yyyy-MM'), hours: '', amount_paid: '', notes: '' }); setHoursDialog(true) }}>
             + Log Hours
           </Button>
           <Button onClick={() => setFormOpen(true)}>+ Add Employee</Button>
@@ -288,10 +296,10 @@ export default function EmployeesPage() {
                     <thead>
                       <tr className="border-b border-zinc-100">
                         <th className="text-left px-4 py-2 font-medium text-zinc-500 text-xs">Month</th>
-                        <th className="text-right px-4 py-2 font-medium text-zinc-500 text-xs">Clock Hours</th>
-                        <th className="text-right px-4 py-2 font-medium text-zinc-500 text-xs">Manual Hours</th>
-                        <th className="text-right px-4 py-2 font-medium text-zinc-500 text-xs">Total</th>
-                        <th className="text-right px-4 py-2 font-medium text-zinc-500 text-xs">Est. Pay</th>
+                        <th className="text-right px-4 py-2 font-medium text-zinc-500 text-xs">Hours</th>
+                        <th className="text-right px-4 py-2 font-medium text-zinc-500 text-xs">Owed</th>
+                        <th className="text-right px-4 py-2 font-medium text-zinc-500 text-xs">Paid</th>
+                        <th className="text-right px-4 py-2 font-medium text-zinc-500 text-xs">Still Owe</th>
                         <th className="px-4 py-2" />
                       </tr>
                     </thead>
@@ -299,13 +307,26 @@ export default function EmployeesPage() {
                       {rows.filter((r) => r.totalHours > 0 || r.month === format(now, 'yyyy-MM')).map((row) => (
                         <tr key={row.month} className="border-b border-zinc-50 hover:bg-zinc-50">
                           <td className="px-4 py-2.5 text-zinc-700 font-medium">{row.label}</td>
-                          <td className="px-4 py-2.5 text-right text-zinc-500">{row.clockHours > 0 ? `${row.clockHours.toFixed(1)}h` : '—'}</td>
-                          <td className="px-4 py-2.5 text-right text-zinc-500">{row.manualHours > 0 ? `${row.manualHours.toFixed(1)}h` : '—'}</td>
-                          <td className="px-4 py-2.5 text-right font-semibold text-zinc-900">{row.totalHours.toFixed(1)}h</td>
+                          <td className="px-4 py-2.5 text-right text-zinc-500">{row.totalHours > 0 ? `${row.totalHours.toFixed(1)}h` : '—'}</td>
                           <td className="px-4 py-2.5 text-right text-zinc-700">{row.pay > 0 ? formatCurrency(row.pay) : '—'}</td>
+                          <td className="px-4 py-2.5 text-right text-green-600 font-medium">{row.amountPaid > 0 ? formatCurrency(row.amountPaid) : '—'}</td>
+                          <td className="px-4 py-2.5 text-right font-semibold">
+                            {row.pay > 0 ? (
+                              row.stillOwes === 0
+                                ? <span className="text-green-600">Paid ✓</span>
+                                : <span className="text-red-500">{formatCurrency(row.stillOwes)}</span>
+                            ) : '—'}
+                          </td>
                           <td className="px-4 py-2.5 text-right">
                             <button
-                              onClick={() => openEditHours({ id: row.manualId ?? '', employee_id: employee.id, month: row.month, hours: row.manualHours, notes: null })}
+                              onClick={() => openEditHours({
+                                id: row.manualId ?? '',
+                                employee_id: employee.id,
+                                month: row.month,
+                                hours: row.manualHours,
+                                amount_paid: row.amountPaid,
+                                notes: row.manualEntry?.notes ?? null,
+                              })}
                               className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors"
                             >
                               {row.manualId ? 'Edit' : '+ Add'}
@@ -423,8 +444,8 @@ export default function EmployeesPage() {
       {/* ── LOG HOURS DIALOG ──────────────────────────────────────────────────── */}
       <Dialog open={hoursDialog} onOpenChange={setHoursDialog}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Log Monthly Hours</DialogTitle></DialogHeader>
-          <p className="text-sm text-zinc-500">Manually record hours worked for a specific month. This is added on top of any clock-in/out entries.</p>
+          <DialogHeader><DialogTitle>Log Hours & Payment</DialogTitle></DialogHeader>
+          <p className="text-sm text-zinc-500">Record hours worked and any payments already made for this month.</p>
           <div className="space-y-3">
             <div className="space-y-1">
               <Label>Employee *</Label>
@@ -461,9 +482,32 @@ export default function EmployeesPage() {
               </div>
             </div>
             <div className="space-y-1">
+              <Label>Amount Already Paid ($)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+                value={hoursForm.amount_paid}
+                onChange={(e) => setHoursForm({ ...hoursForm, amount_paid: e.target.value })}
+              />
+              {hoursForm.hours && hoursForm.employee_id && (() => {
+                const emp = employees.find(e => e.id === hoursForm.employee_id)
+                const owed = parseFloat(hoursForm.hours || '0') * (emp?.hourly_rate ?? 0)
+                const paid = parseFloat(hoursForm.amount_paid || '0')
+                const still = Math.max(0, owed - paid)
+                if (owed > 0) return (
+                  <p className="text-xs text-zinc-500 mt-1">
+                    Owed: <span className="font-medium text-zinc-700">{formatCurrency(owed)}</span>
+                    {paid > 0 && <> · Paid: <span className="font-medium text-green-600">{formatCurrency(paid)}</span> · Still owes: <span className={`font-medium ${still === 0 ? 'text-green-600' : 'text-red-500'}`}>{still === 0 ? 'Nothing ✓' : formatCurrency(still)}</span></>}
+                  </p>
+                )
+              })()}
+            </div>
+            <div className="space-y-1">
               <Label>Notes (optional)</Label>
               <Input
-                placeholder="e.g. Adjusted for overtime"
+                placeholder="e.g. Paid half on 4/15"
                 value={hoursForm.notes}
                 onChange={(e) => setHoursForm({ ...hoursForm, notes: e.target.value })}
               />
@@ -471,7 +515,7 @@ export default function EmployeesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setHoursDialog(false)}>Cancel</Button>
-            <Button onClick={handleSaveHours} disabled={hoursSaving}>{hoursSaving ? 'Saving…' : 'Save Hours'}</Button>
+            <Button onClick={handleSaveHours} disabled={hoursSaving}>{hoursSaving ? 'Saving…' : 'Save'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
