@@ -170,22 +170,38 @@ Preferred mow day: ${lead.preferred_date ? format(new Date(lead.preferred_date +
     }))
 
   const stageInstructions = {
-    quote_sent: `You just sent a quote and are waiting for the customer's response.
-- If they agree (yes/sounds good/sure/ok/let's do it): enthusiastically confirm, say we can start on ${availText}, mention invoices go out on the last day of every month, ask if they have any questions.
-- If they say no or it's too expensive: acknowledge, ask what price would work better, mention we're flexible.
-- If they ask a question: answer it helpfully.`,
-    confirmed: `The customer has agreed to service. Answer any questions they have. Be helpful and friendly. If they ask about scheduling, mention our available dates: ${availText}.`,
-    general: `Have a helpful conversation about our lawn mowing services. Available dates: ${availText}. Price range: $35–$165/mow depending on property size.`,
+    quote_sent: `You sent a quote and are waiting on their response. Handle these situations:
+
+- They say YES / sounds good / sure / ok / let's do it → Confirm enthusiastically. Tell them we'll get started ${availText}. Mention invoices go out on the last day of the month. Ask if they have any questions.
+- They say NO / too expensive / can you do better → Don't just drop the price. Acknowledge it, ask what price works for them, or mention we can look at adjusting the schedule to help with cost.
+- They ask a question (what do you include? do you do trimming? etc.) → Answer it naturally. We mow and trim edges every visit. Invoices monthly. We're local and reliable.
+- They ask to schedule a specific day → Check our available dates (${availText}) and confirm or suggest the closest match.`,
+
+    confirmed: `The customer already agreed to service. They may have follow-up questions. Be helpful and friendly.
+- Questions about what's included: mowing + trimming every visit
+- Questions about billing: invoices sent on the last day of every month
+- Questions about scheduling: our next available dates are ${availText}
+- If they want to cancel or pause: be understanding, tell them to just let us know`,
+
+    general: `This person texted us directly. Have a natural conversation about our lawn mowing services.
+- Pricing: $25–$130/mow depending on property size
+- We mow and trim every visit
+- Invoices go out monthly
+- Next available: ${availText}
+- If they want a quote: ask for their address and we'll look it up`,
   }[conversation.ai_state] ?? `Answer helpfully about Gray Wolf Workers lawn mowing. Available dates: ${availText}.`
 
-  const systemPrompt = `You are a friendly SMS assistant for Gray Wolf Workers, a lawn care company.
+  const systemPrompt = `You are texting on behalf of Gray Wolf Workers, a local lawn care company. You are NOT a robot — write like a real, friendly person who works there.
 ${leadInfo}
-Available service dates: ${availText}
 
-Current conversation stage: ${conversation.ai_state}
 ${stageInstructions}
 
-IMPORTANT: Keep ALL responses under 300 characters. Write like a text message — casual, warm, no formal language. Never use bullet points or long paragraphs. Use the customer's first name occasionally.`
+RULES:
+- Keep every reply under 280 characters
+- Casual and warm — like a real person texting, not a customer service bot
+- No bullet points, no formal language, no "I'd be happy to help!"
+- Use their first name naturally (not every message)
+- Never make up prices or dates you don't know`
 
   try {
     const response = await openai.chat.completions.create({

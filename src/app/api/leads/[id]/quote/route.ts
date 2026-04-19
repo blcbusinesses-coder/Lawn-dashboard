@@ -197,26 +197,34 @@ export async function POST(
   let smsBody: string
   const firstName = (lead.name as string).split(' ')[0]
 
+  const startDate = availDates?.length
+    ? format(new Date(availDates[0].available_date + 'T12:00:00'), 'EEEE, MMM d')
+    : 'soon'
+
   try {
-    const prompt = `Write a friendly, natural SMS quote message for a lawn mowing service. Keep the TOTAL message under 320 characters.
+    const prompt = `Write an SMS quote message for a lawn mowing service. Follow this exact structure but make it sound natural — not robotic:
 
-Customer first name: ${firstName}
-Property address: ${lead.address}
-Quote: $${quote.amount}/mow${quote.confidence === 'estimate' ? ' (estimated, exact lot size unavailable)' : ''}
-${preferredText ? `Their preferred day: ${preferredText}` : ''}
-Our next available dates: ${availText}
-Signature to append: ${smsSignature}
+"Hey [first name], I just got your request for a quote. After looking at your property, does $[price] sound fair? If that works, we can get started [start date]. ${smsSignature}"
 
-Include: friendly greeting, the price, ask if it sounds good, mention we can get started soon. No emojis in the body unless very subtle. Append the signature at the end.`
+Fill in:
+- First name: ${firstName}
+- Price: $${quote.amount}/mow
+- Start date: ${preferredText ? preferredText : startDate}
+
+Rules:
+- Keep the ENTIRE message under 300 characters
+- Casual, warm, like a real person texting
+- Do NOT add anything outside the structure above
+- End with exactly: ${smsSignature}`
 
     const res = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 150,
+      max_tokens: 120,
     })
     smsBody = res.choices[0].message.content?.trim() ?? ''
   } catch {
-    smsBody = `Hi ${firstName}! Gray Wolf Workers here 🐺 We'd love to mow your lawn at ${lead.address} for $${quote.amount}/visit. Sound good? We can get started ${availDates?.length ? `as soon as ${format(new Date(availDates[0].available_date + 'T12:00:00'), 'MMM d')}` : 'soon'}! Reply YES to confirm. ${smsSignature}`
+    smsBody = `Hey ${firstName}, I just got your request for a quote. After looking at your property, does $${quote.amount} sound fair? If that works, we can get started ${startDate}. ${smsSignature}`
   }
 
   // ── 5. Send SMS ────────────────────────────────────────────────────────────
