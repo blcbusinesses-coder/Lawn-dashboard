@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 const navItems = [
   { href: '/employee/jobs', label: 'Jobs', icon: '✅' },
   { href: '/employee/clock', label: 'Clock', icon: '⏱️' },
+  { href: '/employee/pay', label: 'My Pay', icon: '💵' },
   { href: '/employee/agent', label: 'Agent', icon: '🤖' },
 ]
 
