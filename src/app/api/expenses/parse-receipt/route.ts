@@ -11,33 +11,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'No file provided' }, { status: 400 })
   }
 
-  // Upload to Supabase Storage
-  const fileName = `receipts/${Date.now()}-${file.name}`
   const arrayBuffer = await file.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
 
-  const { data: uploadData, error: uploadError } = await supabase.storage
+  // Upload to Supabase Storage for record-keeping
+  const fileName = `receipts/${Date.now()}-${file.name}`
+  const { data: uploadData } = await supabase.storage
     .from('receipts')
     .upload(fileName, buffer, { contentType: file.type, upsert: false })
 
-  if (uploadError) {
-    return NextResponse.json({ error: uploadError.message }, { status: 500 })
-  }
+  // Pass image as base64 directly to OpenAI — avoids signed URL access issues
+  const base64 = buffer.toString('base64')
+  const dataUrl = `data:${file.type};base64,${base64}`
 
-  // Get signed URL for OpenAI
-  const { data: signedData } = await supabase.storage
-    .from('receipts')
-    .createSignedUrl(uploadData.path, 3600)
-
-  if (!signedData?.signedUrl) {
-    return NextResponse.json({ error: 'Could not create signed URL' }, { status: 500 })
-  }
-
-  // Parse with OpenAI Vision
-  const parsed = await parseReceipt(signedData.signedUrl)
+  const parsed = await parseReceipt(dataUrl)
 
   return NextResponse.json({
     ...parsed,
-    receipt_url: uploadData.path,
+    receipt_url: uploadData?.path ?? null,
   })
 }
