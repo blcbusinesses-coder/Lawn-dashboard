@@ -69,7 +69,7 @@ export default function ClockPage() {
   const isClockedIn = !!openEntry
 
   return (
-    <div className="p-6 flex flex-col items-center justify-center min-h-[60vh]">
+    <div className="p-4 flex flex-col items-center justify-center min-h-[70vh]">
       <div className="bg-white rounded-2xl border border-zinc-200 p-8 w-full max-w-sm text-center shadow-sm">
         <div className="mb-6">
           <div className={`w-20 h-20 rounded-full mx-auto flex items-center justify-center text-3xl mb-4 ${isClockedIn ? 'bg-green-100' : 'bg-zinc-100'}`}>

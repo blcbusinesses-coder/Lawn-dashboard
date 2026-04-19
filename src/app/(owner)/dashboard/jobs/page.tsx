@@ -282,10 +282,10 @@ export default function JobsPage() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="p-8 space-y-8">
+    <div className="p-4 md:p-8 space-y-8">
       {/* ── Weekly Jobs ──────────────────────────────────────────────────── */}
       <div>
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between flex-wrap gap-y-2 mb-4 md:mb-6">
           <div>
             <h1 className="text-2xl font-bold text-zinc-900">Jobs</h1>
             <p className="text-sm text-zinc-500 mt-1">Track weekly lawn completions</p>
@@ -300,7 +300,7 @@ export default function JobsPage() {
         </div>
 
         {/* Summary cards */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-xl border border-zinc-200 p-4">
             <p className="text-xs text-zinc-500 uppercase tracking-wide">Lawns Done</p>
             <p className="text-2xl font-bold text-zinc-900 mt-1">{doneCount} / {properties.length}</p>
@@ -320,6 +320,7 @@ export default function JobsPage() {
         </div>
 
         <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-100 bg-zinc-50">
@@ -377,6 +378,7 @@ export default function JobsPage() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 
@@ -396,6 +398,7 @@ export default function JobsPage() {
             <span className="text-sm font-medium text-zinc-700">Pending</span>
             {pendingOneOff.length > 0 && <Badge variant="secondary">{pendingOneOff.length}</Badge>}
           </div>
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-100">
@@ -447,6 +450,7 @@ export default function JobsPage() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
 
         {/* Recently completed one-off jobs */}
@@ -455,6 +459,7 @@ export default function JobsPage() {
             <div className="px-4 py-3 bg-zinc-50 border-b border-zinc-100">
               <span className="text-sm font-medium text-zinc-700">Recently Completed</span>
             </div>
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-zinc-100">
@@ -495,6 +500,7 @@ export default function JobsPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
       </div>

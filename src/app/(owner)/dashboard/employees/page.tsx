@@ -258,8 +258,8 @@ export default function EmployeesPage() {
   }))
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 md:p-8">
+      <div className="flex items-center justify-between flex-wrap gap-y-2 mb-4 md:mb-6">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900">Employees</h1>
           <p className="text-sm text-zinc-500 mt-1">Manage your team and track time</p>
@@ -287,6 +287,7 @@ export default function EmployeesPage() {
       {/* ── TEAM TAB ─────────────────────────────────────────────────────────── */}
       {activeTab === 'employees' && (
         <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-100 bg-zinc-50">
@@ -325,6 +326,7 @@ export default function EmployeesPage() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -353,6 +355,7 @@ export default function EmployeesPage() {
                       {totalHours.toFixed(1)}h total · {formatCurrency(totalPay)} est. pay
                     </div>
                   </div>
+                  <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-zinc-100">
@@ -442,6 +445,7 @@ export default function EmployeesPage() {
                       )}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               )
             })
@@ -452,6 +456,7 @@ export default function EmployeesPage() {
       {/* ── CLOCK LOGS TAB ───────────────────────────────────────────────────── */}
       {activeTab === 'timelogs' && (
         <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-100 bg-zinc-50">
@@ -497,6 +502,7 @@ export default function EmployeesPage() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

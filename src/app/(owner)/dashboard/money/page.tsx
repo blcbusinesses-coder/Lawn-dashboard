@@ -52,8 +52,8 @@ export default function MoneyPage() {
     value != null ? formatCurrency(Number(value)) : ''
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 md:p-8">
+      <div className="flex items-center justify-between flex-wrap gap-y-2 mb-4 md:mb-6">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900">Money</h1>
           <p className="text-sm text-zinc-500 mt-1">Revenue, expenses, and profit overview</p>
@@ -68,7 +68,7 @@ export default function MoneyPage() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         {[
           { label: 'Total Revenue', value: totals.revenue, color: 'text-green-600' },
           { label: 'Total Expenses', value: totals.expenses, color: 'text-red-500' },
@@ -133,6 +133,7 @@ export default function MoneyPage() {
             <div className="px-5 py-4 border-b border-zinc-100">
               <h2 className="text-base font-semibold text-zinc-800">Monthly Breakdown</h2>
             </div>
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-zinc-100 bg-zinc-50">
@@ -166,6 +167,7 @@ export default function MoneyPage() {
                 </tr>
               </tfoot>
             </table>
+            </div>
           </div>
         </div>
       )}

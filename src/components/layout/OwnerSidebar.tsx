@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
+import { useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -21,9 +22,17 @@ const navItems = [
   { href: '/dashboard/automation', label: 'Automation', icon: '⚙️' },
 ]
 
-export function OwnerSidebar() {
+interface OwnerSidebarProps {
+  open?: boolean
+  onClose?: () => void
+}
+
+export function OwnerSidebar({ open = false, onClose }: OwnerSidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
+
+  // Auto-close on navigation (mobile)
+  useEffect(() => { onClose?.() }, [pathname]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSignOut() {
     const supabase = createClient()
@@ -34,9 +43,17 @@ export function OwnerSidebar() {
   }
 
   return (
-    <aside className="w-60 shrink-0 h-screen sticky top-0 bg-zinc-900 flex flex-col">
+    <aside
+      className={cn(
+        // Mobile: fixed overlay drawer, slides in/out
+        'fixed inset-y-0 left-0 z-50 w-72 bg-zinc-900 flex flex-col transition-transform duration-200 ease-in-out',
+        // Desktop: static sidebar
+        'md:relative md:z-auto md:w-60 md:shrink-0 md:translate-x-0',
+        open ? 'translate-x-0' : '-translate-x-full',
+      )}
+    >
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-zinc-800">
+      <div className="px-5 py-5 border-b border-zinc-800 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shrink-0">
             <span className="text-zinc-900 font-bold text-xs">GW</span>
@@ -46,6 +63,16 @@ export function OwnerSidebar() {
             <p className="text-zinc-500 text-xs">Owner Portal</p>
           </div>
         </div>
+        {/* Close button — mobile only */}
+        <button
+          onClick={onClose}
+          className="md:hidden text-zinc-400 hover:text-white p-1 transition-colors"
+          aria-label="Close menu"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
 
       {/* Nav */}
@@ -56,7 +83,7 @@ export function OwnerSidebar() {
               <Link
                 href={item.href}
                 className={cn(
-                  'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
                   pathname === item.href
                     ? 'bg-zinc-700 text-white font-medium'
                     : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
@@ -74,7 +101,7 @@ export function OwnerSidebar() {
       <div className="px-2 py-4 border-t border-zinc-800">
         <button
           onClick={handleSignOut}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
         >
           <span className="text-base">🚪</span>
           Sign Out

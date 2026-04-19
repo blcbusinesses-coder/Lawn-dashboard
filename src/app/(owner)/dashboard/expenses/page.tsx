@@ -174,8 +174,8 @@ export default function ExpensesPage() {
   const grandTotal = expenses.reduce((sum, e) => sum + e.amount, 0)
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 md:p-8">
+      <div className="flex items-center justify-between flex-wrap gap-y-2 mb-4 md:mb-6">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900">Expenses</h1>
           <p className="text-sm text-zinc-500 mt-1">Track and categorize business expenses</p>
@@ -194,7 +194,7 @@ export default function ExpensesPage() {
 
       {/* Category totals */}
       {!loading && expenses.length > 0 && (
-        <div className="grid grid-cols-6 gap-3 mb-6">
+        <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-6">
           {CATEGORIES.map((cat) => (
             <div key={cat} className="bg-white rounded-xl border border-zinc-200 p-3">
               <p className="text-xs text-zinc-500 capitalize">{cat}</p>
@@ -209,6 +209,7 @@ export default function ExpensesPage() {
       )}
 
       <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-zinc-100 bg-zinc-50">
@@ -264,6 +265,7 @@ export default function ExpensesPage() {
             </tfoot>
           )}
         </table>
+        </div>
       </div>
 
       {/* Form Dialog */}

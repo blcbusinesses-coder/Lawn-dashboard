@@ -89,8 +89,8 @@ export default function EmployeeJobsPage() {
   const doneCount = jobLogs.filter((j) => j.status === 'done').length
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4">
+      <div className="flex items-center justify-between flex-wrap gap-y-2 mb-4 md:mb-6">
         <div>
           <h1 className="text-xl font-bold text-zinc-900">My Jobs</h1>
           <p className="text-sm text-zinc-500">{doneCount} of {properties.length} done this week</p>
