@@ -146,7 +146,9 @@ export default function ExpensesPage() {
       } else {
         toast.success(editing ? 'Expense updated' : 'Expense saved')
         setFormOpen(false)
-        load()
+        // Switch to the month of the saved expense so it's immediately visible
+        const expenseMonth = form.expense_date.slice(0, 7) // 'YYYY-MM'
+        setSelectedMonth(expenseMonth)
       }
     } catch (err) {
       console.error('handleSave error:', err)
