@@ -130,22 +130,30 @@ export default function ExpensesPage() {
     if (!form.merchant.trim() || !form.amount) return toast.error('Merchant and amount are required')
     setSaving(true)
 
-    const url = editing ? `/api/expenses/${editing.id}` : '/api/expenses'
-    const method = editing ? 'PUT' : 'POST'
+    try {
+      const url = editing ? `/api/expenses/${editing.id}` : '/api/expenses'
+      const method = editing ? 'PUT' : 'POST'
 
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, amount: parseFloat(form.amount) }),
-    })
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, amount: parseFloat(form.amount) }),
+      })
 
-    if (!res.ok) toast.error((await res.json()).error)
-    else {
-      toast.success(editing ? 'Expense updated' : 'Expense saved')
-      setFormOpen(false)
-      load()
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        toast.error(body?.error ?? `Save failed (${res.status})`)
+      } else {
+        toast.success(editing ? 'Expense updated' : 'Expense saved')
+        setFormOpen(false)
+        load()
+      }
+    } catch (err) {
+      console.error('handleSave error:', err)
+      toast.error('Network error — could not save expense')
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   async function handleDelete() {
