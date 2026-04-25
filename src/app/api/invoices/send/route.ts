@@ -53,8 +53,13 @@ export async function POST(request: NextRequest) {
     })
   )
 
+  const fromEmail = process.env.RESEND_FROM_EMAIL
+  if (!fromEmail) {
+    return NextResponse.json({ error: 'RESEND_FROM_EMAIL environment variable is not set' }, { status: 500 })
+  }
+
   const { error: sendError } = await getResend().emails.send({
-    from: process.env.RESEND_FROM_EMAIL!,
+    from: fromEmail,
     to: customer.email,
     subject: `Invoice from Gray Wolf Workers — ${periodLabel}`,
     html: emailHtml,
