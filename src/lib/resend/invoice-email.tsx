@@ -8,7 +8,11 @@ import {
   Row,
   Column,
   Hr,
+  Img,
 } from '@react-email/components'
+
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL
+  || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
 
 interface LineItem {
   description: string
@@ -55,34 +59,20 @@ export function InvoiceEmail({
 
           {/* ── Header card ───────────────────────────────────────── */}
           <Section style={{
-            backgroundColor: '#1e4010',
+            backgroundColor: '#0a0a0a',
             borderRadius: '16px 16px 0 0',
-            padding: '32px 40px 28px',
-            backgroundImage: 'radial-gradient(ellipse at top right, #2d5a1b 0%, #1a380e 100%)',
+            padding: '20px 40px',
           }}>
             <Row>
-              {/* Logo mark */}
-              <Column style={{ width: '52px', verticalAlign: 'middle' }}>
-                <div style={{
-                  width: '44px',
-                  height: '44px',
-                  backgroundColor: 'rgba(255,255,255,0.12)',
-                  border: '1px solid rgba(255,255,255,0.18)',
-                  borderRadius: '10px',
-                  display: 'table-cell',
-                  textAlign: 'center',
-                  verticalAlign: 'middle',
-                }}>
-                  <Text style={{
-                    color: '#ffffff',
-                    fontSize: '14px',
-                    fontWeight: '700',
-                    margin: '0',
-                    lineHeight: '44px',
-                    letterSpacing: '0.04em',
-                    textAlign: 'center',
-                  }}>GW</Text>
-                </div>
+              {/* Wolf logo — black bg blends with header */}
+              <Column style={{ width: '72px', verticalAlign: 'middle' }}>
+                <Img
+                  src={`${BASE_URL}/wolf-logo.png`}
+                  alt="Gray Wolf Workers"
+                  width="60"
+                  height="60"
+                  style={{ display: 'block' }}
+                />
               </Column>
               {/* Name */}
               <Column style={{ verticalAlign: 'middle', paddingLeft: '14px' }}>
@@ -97,7 +87,7 @@ export function InvoiceEmail({
                   Gray Wolf Workers
                 </Text>
                 <Text style={{
-                  color: 'rgba(255,255,255,0.5)',
+                  color: 'rgba(255,255,255,0.45)',
                   fontSize: '11px',
                   fontWeight: '600',
                   margin: '4px 0 0',
@@ -332,8 +322,7 @@ export function InvoiceEmail({
 
           {/* ── Footer ────────────────────────────────────────────── */}
           <Section style={{
-            backgroundColor: '#1e4010',
-            backgroundImage: 'linear-gradient(135deg, #2d5a1b 0%, #1a380e 100%)',
+            backgroundColor: '#0a0a0a',
             borderRadius: '0 0 16px 16px',
             padding: '20px 40px',
           }}>
