@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { getResend } from '@/lib/resend/client'
+import { getMailer, MAIL_FROM } from '@/lib/nodemailer/client'
 import { InvoiceEmail } from '@/lib/resend/invoice-email'
 import { NextRequest, NextResponse } from 'next/server'
 import { format } from 'date-fns'
@@ -53,20 +53,16 @@ export async function POST(request: NextRequest) {
     })
   )
 
-  const fromEmail = process.env.RESEND_FROM_EMAIL
-  if (!fromEmail) {
-    return NextResponse.json({ error: 'RESEND_FROM_EMAIL environment variable is not set' }, { status: 500 })
-  }
-
-  const { error: sendError } = await getResend().emails.send({
-    from: `Gray Wolf Workers <${fromEmail}>`,
-    to: customer.email,
-    subject: `Invoice from Gray Wolf Workers — ${periodLabel}`,
-    html: emailHtml,
-  })
-
-  if (sendError) {
-    return NextResponse.json({ error: sendError.message }, { status: 500 })
+  try {
+    await getMailer().sendMail({
+      from: MAIL_FROM,
+      to: customer.email,
+      subject: `Invoice from Gray Wolf Workers — ${periodLabel}`,
+      html: emailHtml,
+    })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to send email'
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 
   // Update invoice status

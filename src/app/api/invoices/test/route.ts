@@ -1,4 +1,4 @@
-import { getResend } from '@/lib/resend/client'
+import { getMailer, MAIL_FROM } from '@/lib/nodemailer/client'
 import { InvoiceEmail } from '@/lib/resend/invoice-email'
 import { NextRequest, NextResponse } from 'next/server'
 import { format, subDays } from 'date-fns'
@@ -22,26 +22,24 @@ export async function POST(request: NextRequest) {
   }
 
   // Build a realistic-looking fake invoice
-  const address = SAMPLE_ADDRESSES[Math.floor(Math.random() * SAMPLE_ADDRESSES.length)]
-  const visits   = MOWS_PER_MONTH[Math.floor(Math.random() * MOWS_PER_MONTH.length)]
-  const price    = PRICES[Math.floor(Math.random() * PRICES.length)]
-  const subtotal = visits * price
-  const total    = subtotal
+  const address   = SAMPLE_ADDRESSES[Math.floor(Math.random() * SAMPLE_ADDRESSES.length)]
+  const visits    = MOWS_PER_MONTH[Math.floor(Math.random() * MOWS_PER_MONTH.length)]
+  const price     = PRICES[Math.floor(Math.random() * PRICES.length)]
+  const subtotal  = visits * price
+  const total     = subtotal
 
-  const now        = new Date()
-  const periodEnd  = subDays(now, 1)
+  const now         = new Date()
+  const periodEnd   = subDays(now, 1)
   const periodStart = new Date(periodEnd.getFullYear(), periodEnd.getMonth(), 1)
   const periodLabel = format(periodStart, 'MMMM yyyy')
   const fakeId      = Math.random().toString(36).slice(2, 10).toUpperCase()
 
-  const lineItems = [
-    {
-      description: `Lawn mowing — ${address}`,
-      quantity: visits,
-      unit_price: price,
-      line_total: subtotal,
-    },
-  ]
+  const lineItems = [{
+    description: `Lawn mowing — ${address}`,
+    quantity: visits,
+    unit_price: price,
+    line_total: subtotal,
+  }]
 
   const aiMessage = `Here's your invoice for lawn care services in ${periodLabel}. We completed ${visits} visit${visits > 1 ? 's' : ''} this month — it was a pleasure keeping things looking sharp. Let us know if you have any questions!`
 
@@ -59,20 +57,16 @@ export async function POST(request: NextRequest) {
     })
   )
 
-  const fromEmail = process.env.RESEND_FROM_EMAIL
-  if (!fromEmail) {
-    return NextResponse.json({ error: 'RESEND_FROM_EMAIL environment variable is not set' }, { status: 500 })
-  }
-
-  const { error } = await getResend().emails.send({
-    from: `Gray Wolf Workers <${fromEmail}>`,
-    to: email,
-    subject: `[TEST] Invoice from Gray Wolf Workers — ${periodLabel}`,
-    html: emailHtml,
-  })
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  try {
+    await getMailer().sendMail({
+      from: MAIL_FROM,
+      to: email,
+      subject: `[TEST] Invoice from Gray Wolf Workers — ${periodLabel}`,
+      html: emailHtml,
+    })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to send email'
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 
   return NextResponse.json({ success: true, visits, price, total, address, periodLabel })
