@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
   }
 
   const { error } = await getResend().emails.send({
-    from: fromEmail,
+    from: `Gray Wolf Workers <${fromEmail}>`,
     to: email,
     subject: `[TEST] Invoice from Gray Wolf Workers — ${periodLabel}`,
     html: emailHtml,
