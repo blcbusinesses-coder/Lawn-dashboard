@@ -12,7 +12,45 @@ interface PricingTier        { max_sqft: number; price: number; label: string }
 interface GrassRatioTier     { max_sqft: number; ratio: number; label: string }
 interface FootprintEstTier   { max_sqft: number; pct: number;   label: string }
 
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const KENDALLVILLE_LAT = 41.4456
+const KENDALLVILLE_LNG = -85.2650
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Haversine formula — returns distance in miles between two lat/lng points */
+function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 3958.8 // Earth radius in miles
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLon = (lon2 - lon1) * Math.PI / 180
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+/** Geocode an address using Nominatim (free, no API key required) */
+async function geocodeAddress(address: string): Promise<{ lat: number; lon: number } | null> {
+  try {
+    const encoded = encodeURIComponent(address)
+    const url = `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&limit=1&countrycodes=us`
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'GrayWolfWorkers/1.0 (lawn management app)',
+        'Accept-Language': 'en-US,en',
+      },
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!res.ok) return null
+    const data = await res.json() as Array<{ lat: string; lon: string }>
+    if (!data.length) return null
+    return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) }
+  } catch {
+    return null
+  }
+}
 
 /**
  * Calculate the mowable area of a property.
@@ -132,6 +170,8 @@ export async function POST(
   const overOneAcrePrice: number          = (settings.over_one_acre_price as number) ?? 130
   const smsSignature: string              = (settings.sms_signature as string) ?? '– Gray Wolf Workers'
   const apifyActor: string                = (settings.apify_actor as string) ?? 'maxcopell~zillow-detail-scraper'
+  const surchargeThresholdMiles: number   = (settings.drive_surcharge_miles as number) ?? 12
+  const surchargeAmount: number           = (settings.drive_surcharge_amount as number) ?? 5
 
   // ── 1. Property lookup via Apify ───────────────────────────────────────────
   const lookupStart = Date.now()
@@ -174,7 +214,46 @@ export async function POST(
     lookupMs
   )
 
-  const quote = calculateQuoteFromTiers(mowableSqft, tiers, fallbackPrice, overOneAcrePrice)
+  const baseQuote = calculateQuoteFromTiers(mowableSqft, tiers, fallbackPrice, overOneAcrePrice)
+
+  // ── 2b. Distance surcharge ─────────────────────────────────────────────────
+  let distanceMiles: number | null = null
+  let driveSurcharge = 0
+  let geocodeCoords: { lat: number; lon: number } | null = null
+
+  try {
+    geocodeCoords = await geocodeAddress(lead.address as string)
+    if (geocodeCoords) {
+      distanceMiles = Math.round(haversineDistance(
+        KENDALLVILLE_LAT, KENDALLVILLE_LNG,
+        geocodeCoords.lat, geocodeCoords.lon
+      ) * 10) / 10 // round to 1 decimal
+      if (distanceMiles > surchargeThresholdMiles) {
+        driveSurcharge = surchargeAmount
+      }
+    }
+  } catch {
+    // Geocoding failed — no surcharge, continue
+  }
+
+  const quote = {
+    ...baseQuote,
+    amount: baseQuote.amount + driveSurcharge,
+  }
+
+  await writeLog(adminClient, id, 'distance_check',
+    geocodeCoords ? 'success' : 'skipped',
+    {
+      address:           lead.address,
+      lat:               geocodeCoords?.lat ?? null,
+      lon:               geocodeCoords?.lon ?? null,
+      distance_miles:    distanceMiles,
+      threshold_miles:   surchargeThresholdMiles,
+      surcharge_applied: driveSurcharge,
+      base_quote:        baseQuote.amount,
+      final_quote:       quote.amount,
+    }
+  )
 
   // ── 3. Get nearest available dates ─────────────────────────────────────────
   const today = format(new Date(), 'yyyy-MM-dd')
@@ -247,6 +326,9 @@ Rules:
       body:          smsBody,
       twilio_sid:    twilioSid,
       quote_amount:  quote.amount,
+      base_quote:          baseQuote.amount,
+      drive_surcharge:     driveSurcharge,
+      distance_miles:      distanceMiles,
       lot_size_sqft:       lotSqft,
       living_sqft:         livingSqft,
       footprint_method:    footprintMethod,
@@ -305,6 +387,9 @@ Rules:
   return NextResponse.json({
     success:       true,
     quote_amount:  quote.amount,
+    base_quote:    baseQuote.amount,
+    drive_surcharge: driveSurcharge,
+    distance_miles:  distanceMiles,
     confidence:    quote.confidence,
     tier:          quote.tier,
     lot_size_sqft:       lotSqft,

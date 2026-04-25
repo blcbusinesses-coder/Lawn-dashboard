@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { getTwilioClient, TWILIO_FROM } from '@/lib/twilio/client'
 import { generateInvoices } from '@/lib/invoices/generate'
 import { startOfISOWeek, format } from 'date-fns'
@@ -13,7 +13,7 @@ interface QueryEmployeeHoursArgs { start_date?: string; end_date?: string; emplo
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-async function findCustomerByName(supabase: Awaited<ReturnType<typeof createClient>>, name: string) {
+async function findCustomerByName(supabase: Awaited<ReturnType<typeof createAdminClient>>, name: string) {
   const { data } = await supabase
     .from('customers')
     .select('id, full_name, phone, email')
@@ -23,7 +23,7 @@ async function findCustomerByName(supabase: Awaited<ReturnType<typeof createClie
   return data
 }
 
-async function findPropertyByAddress(supabase: Awaited<ReturnType<typeof createClient>>, address: string) {
+async function findPropertyByAddress(supabase: Awaited<ReturnType<typeof createAdminClient>>, address: string) {
   const { data } = await supabase
     .from('properties')
     .select('id, address')
@@ -40,7 +40,7 @@ function currentWeekStart(): string {
 // ── main handler ──────────────────────────────────────────────────────────────
 
 export async function handleAgentTool(name: string, args: Record<string, unknown>): Promise<unknown> {
-  const supabase = await createClient()
+  const supabase = await createAdminClient()
 
   switch (name) {
     // ── READ TOOLS ────────────────────────────────────────────────────────

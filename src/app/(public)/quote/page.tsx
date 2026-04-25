@@ -138,7 +138,7 @@ function MowerLoader() {
       `}</style>
 
       {/* Mower track */}
-      <div className="relative w-full h-14 mb-8 overflow-hidden rounded-xl bg-[#c8dfc0]">
+      <div className="relative w-full h-12 mb-8 overflow-hidden rounded-xl bg-[#c8dfc0]">
         {/* Mowed stripe that grows */}
         <div
           className="absolute left-0 top-0 h-full bg-[#a8c898] rounded-xl"
@@ -222,7 +222,7 @@ export default function QuotePage() {
   /* ── Loading ──────────────────────────────────────────────────────────────── */
   if (step === 'loading') {
     return (
-      <div className="min-h-screen bg-[#eef3e8] flex flex-col items-center justify-center p-6">
+      <div className="min-h-screen bg-[#eef3e8] flex flex-col items-center justify-center px-5 py-8">
         <div className="w-full max-w-sm text-center">
           {/* Logo mark */}
           <div className="inline-flex items-center justify-center w-12 h-12 bg-[#2d5a1b] rounded-xl mb-6">
@@ -230,7 +230,7 @@ export default function QuotePage() {
           </div>
           <MowerLoader />
         </div>
-        <div className="fixed bottom-0 left-0 right-0 pointer-events-none">
+        <div className="fixed bottom-0 left-0 right-0 pointer-events-none overflow-hidden">
           <GrassRow />
         </div>
       </div>
@@ -247,7 +247,7 @@ export default function QuotePage() {
             to   { opacity: 1; transform: translateY(0); }
           }
         `}</style>
-        <div className="min-h-screen bg-[#eef3e8] flex flex-col items-center justify-center p-6">
+        <div className="min-h-screen bg-[#eef3e8] flex flex-col items-center justify-center px-5 py-10 overflow-x-hidden">
           <div
             className="w-full max-w-sm text-center"
             style={{ animation: 'fadeUp 0.5s ease-out' }}
@@ -272,13 +272,13 @@ export default function QuotePage() {
               Reply to that text to lock in your first mow. No contracts, cancel anytime.
             </p>
             <div
-              className="inline-block bg-white border border-[#c8dfc0] rounded-xl px-5 py-3 text-sm text-[#4a6a3a]"
+              className="bg-white border border-[#c8dfc0] rounded-xl px-5 py-3 text-sm text-[#4a6a3a]"
               style={{ animation: 'fadeUp 0.5s ease-out 1.2s both' }}
             >
               Didn&apos;t get it? Double-check your number and try again, or call us directly.
             </div>
           </div>
-          <div className="fixed bottom-0 left-0 right-0 pointer-events-none">
+          <div className="fixed bottom-0 left-0 right-0 pointer-events-none overflow-hidden">
             <GrassRow />
           </div>
         </div>
@@ -289,7 +289,7 @@ export default function QuotePage() {
   /* ── Error ────────────────────────────────────────────────────────────────── */
   if (step === 'error') {
     return (
-      <div className="min-h-screen bg-[#eef3e8] flex flex-col items-center justify-center p-6">
+      <div className="min-h-screen bg-[#eef3e8] flex flex-col items-center justify-center px-5 py-10">
         <div className="w-full max-w-sm text-center">
           <div className="w-16 h-16 rounded-full bg-red-50 border-2 border-red-200 flex items-center justify-center mx-auto mb-5">
             <svg className="w-7 h-7 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -300,12 +300,12 @@ export default function QuotePage() {
           <p className="text-zinc-500 text-sm mb-6">{errorMsg || 'Please try again or call us directly.'}</p>
           <button
             onClick={() => setStep('form')}
-            className="px-6 py-2.5 bg-[#2d5a1b] text-white rounded-lg text-sm font-semibold hover:bg-[#1e3d12] transition-colors"
+            className="px-6 py-3 bg-[#2d5a1b] text-white rounded-lg text-base font-semibold hover:bg-[#1e3d12] transition-colors"
           >
             Try Again
           </button>
         </div>
-        <div className="fixed bottom-0 left-0 right-0 pointer-events-none">
+        <div className="fixed bottom-0 left-0 right-0 pointer-events-none overflow-hidden">
           <GrassRow />
         </div>
       </div>
@@ -314,17 +314,17 @@ export default function QuotePage() {
 
   /* ── Form ─────────────────────────────────────────────────────────────────── */
   return (
-    <div className="min-h-screen bg-[#eef3e8] flex flex-col">
-      <div className="flex-1 flex items-center justify-center p-5 py-10">
+    <div className="min-h-screen bg-[#eef3e8] flex flex-col overflow-x-hidden">
+      <div className="flex-1 flex items-center justify-center px-4 py-8 sm:py-12">
         <div className="w-full max-w-md">
 
           {/* Header */}
-          <div className="text-center mb-7">
+          <div className="text-center mb-6">
             <div className="inline-flex items-center justify-center w-12 h-12 bg-[#2d5a1b] rounded-xl mb-4">
               <span className="text-white font-bold text-sm tracking-wide">GW</span>
             </div>
-            <h1 className="text-3xl font-bold text-[#1e3d12] tracking-tight">Gray Wolf Workers</h1>
-            <p className="text-[#5a7a4a] mt-2 text-sm leading-relaxed">
+            <h1 className="text-2xl sm:text-3xl font-bold text-[#1e3d12] tracking-tight">Gray Wolf Workers</h1>
+            <p className="text-[#5a7a4a] mt-2 text-sm leading-relaxed max-w-xs mx-auto">
               Get a free lawn mowing quote — we&apos;ll text it straight to your phone in under a minute.
             </p>
           </div>
@@ -334,7 +334,7 @@ export default function QuotePage() {
             {/* Green top bar */}
             <div className="h-1.5 bg-[#2d5a1b]" />
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4">
               <Field label="Your Name" required>
                 <input
                   type="text"
@@ -342,7 +342,7 @@ export default function QuotePage() {
                   placeholder="Jane Smith"
                   value={form.name}
                   onChange={(e) => set('name', e.target.value)}
-                  className="w-full rounded-lg border border-zinc-200 px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#2d5a1b] focus:border-transparent transition-shadow"
+                  className="w-full rounded-lg border border-zinc-200 px-3.5 py-3 text-base sm:text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#2d5a1b] focus:border-transparent transition-shadow"
                 />
               </Field>
 
@@ -353,7 +353,7 @@ export default function QuotePage() {
                   placeholder="(260) 555-0100"
                   value={form.phone}
                   onChange={(e) => set('phone', e.target.value)}
-                  className="w-full rounded-lg border border-zinc-200 px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#2d5a1b] focus:border-transparent transition-shadow"
+                  className="w-full rounded-lg border border-zinc-200 px-3.5 py-3 text-base sm:text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#2d5a1b] focus:border-transparent transition-shadow"
                 />
               </Field>
 
@@ -363,7 +363,7 @@ export default function QuotePage() {
                   placeholder="jane@email.com"
                   value={form.email}
                   onChange={(e) => set('email', e.target.value)}
-                  className="w-full rounded-lg border border-zinc-200 px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#2d5a1b] focus:border-transparent transition-shadow"
+                  className="w-full rounded-lg border border-zinc-200 px-3.5 py-3 text-base sm:text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#2d5a1b] focus:border-transparent transition-shadow"
                 />
               </Field>
 
@@ -374,7 +374,7 @@ export default function QuotePage() {
                   placeholder="1234 Oak St, Kendallville, IN 46755"
                   value={form.address}
                   onChange={(e) => set('address', e.target.value)}
-                  className="w-full rounded-lg border border-zinc-200 px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#2d5a1b] focus:border-transparent transition-shadow"
+                  className="w-full rounded-lg border border-zinc-200 px-3.5 py-3 text-base sm:text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#2d5a1b] focus:border-transparent transition-shadow"
                 />
               </Field>
 
@@ -383,13 +383,13 @@ export default function QuotePage() {
                   type="date"
                   value={form.preferred_date}
                   onChange={(e) => set('preferred_date', e.target.value)}
-                  className="w-full rounded-lg border border-zinc-200 px-3.5 py-2.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#2d5a1b] focus:border-transparent transition-shadow"
+                  className="w-full rounded-lg border border-zinc-200 px-3.5 py-3 text-base sm:text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#2d5a1b] focus:border-transparent transition-shadow"
                 />
               </Field>
 
               <button
                 type="submit"
-                className="w-full bg-[#2d5a1b] text-white rounded-lg py-3 text-sm font-semibold hover:bg-[#1e3d12] active:scale-[0.98] transition-all mt-1"
+                className="w-full bg-[#2d5a1b] text-white rounded-lg py-3.5 text-base font-semibold hover:bg-[#1e3d12] active:scale-[0.98] transition-all mt-1"
               >
                 Get My Free Quote →
               </button>
@@ -408,7 +408,7 @@ export default function QuotePage() {
       </div>
 
       {/* Grass bottom decoration */}
-      <div className="pointer-events-none">
+      <div className="pointer-events-none overflow-hidden">
         <GrassRow />
       </div>
     </div>

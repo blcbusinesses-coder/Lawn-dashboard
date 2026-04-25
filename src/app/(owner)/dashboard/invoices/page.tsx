@@ -59,6 +59,21 @@ export default function InvoicesPage() {
   const [sending, setSending] = useState<string | null>(null)
   const [editingMsg, setEditingMsg] = useState<{ id: string; message: string } | null>(null)
   const [filterStatus, setFilterStatus] = useState<string>('draft')
+  const [testOpen, setTestOpen] = useState(false)
+  const [testEmail, setTestEmail] = useState('')
+  const [testSending, setTestSending] = useState(false)
+
+  // Custom invoice
+  const [customOpen, setCustomOpen] = useState(false)
+  const [customers, setCustomers] = useState<{ id: string; full_name: string; email: string | null }[]>([])
+  const [customForm, setCustomForm] = useState({
+    customer_id: '',
+    period_start: format(new Date(), 'yyyy-MM-01'),
+    period_end: format(new Date(), `yyyy-MM-${new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()}`),
+    ai_message: '',
+  })
+  const [customItems, setCustomItems] = useState([{ description: '', quantity: 1, unit_price: 0 }])
+  const [customSaving, setCustomSaving] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -126,6 +141,60 @@ export default function InvoicesPage() {
     else toast.error('Could not update')
   }
 
+  async function openCustom() {
+    if (!customers.length) {
+      const res = await fetch('/api/customers')
+      if (res.ok) setCustomers(await res.json())
+    }
+    setCustomOpen(true)
+  }
+
+  async function handleCustomInvoice() {
+    if (!customForm.customer_id) return toast.error('Select a customer')
+    if (customItems.some((li) => !li.description.trim())) return toast.error('All line items need a description')
+    setCustomSaving(true)
+    const res = await fetch('/api/invoices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customer_id: customForm.customer_id,
+        period_start: customForm.period_start,
+        period_end: customForm.period_end,
+        ai_message: customForm.ai_message || null,
+        line_items: customItems,
+      }),
+    })
+    setCustomSaving(false)
+    if (res.ok) {
+      toast.success('Custom invoice created as draft')
+      setCustomOpen(false)
+      setCustomItems([{ description: '', quantity: 1, unit_price: 0 }])
+      setFilterStatus('draft')
+      load()
+    } else {
+      toast.error((await res.json()).error ?? 'Failed to create invoice')
+    }
+  }
+
+  async function handleSendTest() {
+    if (!testEmail.trim()) return
+    setTestSending(true)
+    const res = await fetch('/api/invoices/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: testEmail }),
+    })
+    const result = await res.json()
+    setTestSending(false)
+    if (res.ok) {
+      toast.success(`Test invoice sent to ${testEmail}`)
+      setTestOpen(false)
+      setTestEmail('')
+    } else {
+      toast.error(result.error ?? 'Failed to send test')
+    }
+  }
+
   async function handleSaveMessage() {
     if (!editingMsg) return
     const res = await fetch(`/api/invoices/${editingMsg.id}`, {
@@ -149,7 +218,11 @@ export default function InvoicesPage() {
           <h1 className="text-2xl font-bold text-zinc-900">Invoices</h1>
           <p className="text-sm text-zinc-500 mt-1">Generate, review, and send monthly invoices</p>
         </div>
-        <Button onClick={() => setGenOpen(true)}>⚡ Generate Invoices</Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={() => setTestOpen(true)}>Send Test Email</Button>
+          <Button variant="outline" onClick={openCustom}>Custom Invoice</Button>
+          <Button onClick={() => setGenOpen(true)}>Generate Invoices</Button>
+        </div>
       </div>
 
       {/* Status filter */}
@@ -201,9 +274,15 @@ export default function InvoicesPage() {
                   <div className="flex gap-2">
                     {inv.status === 'draft' && (
                       <>
-                        <Button size="sm" onClick={() => handleSend(inv.id)} disabled={sending === inv.id}>
-                          {sending === inv.id ? 'Sending…' : '📧 Send'}
-                        </Button>
+                        {inv.customers?.email ? (
+                          <Button size="sm" onClick={() => handleSend(inv.id)} disabled={sending === inv.id}>
+                            {sending === inv.id ? 'Sending…' : 'Send Email'}
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-md font-medium">
+                            No email on file
+                          </span>
+                        )}
                         <Button size="sm" variant="ghost" className="text-red-500" onClick={() => handleVoid(inv.id)}>Void</Button>
                       </>
                     )}
@@ -248,6 +327,165 @@ export default function InvoicesPage() {
           ))}
         </div>
       )}
+
+      {/* Custom Invoice Dialog */}
+      <Dialog open={customOpen} onOpenChange={setCustomOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Create Custom Invoice</DialogTitle></DialogHeader>
+          <p className="text-sm text-zinc-500">For one-off jobs like mulching, cleanups, or any custom service.</p>
+
+          <div className="space-y-4">
+            {/* Customer */}
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-zinc-700">Customer *</label>
+              <select
+                value={customForm.customer_id}
+                onChange={(e) => setCustomForm({ ...customForm, customer_id: e.target.value })}
+                className="w-full border border-zinc-200 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-zinc-400"
+              >
+                <option value="">Select customer…</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>{c.full_name}{c.email ? ` — ${c.email}` : ''}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Period */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-zinc-700">Invoice Date (start)</label>
+                <input
+                  type="date"
+                  value={customForm.period_start}
+                  onChange={(e) => setCustomForm({ ...customForm, period_start: e.target.value })}
+                  className="w-full border border-zinc-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-zinc-700">Invoice Date (end)</label>
+                <input
+                  type="date"
+                  value={customForm.period_end}
+                  onChange={(e) => setCustomForm({ ...customForm, period_end: e.target.value })}
+                  className="w-full border border-zinc-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400"
+                />
+              </div>
+            </div>
+
+            {/* Line items */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-zinc-700">Line Items *</label>
+                <button
+                  type="button"
+                  onClick={() => setCustomItems([...customItems, { description: '', quantity: 1, unit_price: 0 }])}
+                  className="text-xs text-zinc-500 hover:text-zinc-800 border border-zinc-200 rounded px-2 py-1 hover:bg-zinc-50"
+                >
+                  + Add item
+                </button>
+              </div>
+
+              {/* Header */}
+              <div className="grid grid-cols-12 gap-2 text-xs font-medium text-zinc-500 px-1">
+                <span className="col-span-6">Description</span>
+                <span className="col-span-2 text-center">Qty</span>
+                <span className="col-span-3 text-right">Unit Price</span>
+                <span className="col-span-1" />
+              </div>
+
+              {customItems.map((item, i) => (
+                <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                  <input
+                    className="col-span-6 border border-zinc-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400"
+                    placeholder="e.g. Mulching — 412 Oak St"
+                    value={item.description}
+                    onChange={(e) => {
+                      const next = [...customItems]; next[i] = { ...next[i], description: e.target.value }; setCustomItems(next)
+                    }}
+                  />
+                  <input
+                    type="number" min="1"
+                    className="col-span-2 border border-zinc-200 rounded px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-zinc-400"
+                    value={item.quantity}
+                    onChange={(e) => {
+                      const next = [...customItems]; next[i] = { ...next[i], quantity: parseInt(e.target.value) || 1 }; setCustomItems(next)
+                    }}
+                  />
+                  <input
+                    type="number" min="0" step="0.01"
+                    className="col-span-3 border border-zinc-200 rounded px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-zinc-400"
+                    placeholder="0.00"
+                    value={item.unit_price || ''}
+                    onChange={(e) => {
+                      const next = [...customItems]; next[i] = { ...next[i], unit_price: parseFloat(e.target.value) || 0 }; setCustomItems(next)
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={customItems.length === 1}
+                    onClick={() => setCustomItems(customItems.filter((_, idx) => idx !== i))}
+                    className="col-span-1 text-zinc-300 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed text-lg leading-none flex items-center justify-center"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+
+              {/* Total preview */}
+              <div className="flex justify-end pt-1 border-t border-zinc-100">
+                <p className="text-sm font-semibold text-zinc-900">
+                  Total: {formatCurrency(customItems.reduce((s, li) => s + li.quantity * li.unit_price, 0))}
+                </p>
+              </div>
+            </div>
+
+            {/* Optional message */}
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-zinc-700">Email message <span className="font-normal text-zinc-400">(optional)</span></label>
+              <Textarea
+                placeholder="e.g. Thanks for the mulching job — the yard is looking great!"
+                value={customForm.ai_message}
+                onChange={(e) => setCustomForm({ ...customForm, ai_message: e.target.value })}
+                rows={2}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCustomOpen(false)}>Cancel</Button>
+            <Button onClick={handleCustomInvoice} disabled={customSaving}>
+              {customSaving ? 'Creating…' : 'Create Draft'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Test Invoice Dialog */}
+      <Dialog open={testOpen} onOpenChange={setTestOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Send Test Invoice</DialogTitle></DialogHeader>
+          <p className="text-sm text-zinc-500">
+            Sends a sample invoice with a random address and visit count so you can preview exactly how it looks in an inbox.
+          </p>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-zinc-700">Send to email</label>
+            <input
+              type="email"
+              placeholder="you@example.com"
+              value={testEmail}
+              onChange={(e) => setTestEmail(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSendTest() }}
+              className="w-full border border-zinc-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTestOpen(false)}>Cancel</Button>
+            <Button onClick={handleSendTest} disabled={testSending || !testEmail.trim()}>
+              {testSending ? 'Sending…' : 'Send Test'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Generate Dialog */}
       <Dialog open={genOpen} onOpenChange={setGenOpen}>

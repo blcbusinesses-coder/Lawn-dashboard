@@ -29,6 +29,8 @@ interface SettingsMap {
   over_one_acre_price: number
   sms_signature: string
   apify_actor: string
+  drive_surcharge_miles: number
+  drive_surcharge_amount: number
 }
 
 interface LogEntry {
@@ -88,6 +90,8 @@ export default function AutomationPage() {
   const [overAcre, setOverAcre] = useState('')
   const [signature, setSignature] = useState('')
   const [actor, setActor] = useState('')
+  const [surchargeThreshold, setSurchargeThreshold] = useState('')
+  const [surchargeAmount, setSurchargeAmount] = useState('')
 
   // Active tab
   const [tab, setTab] = useState<'pricing' | 'leads' | 'logs' | 'config'>('pricing')
@@ -107,6 +111,8 @@ export default function AutomationPage() {
       setOverAcre(String(map.over_one_acre_price ?? 165))
       setSignature(String(map.sms_signature ?? ''))
       setActor(String(map.apify_actor ?? ''))
+      setSurchargeThreshold(String(map.drive_surcharge_miles ?? 12))
+      setSurchargeAmount(String(map.drive_surcharge_amount ?? 5))
     }
     if (logRes.ok) setLogs(await logRes.json())
     if (leadRes.ok) setLeads(await leadRes.json())
@@ -538,6 +544,53 @@ export default function AutomationPage() {
                 <Button size="sm" onClick={() => saveSetting('sms_signature', signature)} disabled={savingKey === 'sms_signature'}>
                   {savingKey === 'sms_signature' ? '…' : 'Save'}
                 </Button>
+              </div>
+            </div>
+
+            <div className="border-t border-zinc-100 pt-4 space-y-4">
+              <h3 className="text-sm font-semibold text-zinc-700">Drive Surcharge</h3>
+              <p className="text-xs text-zinc-400 -mt-2">Adds a flat fee when the property is beyond X miles from Kendallville.</p>
+
+              <div className="space-y-1.5">
+                <Label>Distance Threshold (miles)</Label>
+                <p className="text-xs text-zinc-400">Properties farther than this from Kendallville, IN get the surcharge.</p>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    value={surchargeThreshold}
+                    onChange={(e) => setSurchargeThreshold(e.target.value)}
+                    placeholder="12"
+                    className="w-32"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => saveSetting('drive_surcharge_miles', parseFloat(surchargeThreshold))}
+                    disabled={savingKey === 'drive_surcharge_miles'}
+                  >
+                    {savingKey === 'drive_surcharge_miles' ? '…' : 'Save'}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Surcharge Amount ($)</Label>
+                <p className="text-xs text-zinc-400">Added to the quote if over the threshold.</p>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    value={surchargeAmount}
+                    onChange={(e) => setSurchargeAmount(e.target.value)}
+                    placeholder="5"
+                    className="w-32"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => saveSetting('drive_surcharge_amount', parseFloat(surchargeAmount))}
+                    disabled={savingKey === 'drive_surcharge_amount'}
+                  >
+                    {savingKey === 'drive_surcharge_amount' ? '…' : 'Save'}
+                  </Button>
+                </div>
               </div>
             </div>
 

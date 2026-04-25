@@ -31,7 +31,9 @@ Guidelines:
 - Use fuzzy customer name matching (partial names work fine)
 - For week_start you can use "current" to mean this week
 - Format money as $X.XX
-- If an action fails, explain why and suggest a fix`
+- If an action fails, explain why and suggest a fix
+- Format all responses in clean Markdown: use **bold** for names/numbers, bullet lists for multiple items, tables for comparisons or summaries with multiple columns, and headers only for multi-section responses
+- When showing data (customers, jobs, expenses, etc.) use a markdown table with clear column headers`
 }
 
 export async function POST(request: NextRequest) {

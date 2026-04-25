@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import ReactMarkdown from 'react-markdown'
 
 // A message can have text content or a mixed content array (text + image)
 type MessageContent = string | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }>
@@ -194,13 +195,32 @@ export default function AgentPage() {
                   )
                 )}
                 {typeof msg.content === 'string' && (
-                  msg.content || (msg.role === 'assistant' && loading && i === messages.length - 1 ? (
+                  msg.role === 'assistant' && !msg.content && loading && i === messages.length - 1 ? (
                     <span className="inline-flex gap-1">
                       <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                       <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                       <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                     </span>
-                  ) : msg.content)
+                  ) : msg.role === 'assistant' ? (
+                    <div className="prose prose-sm prose-zinc max-w-none
+                      [&>p]:mb-2 [&>p:last-child]:mb-0
+                      [&>ul]:my-2 [&>ul]:pl-4 [&>ul>li]:mb-0.5
+                      [&>ol]:my-2 [&>ol]:pl-4 [&>ol>li]:mb-0.5
+                      [&>h1]:text-base [&>h1]:font-semibold [&>h1]:mb-1
+                      [&>h2]:text-sm [&>h2]:font-semibold [&>h2]:mb-1
+                      [&>h3]:text-sm [&>h3]:font-semibold [&>h3]:mb-1
+                      [&>strong]:font-semibold
+                      [&>code]:bg-zinc-100 [&>code]:px-1 [&>code]:rounded [&>code]:text-xs
+                      [&>pre]:bg-zinc-100 [&>pre]:rounded [&>pre]:p-2 [&>pre]:text-xs [&>pre]:overflow-auto
+                      [&>table]:w-full [&>table]:text-xs [&>table]:border-collapse
+                      [&_th]:border [&_th]:border-zinc-200 [&_th]:px-2 [&_th]:py-1 [&_th]:bg-zinc-50 [&_th]:font-medium
+                      [&_td]:border [&_td]:border-zinc-200 [&_td]:px-2 [&_td]:py-1
+                      [&>hr]:border-zinc-200 [&>hr]:my-2">
+                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    msg.content
+                  )
                 )}
               </div>
             </div>

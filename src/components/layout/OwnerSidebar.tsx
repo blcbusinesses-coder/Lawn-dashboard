@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import {
   Users, Home, ClipboardCheck, Receipt, FileText, Bot,
-  TrendingUp, HardHat, MessageSquare, Inbox, Star, Settings2, LogOut,
+  TrendingUp, HardHat, MessageSquare, Inbox, Star, Settings2, LogOut, CheckSquare,
 } from 'lucide-react'
 
 const navItems = [
@@ -17,6 +17,7 @@ const navItems = [
   { href: '/dashboard/jobs',       label: 'Jobs',        Icon: ClipboardCheck },
   { href: '/dashboard/expenses',   label: 'Expenses',    Icon: Receipt },
   { href: '/dashboard/invoices',   label: 'Invoices',    Icon: FileText },
+  { href: '/dashboard/todos',      label: 'To-Do',       Icon: CheckSquare },
   { href: '/dashboard/agent',      label: 'Agent',       Icon: Bot },
   { href: '/dashboard/money',      label: 'Money',       Icon: TrendingUp },
   { href: '/dashboard/employees',  label: 'Employees',   Icon: HardHat },

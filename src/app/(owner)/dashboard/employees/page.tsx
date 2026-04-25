@@ -76,6 +76,10 @@ export default function EmployeesPage() {
   const [bonusForm, setBonusForm] = useState({ employee_id: '', amount: '', description: '', entry_date: new Date().toISOString().split('T')[0], type: 'bonus' as 'bonus' | 'payment' })
   const [bonusSaving, setBonusSaving] = useState(false)
 
+  // Delete employee
+  const [deleteConfirm, setDeleteConfirm] = useState<Employee | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
   const load = useCallback(async () => {
     try {
       const [empRes, tlRes, mhRes, bonusRes] = await Promise.all([
@@ -179,6 +183,21 @@ export default function EmployeesPage() {
   async function deleteBonus(id: string) {
     await fetch(`/api/employees/bonuses?id=${id}`, { method: 'DELETE' })
     load()
+  }
+
+  async function handleDelete() {
+    if (!deleteConfirm) return
+    setDeleting(true)
+    const res = await fetch(`/api/employees/${deleteConfirm.id}`, { method: 'DELETE' })
+    if (res.ok) {
+      toast.success(`${deleteConfirm.full_name} removed`)
+      setDeleteConfirm(null)
+      load()
+    } else {
+      const body = await res.json().catch(() => ({}))
+      toast.error(body?.error ?? 'Failed to delete employee')
+    }
+    setDeleting(false)
   }
 
   function openEditHours(mh: ManualHours) {
@@ -297,19 +316,20 @@ export default function EmployeesPage() {
                 <th className="text-left px-4 py-3 font-medium text-zinc-600">Hours This Month</th>
                 <th className="text-left px-4 py-3 font-medium text-zinc-600">Est. Pay</th>
                 <th className="text-left px-4 py-3 font-medium text-zinc-600">Status</th>
+                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 Array.from({ length: 3 }).map((_, i) => (
                   <tr key={i} className="border-b border-zinc-50">
-                    {Array.from({ length: 6 }).map((_, j) => (
+                    {Array.from({ length: 7 }).map((_, j) => (
                       <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
                     ))}
                   </tr>
                 ))
               ) : employeeStats.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-zinc-400">No employees yet.</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-zinc-400">No employees yet.</td></tr>
               ) : (
                 employeeStats.map((emp) => (
                   <tr key={emp.id} className="border-b border-zinc-50 hover:bg-zinc-50">
@@ -320,6 +340,16 @@ export default function EmployeesPage() {
                     <td className="px-4 py-3 font-medium text-zinc-900">{formatCurrency(emp.grossPay)}</td>
                     <td className="px-4 py-3">
                       <Badge variant={emp.is_active ? 'default' : 'secondary'}>{emp.is_active ? 'Active' : 'Inactive'}</Badge>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => setDeleteConfirm(emp)}
+                      >
+                        Delete
+                      </Button>
                     </td>
                   </tr>
                 ))
@@ -690,6 +720,30 @@ export default function EmployeesPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setHoursDialog(false)}>Cancel</Button>
             <Button onClick={handleSaveHours} disabled={hoursSaving}>{hoursSaving ? 'Saving…' : 'Save'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── DELETE EMPLOYEE CONFIRMATION ─────────────────────────────────────── */}
+      <Dialog open={!!deleteConfirm} onOpenChange={(open) => { if (!open) setDeleteConfirm(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove Employee</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-zinc-600">
+            Are you sure you want to remove <strong className="text-zinc-900">{deleteConfirm?.full_name}</strong>?
+            This will delete their account and they will no longer be able to log in.
+            Their time logs and pay history will remain.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={deleting}
+            >
+              {deleting ? 'Removing…' : 'Remove Employee'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
