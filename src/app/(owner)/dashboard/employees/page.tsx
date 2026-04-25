@@ -80,6 +80,9 @@ export default function EmployeesPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<Employee | null>(null)
   const [deleting, setDeleting] = useState(false)
 
+  // Pay in full
+  const [payingFull, setPayingFull] = useState<string | null>(null) // employee id
+
   const load = useCallback(async () => {
     try {
       const [empRes, tlRes, mhRes, bonusRes] = await Promise.all([
@@ -198,6 +201,30 @@ export default function EmployeesPage() {
       toast.error(body?.error ?? 'Failed to delete employee')
     }
     setDeleting(false)
+  }
+
+  async function handlePayInFull(employee: Employee, totalOwed: number) {
+    if (totalOwed <= 0) return toast.error('Nothing owed — balance is already clear')
+    setPayingFull(employee.id)
+    const res = await fetch('/api/employees/bonuses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        employee_id: employee.id,
+        amount: totalOwed,
+        description: `Paid in full — ${format(now, 'MMM d, yyyy')}`,
+        entry_date: format(now, 'yyyy-MM-dd'),
+        type: 'payment',
+      }),
+    })
+    setPayingFull(null)
+    if (res.ok) {
+      toast.success(`Marked ${employee.full_name} as paid in full (${formatCurrency(totalOwed)})`)
+      load()
+    } else {
+      const body = await res.json().catch(() => ({}))
+      toast.error(body?.error ?? 'Failed to record payment')
+    }
   }
 
   function openEditHours(mh: ManualHours) {
@@ -369,20 +396,39 @@ export default function EmployeesPage() {
             <p className="text-zinc-400 text-sm">No employees yet.</p>
           ) : (
             monthlySummary.map(({ employee, rows }) => {
-              const totalHours = rows.reduce((s, r) => s + r.totalHours, 0)
-              const totalPay   = rows.reduce((s, r) => s + r.pay, 0)
-              const hasData    = rows.some((r) => r.totalHours > 0)
+              const totalHours   = rows.reduce((s, r) => s + r.totalHours, 0)
+              const totalPay     = rows.reduce((s, r) => s + r.pay, 0)
+              const totalStillOwes = rows.reduce((s, r) => s + r.stillOwes, 0)
+              const hasData      = rows.some((r) => r.totalHours > 0)
               return (
                 <div key={employee.id} className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
-                  <div className="px-5 py-3 border-b border-zinc-100 bg-zinc-50 flex items-center justify-between">
+                  <div className="px-5 py-3 border-b border-zinc-100 bg-zinc-50 flex items-center justify-between gap-4 flex-wrap">
                     <div>
                       <span className="font-semibold text-zinc-900">{employee.full_name}</span>
                       {employee.hourly_rate && (
                         <span className="ml-2 text-xs text-zinc-400">{formatCurrency(employee.hourly_rate)}/hr</span>
                       )}
                     </div>
-                    <div className="text-sm text-zinc-500">
-                      {totalHours.toFixed(1)}h total · {formatCurrency(totalPay)} est. pay
+                    <div className="flex items-center gap-4 ml-auto">
+                      <div className="text-sm text-zinc-500 text-right">
+                        {totalHours.toFixed(1)}h total · {formatCurrency(totalPay)} est. pay
+                        {totalStillOwes > 0 && (
+                          <span className="ml-2 font-semibold text-red-500">· {formatCurrency(totalStillOwes)} owed</span>
+                        )}
+                        {totalStillOwes === 0 && totalPay > 0 && (
+                          <span className="ml-2 font-medium text-green-600">· Fully paid</span>
+                        )}
+                      </div>
+                      {totalStillOwes > 0 && (
+                        <Button
+                          size="sm"
+                          onClick={() => handlePayInFull(employee, totalStillOwes)}
+                          disabled={payingFull === employee.id}
+                          className="bg-green-600 hover:bg-green-700 text-white shrink-0"
+                        >
+                          {payingFull === employee.id ? 'Recording…' : `Pay in Full · ${formatCurrency(totalStillOwes)}`}
+                        </Button>
+                      )}
                     </div>
                   </div>
                   <div className="overflow-x-auto">
