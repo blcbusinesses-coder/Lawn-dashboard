@@ -8,23 +8,24 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import {
   Users, Home, ClipboardCheck, Receipt, FileText, Bot,
-  TrendingUp, HardHat, MessageSquare, Inbox, Star, Settings2, LogOut, CheckSquare,
+  TrendingUp, HardHat, MessageSquare, Inbox, Star, Settings2, LogOut, CheckSquare, BarChart2,
 } from 'lucide-react'
 
 const navItems = [
-  { href: '/dashboard/customers',  label: 'Customers',   Icon: Users },
-  { href: '/dashboard/properties', label: 'Properties',  Icon: Home },
-  { href: '/dashboard/jobs',       label: 'Jobs',        Icon: ClipboardCheck },
-  { href: '/dashboard/expenses',   label: 'Expenses',    Icon: Receipt },
-  { href: '/dashboard/invoices',   label: 'Invoices',    Icon: FileText },
-  { href: '/dashboard/todos',      label: 'To-Do',       Icon: CheckSquare },
-  { href: '/dashboard/agent',      label: 'Agent',       Icon: Bot },
-  { href: '/dashboard/money',      label: 'Money',       Icon: TrendingUp },
-  { href: '/dashboard/employees',  label: 'Employees',   Icon: HardHat },
-  { href: '/dashboard/sms',        label: 'SMS',         Icon: MessageSquare },
-  { href: '/dashboard/inbox',      label: 'Inbox',       Icon: Inbox },
-  { href: '/dashboard/important',  label: 'Important',   Icon: Star },
-  { href: '/dashboard/automation', label: 'Automation',  Icon: Settings2 },
+  { href: '/dashboard/customers',  label: 'Customers',      Icon: Users },
+  { href: '/dashboard/properties', label: 'Properties',     Icon: Home },
+  { href: '/dashboard/jobs',       label: 'Jobs',           Icon: ClipboardCheck },
+  { href: '/dashboard/expenses',   label: 'Expenses',       Icon: Receipt },
+  { href: '/dashboard/invoices',   label: 'Invoices',       Icon: FileText },
+  { href: '/dashboard/todos',      label: 'To-Do',          Icon: CheckSquare },
+  { href: '/dashboard/agent',      label: 'Agent',          Icon: Bot },
+  { href: '/dashboard/money',      label: 'Money',          Icon: TrendingUp },
+  { href: '/dashboard/ads',        label: 'Ad Intelligence', Icon: BarChart2 },
+  { href: '/dashboard/employees',  label: 'Employees',      Icon: HardHat },
+  { href: '/dashboard/sms',        label: 'SMS',            Icon: MessageSquare },
+  { href: '/dashboard/inbox',      label: 'Inbox',          Icon: Inbox },
+  { href: '/dashboard/important',  label: 'Important',      Icon: Star },
+  { href: '/dashboard/automation', label: 'Automation',     Icon: Settings2 },
 ]
 
 interface OwnerSidebarProps {
