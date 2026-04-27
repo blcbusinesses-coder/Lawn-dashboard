@@ -83,6 +83,12 @@ export default function EmployeesPage() {
   // Pay in full
   const [payingFull, setPayingFull] = useState<string | null>(null) // employee id
 
+  // Edit clock log
+  const [editLogOpen, setEditLogOpen] = useState(false)
+  const [editingLog, setEditingLog] = useState<TimeLog | null>(null)
+  const [logForm, setLogForm] = useState({ clock_in: '', clock_out: '' })
+  const [logSaving, setLogSaving] = useState(false)
+
   const load = useCallback(async () => {
     try {
       const [empRes, tlRes, mhRes, bonusRes] = await Promise.all([
@@ -225,6 +231,46 @@ export default function EmployeesPage() {
       const body = await res.json().catch(() => ({}))
       toast.error(body?.error ?? 'Failed to record payment')
     }
+  }
+
+  function openEditLog(log: TimeLog) {
+    setEditingLog(log)
+    const toLocalInput = (iso: string) => {
+      const d = new Date(iso)
+      const pad = (n: number) => String(n).padStart(2, '0')
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+    }
+    setLogForm({
+      clock_in: toLocalInput(log.clock_in),
+      clock_out: log.clock_out ? toLocalInput(log.clock_out) : '',
+    })
+    setEditLogOpen(true)
+  }
+
+  async function handleSaveLog() {
+    if (!editingLog || !logForm.clock_in) return
+    setLogSaving(true)
+    const toISO = (local: string) => local ? new Date(local).toISOString() : null
+    const res = await fetch(`/api/timelogs/${editingLog.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clock_in: toISO(logForm.clock_in), clock_out: toISO(logForm.clock_out) }),
+    })
+    if (res.ok) {
+      toast.success('Clock log updated')
+      setEditLogOpen(false)
+      load()
+    } else {
+      const { error } = await res.json()
+      toast.error(error ?? 'Failed to update')
+    }
+    setLogSaving(false)
+  }
+
+  async function handleDeleteLog(id: string) {
+    const res = await fetch(`/api/timelogs/${id}`, { method: 'DELETE' })
+    if (res.ok) { toast.success('Clock log deleted'); load() }
+    else toast.error('Could not delete log')
   }
 
   function openEditHours(mh: ManualHours) {
@@ -541,19 +587,20 @@ export default function EmployeesPage() {
                 <th className="text-left px-4 py-3 font-medium text-zinc-600">Clock Out</th>
                 <th className="text-left px-4 py-3 font-medium text-zinc-600">Duration</th>
                 <th className="text-left px-4 py-3 font-medium text-zinc-600">Pay</th>
+                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i} className="border-b border-zinc-50">
-                    {Array.from({ length: 5 }).map((_, j) => (
+                    {Array.from({ length: 6 }).map((_, j) => (
                       <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
                     ))}
                   </tr>
                 ))
               ) : timeLogs.length === 0 ? (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-zinc-400">No clock logs yet</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-zinc-400">No clock logs yet</td></tr>
               ) : (
                 timeLogs.map((log) => {
                   const hours = (log.duration_minutes ?? 0) / 60
@@ -572,6 +619,12 @@ export default function EmployeesPage() {
                         {log.duration_minutes ? `${Math.floor(log.duration_minutes / 60)}h ${log.duration_minutes % 60}m` : '—'}
                       </td>
                       <td className="px-4 py-2.5 font-medium text-zinc-900">{rate > 0 ? formatCurrency(pay) : '—'}</td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex gap-2 justify-end">
+                          <Button size="sm" variant="ghost" onClick={() => openEditLog(log)}>Edit</Button>
+                          <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-600" onClick={() => handleDeleteLog(log.id)}>Delete</Button>
+                        </div>
+                      </td>
                     </tr>
                   )
                 })
@@ -581,6 +634,35 @@ export default function EmployeesPage() {
           </div>
         </div>
       )}
+
+      {/* ── EDIT CLOCK LOG DIALOG ────────────────────────────────────────────── */}
+      <Dialog open={editLogOpen} onOpenChange={setEditLogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit Clock Log</DialogTitle></DialogHeader>
+          <p className="text-sm text-zinc-500">Adjust the clock-in and clock-out times. Duration recalculates automatically.</p>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Clock In *</Label>
+              <Input type="datetime-local" value={logForm.clock_in} onChange={(e) => setLogForm({ ...logForm, clock_in: e.target.value })} />
+            </div>
+            <div className="space-y-1">
+              <Label>Clock Out</Label>
+              <Input type="datetime-local" value={logForm.clock_out} onChange={(e) => setLogForm({ ...logForm, clock_out: e.target.value })} />
+              <p className="text-xs text-zinc-400">Leave blank if still clocked in.</p>
+            </div>
+            {logForm.clock_in && logForm.clock_out && (() => {
+              const diffMs = new Date(logForm.clock_out).getTime() - new Date(logForm.clock_in).getTime()
+              const mins = Math.round(diffMs / 60000)
+              if (mins < 0) return <p className="text-xs text-red-500">Clock-out is before clock-in</p>
+              return <p className="text-xs text-zinc-500">New duration: <span className="font-medium text-zinc-700">{Math.floor(mins/60)}h {mins%60}m</span></p>
+            })()}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditLogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveLog} disabled={logSaving}>{logSaving ? 'Saving…' : 'Save'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── BONUS / PAYMENT DIALOG ───────────────────────────────────────────── */}
       <Dialog open={bonusDialog} onOpenChange={setBonusDialog}>

@@ -535,6 +535,140 @@ export interface Database {
         }
         Relationships: []
       }
+      equipment: {
+        Row: {
+          id: string
+          name: string
+          type: string
+          brand: string | null
+          model: string | null
+          serial_number: string | null
+          purchase_date: string | null
+          purchase_price: number | null
+          status: 'active' | 'maintenance' | 'retired'
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          type?: string
+          brand?: string | null
+          model?: string | null
+          serial_number?: string | null
+          purchase_date?: string | null
+          purchase_price?: number | null
+          status?: 'active' | 'maintenance' | 'retired'
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          type?: string
+          brand?: string | null
+          model?: string | null
+          serial_number?: string | null
+          purchase_date?: string | null
+          purchase_price?: number | null
+          status?: 'active' | 'maintenance' | 'retired'
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      todos: {
+        Row: {
+          id: string
+          title: string
+          description: string | null
+          status: 'pending' | 'done'
+          priority: 'low' | 'normal' | 'high'
+          due_date: string | null
+          assign_type: 'customer' | 'employee' | 'equipment' | null
+          assigned_customer_id: string | null
+          assigned_employee_id: string | null
+          assigned_equipment_id: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          title: string
+          description?: string | null
+          status?: 'pending' | 'done'
+          priority?: 'low' | 'normal' | 'high'
+          due_date?: string | null
+          assign_type?: 'customer' | 'employee' | 'equipment' | null
+          assigned_customer_id?: string | null
+          assigned_employee_id?: string | null
+          assigned_equipment_id?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          title?: string
+          description?: string | null
+          status?: 'pending' | 'done'
+          priority?: 'low' | 'normal' | 'high'
+          due_date?: string | null
+          assign_type?: 'customer' | 'employee' | 'equipment' | null
+          assigned_customer_id?: string | null
+          assigned_employee_id?: string | null
+          assigned_equipment_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: 'todos_assigned_customer_id_fkey'; columns: ['assigned_customer_id']; isOneToOne: false; referencedRelation: 'customers'; referencedColumns: ['id'] },
+          { foreignKeyName: 'todos_assigned_employee_id_fkey'; columns: ['assigned_employee_id']; isOneToOne: false; referencedRelation: 'profiles'; referencedColumns: ['id'] },
+          { foreignKeyName: 'todos_assigned_equipment_id_fkey'; columns: ['assigned_equipment_id']; isOneToOne: false; referencedRelation: 'equipment'; referencedColumns: ['id'] },
+        ]
+      }
+      efficiency_metrics: {
+        Row: {
+          id: string
+          employee_id: string | null
+          label: string
+          minutes_per_1000sqft: number | null
+          equipment_id: string | null
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          employee_id?: string | null
+          label: string
+          minutes_per_1000sqft?: number | null
+          equipment_id?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          employee_id?: string | null
+          label?: string
+          minutes_per_1000sqft?: number | null
+          equipment_id?: string | null
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: 'efficiency_metrics_employee_id_fkey'; columns: ['employee_id']; isOneToOne: false; referencedRelation: 'profiles'; referencedColumns: ['id'] },
+          { foreignKeyName: 'efficiency_metrics_equipment_id_fkey'; columns: ['equipment_id']; isOneToOne: false; referencedRelation: 'equipment'; referencedColumns: ['id'] },
+        ]
+      }
+      efficiency_settings: {
+        Row: { key: string; value: number; label: string | null; unit: string | null; updated_at: string }
+        Insert: { key: string; value: number; label?: string | null; unit?: string | null; updated_at?: string }
+        Update: { value?: number; label?: string | null; unit?: string | null; updated_at?: string }
+        Relationships: []
+      }
       availability_dates: {
         Row: {
           id: string
