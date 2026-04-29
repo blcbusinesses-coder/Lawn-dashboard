@@ -1,58 +1,35 @@
+/**
+ * GET  /api/availability  → string[]  (available days of week, e.g. ["Monday","Friday"])
+ * PUT  /api/availability  → { days: string[] }  (replace the full array)
+ */
+
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET() {
   const supabase = await createClient()
   const { data, error } = await supabase
-    .from('availability_dates')
-    .select('*')
-    .order('available_date')
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data)
-}
-
-export async function POST(request: NextRequest) {
-  const supabase = await createClient()
-  const { available_date, notes } = await request.json()
-  if (!available_date) return NextResponse.json({ error: 'available_date required' }, { status: 400 })
-
-  const { data, error } = await supabase
-    .from('availability_dates')
-    .insert({ available_date, notes: notes || null })
-    .select()
+    .from('automation_settings')
+    .select('value')
+    .eq('key', 'available_days')
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data, { status: 201 })
+  if (error || !data) return NextResponse.json([])
+  return NextResponse.json(data.value as string[])
 }
 
-export async function PATCH(request: NextRequest) {
+export async function PUT(request: NextRequest) {
   const supabase = await createClient()
-  const { id, is_full, notes } = await request.json()
-  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+  const { days } = await request.json() as { days: string[] }
 
-  const updates: { is_full?: boolean; notes?: string | null } = {}
-  if (typeof is_full === 'boolean') updates.is_full = is_full
-  if (notes !== undefined) updates.notes = notes as string | null
+  if (!Array.isArray(days)) {
+    return NextResponse.json({ error: 'days must be an array' }, { status: 400 })
+  }
 
-  const { data, error } = await supabase
-    .from('availability_dates')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single()
+  const { error } = await supabase
+    .from('automation_settings')
+    .upsert({ key: 'available_days', value: days, label: 'Days of the week available for new customers' })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data)
-}
-
-export async function DELETE(request: NextRequest) {
-  const supabase = await createClient()
-  const { searchParams } = new URL(request.url)
-  const id = searchParams.get('id')
-  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
-
-  const { error } = await supabase.from('availability_dates').delete().eq('id', id)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ success: true })
+  return NextResponse.json({ days })
 }

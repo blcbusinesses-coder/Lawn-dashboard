@@ -66,13 +66,6 @@ interface AddonOption {
   description: string
 }
 
-interface AvailabilityDate {
-  id: string
-  available_date: string
-  notes: string | null
-  is_full: boolean
-  created_at?: string
-}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -98,14 +91,11 @@ export default function AutomationPage() {
   const [settings, setSettings] = useState<SettingsMap | null>(null)
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [leads, setLeads] = useState<Lead[]>([])
-  const [availDates, setAvailDates] = useState<AvailabilityDate[]>([])
+  const [availDays, setAvailDays] = useState<string[]>([])
+  const [availDaysDraft, setAvailDaysDraft] = useState<string[]>([])
+  const [savingDays, setSavingDays] = useState(false)
   const [loading, setLoading] = useState(true)
   const [savingKey, setSavingKey] = useState<string | null>(null)
-
-  // Availability date management
-  const [newDate, setNewDate] = useState('')
-  const [newNotes, setNewNotes] = useState('')
-  const [addingDate, setAddingDate] = useState(false)
 
   // Editable copies of settings
   const [tiers, setTiers] = useState<PricingTier[]>([])
@@ -141,7 +131,11 @@ export default function AutomationPage() {
     }
     if (logRes.ok) setLogs(await logRes.json())
     if (leadRes.ok) setLeads(await leadRes.json())
-    if (availRes.ok) setAvailDates(await availRes.json())
+    if (availRes.ok) {
+      const days: string[] = await availRes.json()
+      setAvailDays(days)
+      setAvailDaysDraft(days)
+    }
     setLoading(false)
   }, [])
 
@@ -194,46 +188,27 @@ export default function AutomationPage() {
   }
 
   // ── Availability helpers ───────────────────────────────────────────────────
-  async function addAvailDate() {
-    if (!newDate) return
-    setAddingDate(true)
-    const res = await fetch('/api/availability', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ available_date: newDate, notes: newNotes.trim() || null }),
-    })
-    setAddingDate(false)
-    if (res.ok) {
-      toast.success('Date added')
-      setNewDate('')
-      setNewNotes('')
-      const fresh = await fetch('/api/availability')
-      if (fresh.ok) setAvailDates(await fresh.json())
-    } else {
-      toast.error('Failed to add date')
-    }
+  const ALL_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+  function toggleDay(day: string) {
+    setAvailDaysDraft((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+    )
   }
 
-  async function toggleFull(id: string, current: boolean) {
+  async function saveAvailDays() {
+    setSavingDays(true)
     const res = await fetch('/api/availability', {
-      method: 'PATCH',
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, is_full: !current }),
+      body: JSON.stringify({ days: availDaysDraft }),
     })
+    setSavingDays(false)
     if (res.ok) {
-      setAvailDates((prev) => prev.map((d) => d.id === id ? { ...d, is_full: !current } : d))
+      setAvailDays(availDaysDraft)
+      toast.success('Available days saved')
     } else {
-      toast.error('Failed to update')
-    }
-  }
-
-  async function removeAvailDate(id: string) {
-    const res = await fetch(`/api/availability?id=${id}`, { method: 'DELETE' })
-    if (res.ok) {
-      setAvailDates((prev) => prev.filter((d) => d.id !== id))
-      toast.success('Date removed')
-    } else {
-      toast.error('Failed to remove date')
+      toast.error('Failed to save')
     }
   }
 
@@ -607,7 +582,7 @@ export default function AutomationPage() {
                         </td>
                         <td className="px-4 py-3 text-zinc-600 whitespace-nowrap">
                           {lead.chosen_start_day
-                            ? format(new Date(lead.chosen_start_day + 'T12:00:00'), 'EEE, MMM d')
+                            ? <span>{lead.chosen_start_day}s</span>
                             : <span className="text-zinc-300">not chosen</span>}
                         </td>
                         <td className="px-4 py-3 text-zinc-400 text-xs whitespace-nowrap">
@@ -621,12 +596,14 @@ export default function AutomationPage() {
             </div>
           </div>
 
-          {/* Available Start Days Management */}
+          {/* Available Days of Week */}
           <div className="bg-white rounded-xl border border-zinc-200 p-6">
-            <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center justify-between mb-1">
               <div>
-                <h2 className="font-semibold text-zinc-900">Available Start Days</h2>
-                <p className="text-xs text-zinc-400 mt-0.5">These dates appear on the public quote page — customers pick their first mow day.</p>
+                <h2 className="font-semibold text-zinc-900">Available Mow Days</h2>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Customers pick one of these days on the quote page — we mow them weekly on that day.
+                </p>
               </div>
               <a
                 href="/get-a-quote"
@@ -638,82 +615,39 @@ export default function AutomationPage() {
               </a>
             </div>
 
-            {/* Add new date */}
-            <div className="flex gap-2 mb-5 pb-5 border-b border-zinc-100">
-              <input
-                type="date"
-                value={newDate}
-                onChange={(e) => setNewDate(e.target.value)}
-                className="border border-zinc-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-300"
-              />
-              <Input
-                value={newNotes}
-                onChange={(e) => setNewNotes(e.target.value)}
-                placeholder="Notes (optional)"
-                className="flex-1"
-              />
-              <Button
-                size="sm"
-                onClick={addAvailDate}
-                disabled={!newDate || addingDate}
-              >
-                {addingDate ? 'Adding…' : '+ Add Date'}
-              </Button>
+            <div className="flex flex-wrap gap-2 mt-5">
+              {ALL_DAYS.map((day) => {
+                const active = availDaysDraft.includes(day)
+                return (
+                  <button
+                    key={day}
+                    onClick={() => toggleDay(day)}
+                    className={`px-4 py-2 rounded-lg border-2 text-sm font-semibold transition-all ${
+                      active
+                        ? 'border-green-600 bg-green-600 text-white'
+                        : 'border-zinc-200 bg-white text-zinc-500 hover:border-zinc-400'
+                    }`}
+                  >
+                    {day}
+                  </button>
+                )
+              })}
             </div>
 
-            {/* Dates list */}
-            {availDates.length === 0 ? (
-              <p className="text-sm text-zinc-400 text-center py-6">
-                No available dates set — add one above so customers can book a start day.
+            <div className="flex items-center justify-between mt-5 pt-4 border-t border-zinc-100">
+              <p className="text-xs text-zinc-400">
+                {availDaysDraft.length === 0
+                  ? 'No days selected — customers will see "We\'ll reach out to schedule"'
+                  : `${availDaysDraft.length} day${availDaysDraft.length > 1 ? 's' : ''} selected`}
               </p>
-            ) : (
-              <div className="space-y-2">
-                {availDates
-                  .sort((a, b) => a.available_date.localeCompare(b.available_date))
-                  .map((d) => {
-                    const isPast = d.available_date < new Date().toISOString().split('T')[0]
-                    return (
-                      <div
-                        key={d.id}
-                        className={`flex items-center gap-3 px-4 py-3 rounded-lg border transition-colors ${
-                          d.is_full
-                            ? 'bg-zinc-50 border-zinc-200 opacity-60'
-                            : isPast
-                            ? 'bg-zinc-50 border-zinc-100 opacity-50'
-                            : 'bg-green-50 border-green-200'
-                        }`}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-sm font-medium ${d.is_full || isPast ? 'text-zinc-500' : 'text-zinc-900'}`}>
-                            {format(new Date(d.available_date + 'T12:00:00'), 'EEEE, MMMM d, yyyy')}
-                            {isPast && <span className="ml-2 text-xs text-zinc-400">(past)</span>}
-                          </p>
-                          {d.notes && <p className="text-xs text-zinc-400 mt-0.5 truncate">{d.notes}</p>}
-                        </div>
-
-                        <button
-                          onClick={() => toggleFull(d.id, d.is_full)}
-                          className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${
-                            d.is_full
-                              ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
-                              : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
-                          }`}
-                        >
-                          {d.is_full ? '🔴 Full' : '🟢 Open'}
-                        </button>
-
-                        <button
-                          onClick={() => removeAvailDate(d.id)}
-                          className="text-zinc-300 hover:text-red-400 transition-colors px-1 text-lg leading-none"
-                          title="Remove date"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    )
-                  })}
-              </div>
-            )}
+              <Button
+                size="sm"
+                onClick={saveAvailDays}
+                disabled={savingDays || JSON.stringify(availDaysDraft) === JSON.stringify(availDays)}
+              >
+                {savingDays ? 'Saving…' : 'Save Days'}
+              </Button>
+            </div>
           </div>
         </div>
       )}

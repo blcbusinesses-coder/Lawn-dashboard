@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface AddonOption { key: string; label: string; price: number; description: string }
-interface AvailDay    { id: string; available_date: string; notes: string | null }
 
 interface QuoteData {
   lot_size_sqft:  number | null
@@ -149,13 +148,10 @@ function Logo() {
   )
 }
 
-// ── Helper: format day label ──────────────────────────────────────────────────
-function formatDay(dateStr: string) {
-  const d = new Date(dateStr + 'T12:00:00')
-  return {
-    weekday: d.toLocaleDateString('en-US', { weekday: 'long' }),
-    date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-  }
+// ── Day abbreviations ─────────────────────────────────────────────────────────
+const DAY_ABBR: Record<string, string> = {
+  Monday: 'Mon', Tuesday: 'Tue', Wednesday: 'Wed', Thursday: 'Thu',
+  Friday: 'Fri', Saturday: 'Sat', Sunday: 'Sun',
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
@@ -163,7 +159,7 @@ export default function GetAQuotePage() {
   const [step, setStep]           = useState<Step>('address')
   const [address, setAddress]     = useState('')
   const [quoteData, setQuoteData] = useState<QuoteData | null>(null)
-  const [availDays, setAvailDays] = useState<AvailDay[]>([])
+  const [availDays, setAvailDays] = useState<string[]>([])
   const [selectedAddons, setSelectedAddons] = useState<string[]>([])
   const [chosenDay, setChosenDay] = useState<string | null>(null)
   const [name, setName]           = useState('')
@@ -285,7 +281,7 @@ export default function GetAQuotePage() {
       </p>
       {chosenDay && (
         <p className="text-[#4a6a3a] mb-4" style={{ animation: 'fadeUp 0.5s ease-out 1s both' }}>
-          We&apos;ll be there on <strong>{formatDay(chosenDay).weekday}, {formatDay(chosenDay).date}</strong>.
+          We&apos;ll aim to start on <strong>{chosenDay}s</strong>.
         </p>
       )}
       <div className="bg-white border border-[#c8dfc0] rounded-xl px-5 py-4 text-sm text-[#4a6a3a] mt-4"
@@ -428,24 +424,22 @@ export default function GetAQuotePage() {
 
         {/* Start day picker */}
         <div className="px-5 py-4">
-          <p className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-3">
-            {availDays.length > 0 ? 'Choose a start day' : 'Start day'}
-          </p>
+          <p className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-1">Preferred mow day</p>
+          <p className="text-xs text-zinc-400 mb-3">We&apos;ll schedule your weekly mow on this day each week.</p>
           {availDays.length === 0 ? (
             <p className="text-sm text-zinc-400 italic">We&apos;ll reach out to schedule your first mow.</p>
           ) : (
-            <div className="grid grid-cols-2 gap-2">
+            <div className="flex flex-wrap gap-2">
               {availDays.map((day) => {
-                const { weekday, date } = formatDay(day.available_date)
-                const chosen = chosenDay === day.available_date
+                const chosen = chosenDay === day
                 return (
-                  <button key={day.id} onClick={() => setChosenDay(chosen ? null : day.available_date)}
-                    className={`p-3 rounded-xl border-2 text-left transition-all ${
-                      chosen ? 'border-[#2d5a1b] bg-[#f0f8ec]' : 'border-zinc-200 hover:border-zinc-300 bg-white'
+                  <button key={day} onClick={() => setChosenDay(chosen ? null : day)}
+                    className={`px-4 py-2.5 rounded-xl border-2 font-semibold text-sm transition-all ${
+                      chosen
+                        ? 'border-[#2d5a1b] bg-[#2d5a1b] text-white'
+                        : 'border-zinc-200 bg-white text-zinc-700 hover:border-[#2d5a1b] hover:text-[#1e3d12]'
                     }`}>
-                    <p className={`text-sm font-bold ${chosen ? 'text-[#1e3d12]' : 'text-zinc-800'}`}>{weekday}</p>
-                    <p className="text-xs text-zinc-400">{date}</p>
-                    {day.notes && <p className="text-xs text-zinc-300 mt-0.5 truncate">{day.notes}</p>}
+                    {DAY_ABBR[day] ?? day}
                   </button>
                 )
               })}
@@ -475,9 +469,8 @@ export default function GetAQuotePage() {
         </div>
         {chosenDay && (
           <div className="text-right">
-            <p className="text-xs text-[#a8dfc0]">Start day</p>
-            <p className="font-semibold text-sm">{formatDay(chosenDay).weekday}</p>
-            <p className="text-xs text-[#a8dfc0]">{formatDay(chosenDay).date}</p>
+            <p className="text-xs text-[#a8dfc0]">Mow day</p>
+            <p className="font-semibold text-sm">{chosenDay}s</p>
           </div>
         )}
       </div>
