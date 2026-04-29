@@ -26,6 +26,26 @@ export async function POST(request: NextRequest) {
   return NextResponse.json(data, { status: 201 })
 }
 
+export async function PATCH(request: NextRequest) {
+  const supabase = await createClient()
+  const { id, is_full, notes } = await request.json()
+  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+  const updates: Record<string, unknown> = {}
+  if (typeof is_full === 'boolean') updates.is_full = is_full
+  if (notes !== undefined) updates.notes = notes
+
+  const { data, error } = await supabase
+    .from('availability_dates')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json(data)
+}
+
 export async function DELETE(request: NextRequest) {
   const supabase = await createClient()
   const { searchParams } = new URL(request.url)

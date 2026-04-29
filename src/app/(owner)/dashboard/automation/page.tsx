@@ -54,6 +54,24 @@ interface Lead {
   quoted_amount: number | null
   created_at: string
   quote_sent_at: string | null
+  quote_source?: string
+  addons?: AddonOption[] | null
+  chosen_start_day?: string | null
+}
+
+interface AddonOption {
+  key: string
+  label: string
+  price: number
+  description: string
+}
+
+interface AvailabilityDate {
+  id: string
+  available_date: string
+  notes: string | null
+  is_full: boolean
+  created_at?: string
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -80,8 +98,14 @@ export default function AutomationPage() {
   const [settings, setSettings] = useState<SettingsMap | null>(null)
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [leads, setLeads] = useState<Lead[]>([])
+  const [availDates, setAvailDates] = useState<AvailabilityDate[]>([])
   const [loading, setLoading] = useState(true)
   const [savingKey, setSavingKey] = useState<string | null>(null)
+
+  // Availability date management
+  const [newDate, setNewDate] = useState('')
+  const [newNotes, setNewNotes] = useState('')
+  const [addingDate, setAddingDate] = useState(false)
 
   // Editable copies of settings
   const [tiers, setTiers] = useState<PricingTier[]>([])
@@ -94,13 +118,14 @@ export default function AutomationPage() {
   const [surchargeAmount, setSurchargeAmount] = useState('')
 
   // Active tab
-  const [tab, setTab] = useState<'pricing' | 'leads' | 'logs' | 'config'>('pricing')
+  const [tab, setTab] = useState<'pricing' | 'leads' | 'quote_leads' | 'logs' | 'config'>('pricing')
 
   const load = useCallback(async () => {
-    const [settRes, logRes, leadRes] = await Promise.all([
+    const [settRes, logRes, leadRes, availRes] = await Promise.all([
       fetch('/api/automation/settings'),
       fetch('/api/automation/logs?limit=200'),
       fetch('/api/leads'),
+      fetch('/api/availability'),
     ])
     if (settRes.ok) {
       const { map } = await settRes.json() as { map: SettingsMap }
@@ -116,6 +141,7 @@ export default function AutomationPage() {
     }
     if (logRes.ok) setLogs(await logRes.json())
     if (leadRes.ok) setLeads(await leadRes.json())
+    if (availRes.ok) setAvailDates(await availRes.json())
     setLoading(false)
   }, [])
 
@@ -167,8 +193,53 @@ export default function AutomationPage() {
     setRatioTiers((prev) => prev.filter((_, i) => i !== idx))
   }
 
+  // ── Availability helpers ───────────────────────────────────────────────────
+  async function addAvailDate() {
+    if (!newDate) return
+    setAddingDate(true)
+    const res = await fetch('/api/availability', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ available_date: newDate, notes: newNotes.trim() || null }),
+    })
+    setAddingDate(false)
+    if (res.ok) {
+      toast.success('Date added')
+      setNewDate('')
+      setNewNotes('')
+      const fresh = await fetch('/api/availability')
+      if (fresh.ok) setAvailDates(await fresh.json())
+    } else {
+      toast.error('Failed to add date')
+    }
+  }
+
+  async function toggleFull(id: string, current: boolean) {
+    const res = await fetch('/api/availability', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, is_full: !current }),
+    })
+    if (res.ok) {
+      setAvailDates((prev) => prev.map((d) => d.id === id ? { ...d, is_full: !current } : d))
+    } else {
+      toast.error('Failed to update')
+    }
+  }
+
+  async function removeAvailDate(id: string) {
+    const res = await fetch(`/api/availability?id=${id}`, { method: 'DELETE' })
+    if (res.ok) {
+      setAvailDates((prev) => prev.filter((d) => d.id !== id))
+      toast.success('Date removed')
+    } else {
+      toast.error('Failed to remove date')
+    }
+  }
+
   // ── Stats ──────────────────────────────────────────────────────────────────
   const totalLeads = leads.length
+  const quoteLeads = leads.filter((l) => l.quote_source === 'self_service')
   const quotedLeads = leads.filter((l) => l.status === 'quoted' || l.status === 'converted').length
   const convertedLeads = leads.filter((l) => l.status === 'converted').length
   const conversionRate = quotedLeads ? Math.round((convertedLeads / quotedLeads) * 100) : 0
@@ -216,16 +287,20 @@ export default function AutomationPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-zinc-200">
-        {(['pricing', 'leads', 'logs', 'config'] as const).map((t) => (
+      <div className="flex gap-1 border-b border-zinc-200 flex-wrap">
+        {(['pricing', 'leads', 'quote_leads', 'logs', 'config'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${
+            className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
               tab === t ? 'border-zinc-900 text-zinc-900' : 'border-transparent text-zinc-400 hover:text-zinc-600'
             }`}
           >
-            {t === 'pricing' ? '💰 Pricing' : t === 'leads' ? '📋 Leads' : t === 'logs' ? '📊 Run Logs' : '⚙️ Config'}
+            {t === 'pricing'      ? '💰 Pricing'
+             : t === 'leads'      ? '📋 Leads'
+             : t === 'quote_leads'? `🌿 Quote Leads${quoteLeads.length ? ` (${quoteLeads.length})` : ''}`
+             : t === 'logs'       ? '📊 Run Logs'
+             :                      '⚙️ Config'}
           </button>
         ))}
       </div>
@@ -466,6 +541,183 @@ export default function AutomationPage() {
         </div>
       )}
 
+      {/* ── QUOTE LEADS TAB ─────────────────────────────────────────────────── */}
+      {tab === 'quote_leads' && (
+        <div className="space-y-6">
+          {/* Self-service lead submissions */}
+          <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
+            <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-zinc-900">Self-Service Quote Submissions</h2>
+                <p className="text-xs text-zinc-400 mt-0.5">Customers who completed the quote flow at <span className="font-mono">/get-a-quote</span></p>
+              </div>
+              <span className="text-xs bg-green-100 text-green-700 px-2.5 py-1 rounded-full font-medium">
+                {quoteLeads.length} {quoteLeads.length === 1 ? 'lead' : 'leads'}
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-100 bg-zinc-50">
+                    <th className="text-left px-4 py-3 font-medium text-zinc-600 whitespace-nowrap">Name</th>
+                    <th className="text-left px-4 py-3 font-medium text-zinc-600 whitespace-nowrap">Phone</th>
+                    <th className="text-left px-4 py-3 font-medium text-zinc-600 whitespace-nowrap">Address</th>
+                    <th className="text-left px-4 py-3 font-medium text-zinc-600 whitespace-nowrap">Yard Size</th>
+                    <th className="text-left px-4 py-3 font-medium text-zinc-600 whitespace-nowrap">Total Quote</th>
+                    <th className="text-left px-4 py-3 font-medium text-zinc-600 whitespace-nowrap">Add-ons</th>
+                    <th className="text-left px-4 py-3 font-medium text-zinc-600 whitespace-nowrap">Start Day</th>
+                    <th className="text-left px-4 py-3 font-medium text-zinc-600 whitespace-nowrap">Submitted</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {quoteLeads.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-12 text-center text-zinc-400">
+                        <p className="text-2xl mb-2">🌿</p>
+                        <p className="font-medium">No quote submissions yet</p>
+                        <p className="text-xs mt-1">Share <span className="font-mono">/get-a-quote</span> with potential customers</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    quoteLeads.map((lead) => (
+                      <tr key={lead.id} className="border-b border-zinc-50 hover:bg-zinc-50 transition-colors">
+                        <td className="px-4 py-3 font-medium text-zinc-900 whitespace-nowrap">{lead.name}</td>
+                        <td className="px-4 py-3 text-zinc-600 whitespace-nowrap">{lead.phone}</td>
+                        <td className="px-4 py-3 text-zinc-600 max-w-[200px] truncate">{lead.address}</td>
+                        <td className="px-4 py-3 text-zinc-600 whitespace-nowrap">
+                          {lead.lot_size_sqft
+                            ? `${lead.lot_size_sqft.toLocaleString()} sqft`
+                            : <span className="text-zinc-300">unknown</span>}
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-zinc-900 whitespace-nowrap">
+                          {lead.quoted_amount != null ? `$${lead.quoted_amount}` : <span className="text-zinc-300">—</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          {lead.addons && lead.addons.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {lead.addons.map((a) => (
+                                <span key={a.key} className="text-xs bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-full">
+                                  {a.label}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-zinc-300 text-xs">none</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-zinc-600 whitespace-nowrap">
+                          {lead.chosen_start_day
+                            ? format(new Date(lead.chosen_start_day + 'T12:00:00'), 'EEE, MMM d')
+                            : <span className="text-zinc-300">not chosen</span>}
+                        </td>
+                        <td className="px-4 py-3 text-zinc-400 text-xs whitespace-nowrap">
+                          {format(new Date(lead.created_at), 'MMM d, h:mm a')}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Available Start Days Management */}
+          <div className="bg-white rounded-xl border border-zinc-200 p-6">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h2 className="font-semibold text-zinc-900">Available Start Days</h2>
+                <p className="text-xs text-zinc-400 mt-0.5">These dates appear on the public quote page — customers pick their first mow day.</p>
+              </div>
+              <a
+                href="/get-a-quote"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-zinc-400 hover:text-zinc-700 underline underline-offset-2 transition-colors"
+              >
+                Preview quote page ↗
+              </a>
+            </div>
+
+            {/* Add new date */}
+            <div className="flex gap-2 mb-5 pb-5 border-b border-zinc-100">
+              <input
+                type="date"
+                value={newDate}
+                onChange={(e) => setNewDate(e.target.value)}
+                className="border border-zinc-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-300"
+              />
+              <Input
+                value={newNotes}
+                onChange={(e) => setNewNotes(e.target.value)}
+                placeholder="Notes (optional)"
+                className="flex-1"
+              />
+              <Button
+                size="sm"
+                onClick={addAvailDate}
+                disabled={!newDate || addingDate}
+              >
+                {addingDate ? 'Adding…' : '+ Add Date'}
+              </Button>
+            </div>
+
+            {/* Dates list */}
+            {availDates.length === 0 ? (
+              <p className="text-sm text-zinc-400 text-center py-6">
+                No available dates set — add one above so customers can book a start day.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {availDates
+                  .sort((a, b) => a.available_date.localeCompare(b.available_date))
+                  .map((d) => {
+                    const isPast = d.available_date < new Date().toISOString().split('T')[0]
+                    return (
+                      <div
+                        key={d.id}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-lg border transition-colors ${
+                          d.is_full
+                            ? 'bg-zinc-50 border-zinc-200 opacity-60'
+                            : isPast
+                            ? 'bg-zinc-50 border-zinc-100 opacity-50'
+                            : 'bg-green-50 border-green-200'
+                        }`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-medium ${d.is_full || isPast ? 'text-zinc-500' : 'text-zinc-900'}`}>
+                            {format(new Date(d.available_date + 'T12:00:00'), 'EEEE, MMMM d, yyyy')}
+                            {isPast && <span className="ml-2 text-xs text-zinc-400">(past)</span>}
+                          </p>
+                          {d.notes && <p className="text-xs text-zinc-400 mt-0.5 truncate">{d.notes}</p>}
+                        </div>
+
+                        <button
+                          onClick={() => toggleFull(d.id, d.is_full)}
+                          className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${
+                            d.is_full
+                              ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
+                              : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
+                          }`}
+                        >
+                          {d.is_full ? '🔴 Full' : '🟢 Open'}
+                        </button>
+
+                        <button
+                          onClick={() => removeAvailDate(d.id)}
+                          className="text-zinc-300 hover:text-red-400 transition-colors px-1 text-lg leading-none"
+                          title="Remove date"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )
+                  })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── LOGS TAB ────────────────────────────────────────────────────────── */}
       {tab === 'logs' && (
         <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
@@ -615,7 +867,7 @@ export default function AutomationPage() {
             <p className="text-sm font-medium text-amber-800 mb-1">📋 Share Your Quote Form</p>
             <p className="text-xs text-amber-700 mb-2">Send this link to potential customers:</p>
             <code className="block text-xs bg-white border border-amber-200 rounded px-3 py-2 text-zinc-700 break-all">
-              {typeof window !== 'undefined' ? window.location.origin : 'https://your-domain.com'}/quote
+              {typeof window !== 'undefined' ? window.location.origin : 'https://your-domain.com'}/get-a-quote
             </code>
           </div>
         </div>
