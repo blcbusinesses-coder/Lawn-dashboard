@@ -503,6 +503,9 @@ export interface Database {
           quoted_amount: number | null
           quote_sent_at: string | null
           notes: string | null
+          addons: Json | null
+          chosen_start_day: string | null
+          quote_source: string
           created_at: string
         }
         Insert: {
@@ -518,6 +521,9 @@ export interface Database {
           quoted_amount?: number | null
           quote_sent_at?: string | null
           notes?: string | null
+          addons?: Json | null
+          chosen_start_day?: string | null
+          quote_source?: string
           created_at?: string
         }
         Update: {
@@ -532,6 +538,9 @@ export interface Database {
           quoted_amount?: number | null
           quote_sent_at?: string | null
           notes?: string | null
+          addons?: Json | null
+          chosen_start_day?: string | null
+          quote_source?: string
         }
         Relationships: []
       }
@@ -674,17 +683,20 @@ export interface Database {
           id: string
           available_date: string
           notes: string | null
+          is_full: boolean
           created_at: string
         }
         Insert: {
           id?: string
           available_date: string
           notes?: string | null
+          is_full?: boolean
           created_at?: string
         }
         Update: {
           available_date?: string
           notes?: string | null
+          is_full?: boolean
         }
         Relationships: []
       }
