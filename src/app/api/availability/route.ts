@@ -31,9 +31,9 @@ export async function PATCH(request: NextRequest) {
   const { id, is_full, notes } = await request.json()
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
-  const updates: Record<string, unknown> = {}
+  const updates: { is_full?: boolean; notes?: string | null } = {}
   if (typeof is_full === 'boolean') updates.is_full = is_full
-  if (notes !== undefined) updates.notes = notes
+  if (notes !== undefined) updates.notes = notes as string | null
 
   const { data, error } = await supabase
     .from('availability_dates')
