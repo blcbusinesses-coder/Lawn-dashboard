@@ -9,7 +9,7 @@ import { toast } from 'sonner'
 import {
   Users, Home, ClipboardCheck, Receipt, FileText, Bot,
   TrendingUp, HardHat, MessageSquare, Inbox, Star, Settings2, LogOut,
-  CheckSquare, BarChart2, Wrench, Gauge,
+  CheckSquare, BarChart2, Wrench, Gauge, Globe,
 } from 'lucide-react'
 
 const navItems = [
@@ -29,6 +29,7 @@ const navItems = [
   { href: '/dashboard/inbox',      label: 'Inbox',           Icon: Inbox },
   { href: '/dashboard/important',  label: 'Important',       Icon: Star },
   { href: '/dashboard/automation', label: 'Automation',      Icon: Settings2 },
+  { href: '/dashboard/site',       label: 'Site',            Icon: Globe },
 ]
 
 interface OwnerSidebarProps {
