@@ -61,9 +61,8 @@ export function OwnerSidebar({ open = false, onClose }: OwnerSidebarProps) {
       {/* Logo */}
       <div className="flex items-center justify-between px-5 h-16 border-b border-zinc-800 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shrink-0 shadow-sm">
-            <span className="text-zinc-900 font-bold text-xs tracking-wide">GW</span>
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="Gray Wolf Workers" className="w-9 h-9 object-contain shrink-0" />
           <div className="leading-tight">
             <p className="text-white font-semibold text-sm">Gray Wolf Workers</p>
             <p className="text-zinc-500 text-xs">Owner Portal</p>

@@ -224,10 +224,8 @@ export default function QuotePage() {
     return (
       <div className="min-h-screen bg-[#eef3e8] flex flex-col items-center justify-center px-5 py-8">
         <div className="w-full max-w-sm text-center">
-          {/* Logo mark */}
-          <div className="inline-flex items-center justify-center w-12 h-12 bg-[#2d5a1b] rounded-xl mb-6">
-            <span className="text-white font-bold text-sm tracking-wide">GW</span>
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="Gray Wolf Workers" className="w-16 h-16 object-contain mx-auto mb-4" />
           <MowerLoader />
         </div>
         <div className="fixed bottom-0 left-0 right-0 pointer-events-none overflow-hidden">
@@ -320,9 +318,8 @@ export default function QuotePage() {
 
           {/* Header */}
           <div className="text-center mb-6">
-            <div className="inline-flex items-center justify-center w-12 h-12 bg-[#2d5a1b] rounded-xl mb-4">
-              <span className="text-white font-bold text-sm tracking-wide">GW</span>
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.png" alt="Gray Wolf Workers" className="w-16 h-16 object-contain mx-auto mb-2" />
             <h1 className="text-2xl sm:text-3xl font-bold text-[#1e3d12] tracking-tight">Gray Wolf Workers</h1>
             <p className="text-[#5a7a4a] mt-2 text-sm leading-relaxed max-w-xs mx-auto">
               Get a free lawn mowing quote — we&apos;ll text it straight to your phone in under a minute.

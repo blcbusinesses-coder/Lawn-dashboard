@@ -140,9 +140,8 @@ function AnimatedCheck() {
 function Logo() {
   return (
     <div className="flex flex-col items-center mb-6">
-      <div className="w-12 h-12 bg-[#2d5a1b] rounded-xl flex items-center justify-center shadow-md mb-3">
-        <span className="text-white font-bold text-sm tracking-wide">GW</span>
-      </div>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/logo.png" alt="Gray Wolf Workers" className="w-16 h-16 object-contain mb-2" />
       <p className="text-[#1e3d12] font-semibold text-sm">Gray Wolf Workers</p>
     </div>
   )

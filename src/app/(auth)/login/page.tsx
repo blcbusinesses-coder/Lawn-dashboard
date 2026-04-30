@@ -40,9 +40,8 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-zinc-100 px-4">
       <Card className="w-full max-w-sm shadow-lg">
         <CardHeader className="text-center pb-2">
-          <div className="mx-auto mb-3 w-12 h-12 bg-zinc-900 rounded-xl flex items-center justify-center">
-            <span className="text-white text-xl font-bold">GW</span>
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="Gray Wolf Workers" className="w-20 h-20 object-contain mx-auto mb-1" />
           <CardTitle className="text-2xl">Gray Wolf Workers</CardTitle>
           <CardDescription>Sign in to your account</CardDescription>
         </CardHeader>

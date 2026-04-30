@@ -29,9 +29,8 @@ export function OwnerShell({ children }: { children: React.ReactNode }) {
             <Menu size={20} />
           </button>
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 bg-white rounded-lg flex items-center justify-center shrink-0 shadow-sm">
-              <span className="text-zinc-900 font-bold text-xs tracking-wide">GW</span>
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.png" alt="Gray Wolf Workers" className="w-8 h-8 object-contain shrink-0" />
             <span className="text-white font-semibold text-sm">Gray Wolf Workers</span>
           </div>
         </header>
