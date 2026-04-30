@@ -249,16 +249,6 @@ function About() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/lawn3.jpg" alt="Gray Wolf Workers crew at work" className="w-full h-full object-cover" />
             </div>
-            <div className="absolute -bottom-5 -right-4 md:-right-8 rounded-2xl px-6 py-4 shadow-xl"
-              style={{ background: '#2d5a1b', border: '1px solid rgba(255,255,255,0.15)' }}>
-              <p className="text-3xl font-extrabold leading-none text-white">50+</p>
-              <p className="text-xs font-bold tracking-wide mt-0.5" style={{ color: '#a8dba8' }}>Happy Customers</p>
-            </div>
-            <div className="absolute -top-4 -left-4 md:-left-6 rounded-2xl p-3 shadow-lg"
-              style={{ background: '#142d0a', border: '1px solid rgba(255,255,255,0.1)' }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo.png" alt="" className="w-12 h-12 object-contain" />
-            </div>
           </div>
 
           {/* Text */}
