@@ -167,7 +167,7 @@ function BackgroundCollage() {
         setCurrent(c => (c + 1) % GALLERY.length)
         setVisible(true)
       }, 800)
-    }, 5000)
+    }, 5800) // 5 s visible + 0.8 s fade = 5.8 s per photo → ~23 s full cycle
     return () => clearInterval(timer)
   }, [])
 
