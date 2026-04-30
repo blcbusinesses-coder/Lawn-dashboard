@@ -149,34 +149,43 @@ const DAY_ABBR: Record<string, string> = {
 const GALLERY = ['/lawn1.jpg', '/lawn2.jpg', '/lawn3.jpg', '/lawn4.jpg']
 
 function BackgroundCollage() {
-  const [current, setCurrent] = useState(0)
-  const [visible, setVisible] = useState(true)
+  const [index, setIndex] = useState(0)
+  const [transitioning, setTransitioning] = useState(false)
+  const next = (index + 1) % GALLERY.length
 
   useEffect(() => {
     const timer = setInterval(() => {
-      // fade out
-      setVisible(false)
+      setTransitioning(true)          // start cross-fade
       setTimeout(() => {
-        setCurrent(c => (c + 1) % GALLERY.length)
-        setVisible(true)
-      }, 800)
-    }, 5800) // 5 s visible + 0.8 s fade = 5.8 s per photo → ~23 s full cycle
+        setIndex(i => (i + 1) % GALLERY.length)
+        setTransitioning(false)       // snap top layer back to opaque
+      }, 1000)
+    }, 5800)
     return () => clearInterval(timer)
   }, [])
 
   return (
     <>
-      {/* single full-screen photo that rotates every 5 s */}
+      {/* Two stacked images — next sits underneath, current fades out over it */}
       <div className="fixed inset-0 z-0 overflow-hidden" aria-hidden>
+        {/* bottom layer: upcoming photo (already rendered, no pop-in) */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={GALLERY[current]}
+          src={GALLERY[next]}
           alt=""
-          className="w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{ animation: 'slowZoomIn 6s ease-in-out forwards' }}
+        />
+        {/* top layer: current photo — fades out to reveal the one below */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={GALLERY[index]}
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover"
           style={{
+            opacity: transitioning ? 0 : 1,
+            transition: 'opacity 1s ease-in-out',
             animation: 'slowZoomIn 6s ease-in-out forwards',
-            opacity: visible ? 1 : 0,
-            transition: 'opacity 0.8s ease-in-out',
           }}
         />
       </div>
