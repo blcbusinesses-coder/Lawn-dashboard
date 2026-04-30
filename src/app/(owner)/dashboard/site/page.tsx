@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
-import { Globe, ExternalLink, Copy, Check, Eye, Smartphone, Monitor } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Globe, ExternalLink, Copy, Check, Eye, Smartphone, Monitor, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { createClient } from '@/lib/supabase/client'
 
 const SERVICE_AREAS = [
   'Kendallville', 'Albion', 'Angola', 'Auburn', 'Avilla',
@@ -10,39 +11,34 @@ const SERVICE_AREAS = [
   'Ligonier', 'Rome City', 'Waterloo', 'Wolcottville',
 ]
 
-const SITE_URL = typeof window !== 'undefined'
-  ? `${window.location.protocol}//${window.location.host}/home`
-  : '/home'
-
-// ── Section toggle ─────────────────────────────────────────────────────────────
-interface SectionToggleProps {
-  label: string
-  description: string
-  enabled: boolean
-  onChange: (v: boolean) => void
-}
-function SectionToggle({ label, description, enabled, onChange }: SectionToggleProps) {
-  return (
-    <div className="flex items-center justify-between py-3.5 border-b border-zinc-100 last:border-0">
-      <div>
-        <p className="text-sm font-medium text-zinc-800">{label}</p>
-        <p className="text-xs text-zinc-400 mt-0.5">{description}</p>
-      </div>
-      <button
-        onClick={() => onChange(!enabled)}
-        className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 transition-colors duration-200
-          ${enabled ? 'bg-green-500 border-green-500' : 'bg-zinc-200 border-zinc-200'}`}
-        role="switch"
-        aria-checked={enabled}
-      >
-        <span className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transform transition-transform duration-200 mt-0.5
-          ${enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
-      </button>
-    </div>
-  )
+// ── Supabase helpers ───────────────────────────────────────────────────────────
+async function loadSettings() {
+  const supabase = createClient()
+  const { data, error } = await supabase.from('site_settings').select('key, value')
+  if (error) throw error
+  return Object.fromEntries((data ?? []).map(r => [r.key, r.value])) as Record<string, string>
 }
 
-// ── Settings card ──────────────────────────────────────────────────────────────
+async function saveSetting(key: string, value: string) {
+  const supabase = createClient()
+  const { error } = await supabase
+    .from('site_settings')
+    .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+  if (error) throw error
+}
+
+async function saveMany(pairs: Record<string, string>) {
+  const supabase = createClient()
+  const rows = Object.entries(pairs).map(([key, value]) => ({
+    key, value, updated_at: new Date().toISOString(),
+  }))
+  const { error } = await supabase
+    .from('site_settings')
+    .upsert(rows, { onConflict: 'key' })
+  if (error) throw error
+}
+
+// ── UI helpers ────────────────────────────────────────────────────────────────
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
@@ -64,42 +60,168 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   )
 }
 
-const inputClass = "w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm text-zinc-800 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-colors"
-const textareaClass = `${inputClass} resize-none`
+const inputCls = "w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm text-zinc-800 bg-white focus:outline-none focus:ring-2 focus:ring-green-400/40 focus:border-green-500 transition-colors"
 
-// ── Main page ──────────────────────────────────────────────────────────────────
+function SaveButton({ loading, onClick }: { loading: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={loading}
+      className="w-full mt-1 flex items-center justify-center gap-2 bg-[#2d5a1b] hover:bg-[#3a7a22] disabled:opacity-60 text-white font-semibold text-sm py-2.5 rounded-xl transition-colors"
+    >
+      {loading && <Loader2 size={14} className="animate-spin" />}
+      {loading ? 'Saving…' : 'Save Changes'}
+    </button>
+  )
+}
+
+interface ToggleProps {
+  label: string; description: string; enabled: boolean; saving: boolean
+  onChange: (v: boolean) => void
+}
+function SectionToggle({ label, description, enabled, saving, onChange }: ToggleProps) {
+  return (
+    <div className="flex items-center justify-between py-3.5 border-b border-zinc-100 last:border-0">
+      <div>
+        <p className="text-sm font-medium text-zinc-800">{label}</p>
+        <p className="text-xs text-zinc-400 mt-0.5">{description}</p>
+      </div>
+      <button
+        onClick={() => onChange(!enabled)}
+        disabled={saving}
+        className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 transition-colors duration-200 disabled:opacity-60
+          ${enabled ? 'bg-green-500 border-green-500' : 'bg-zinc-200 border-zinc-200'}`}
+        role="switch"
+        aria-checked={enabled}
+      >
+        <span className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transform transition-transform duration-200 mt-0.5
+          ${enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+      </button>
+    </div>
+  )
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 export default function SitePage() {
-  const [copied, setCopied] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [copied, setCopied]   = useState(false)
+
+  // Business info
+  const [name,     setName]     = useState('Gray Wolf Workers')
+  const [tagline,  setTagline]  = useState('Your Lawn, Done Right.')
+  const [location, setLocation] = useState('Kendallville, IN 46755')
+  const [email,    setEmail]    = useState('graywolfworkers@gmail.com')
+  const [savingInfo, setSavingInfo] = useState(false)
+
+  // About section
+  const [about,    setAbout]    = useState("Gray Wolf Workers started right here in Kendallville. We're not a big franchise with a call center — we're your neighbors, and we treat your yard like it's our own.")
+  const [stat1,    setStat1]    = useState('50+')
+  const [stat2,    setStat2]    = useState('3+')
+  const [savingAbout, setSavingAbout] = useState(false)
+
+  // Section toggles
   const [sections, setSections] = useState({
-    services: true,
-    about: true,
-    gallery: true,
-    whyUs: true,
-    areas: true,
-    cta: true,
-    footer: true,
+    services: true, about: true, whyUs: true,
+    gallery: true, areas: true, cta: true, footer: true,
   })
+  const savingToggle = useRef<string | null>(null)
+  const [togglingKey, setTogglingKey] = useState<string | null>(null)
 
-  // Business info (display only for now — used to show what's on the site)
-  const [info] = useState({
-    name: 'Gray Wolf Workers',
-    tagline: 'Your Lawn, Done Right.',
-    location: 'Kendallville, IN 46755',
-    email: 'graywolfworkers@gmail.com',
-    about: "Gray Wolf Workers started right here in Kendallville. We're not a big franchise with a call center — we're your neighbors, and we treat your yard like it's our own.",
-  })
+  // Load on mount
+  useEffect(() => {
+    loadSettings()
+      .then(s => {
+        if (s.business_name)  setName(s.business_name)
+        if (s.tagline)        setTagline(s.tagline)
+        if (s.location)       setLocation(s.location)
+        if (s.email)          setEmail(s.email)
+        if (s.about_text)     setAbout(s.about_text)
+        if (s.stat_customers) setStat1(s.stat_customers)
+        if (s.stat_years)     setStat2(s.stat_years)
+        setSections({
+          services: s.show_services !== 'false',
+          about:    s.show_about    !== 'false',
+          whyUs:    s.show_why_us   !== 'false',
+          gallery:  s.show_gallery  !== 'false',
+          areas:    s.show_areas    !== 'false',
+          cta:      s.show_cta      !== 'false',
+          footer:   s.show_footer   !== 'false',
+        })
+      })
+      .catch(() => toast.error('Could not load site settings'))
+      .finally(() => setLoading(false))
+  }, [])
 
+  // Save business info
+  async function handleSaveInfo() {
+    setSavingInfo(true)
+    try {
+      await saveMany({
+        business_name: name,
+        tagline,
+        location,
+        email,
+      })
+      toast.success('Business info saved!')
+    } catch {
+      toast.error('Could not save — check Supabase connection')
+    } finally {
+      setSavingInfo(false)
+    }
+  }
+
+  // Save about section
+  async function handleSaveAbout() {
+    setSavingAbout(true)
+    try {
+      await saveMany({ about_text: about, stat_customers: stat1, stat_years: stat2 })
+      toast.success('About section saved!')
+    } catch {
+      toast.error('Could not save')
+    } finally {
+      setSavingAbout(false)
+    }
+  }
+
+  // Toggle a section and persist immediately
+  async function handleToggle(key: keyof typeof sections) {
+    if (savingToggle.current) return
+    const newVal = !sections[key]
+    setSections(s => ({ ...s, [key]: newVal }))
+    setTogglingKey(key)
+    savingToggle.current = key
+    const dbKey = {
+      services: 'show_services', about: 'show_about', whyUs: 'show_why_us',
+      gallery: 'show_gallery', areas: 'show_areas', cta: 'show_cta', footer: 'show_footer',
+    }[key]
+    try {
+      await saveSetting(dbKey, String(newVal))
+    } catch {
+      // revert on failure
+      setSections(s => ({ ...s, [key]: !newVal }))
+      toast.error('Could not save toggle')
+    } finally {
+      savingToggle.current = null
+      setTogglingKey(null)
+    }
+  }
+
+  // Copy URL
   function copyUrl() {
     const url = `${window.location.protocol}//${window.location.host}/home`
     navigator.clipboard.writeText(url).then(() => {
       setCopied(true)
-      toast.success('Website URL copied!')
+      toast.success('URL copied to clipboard!')
       setTimeout(() => setCopied(false), 2000)
     })
   }
 
-  function toggleSection(key: keyof typeof sections) {
-    setSections(s => ({ ...s, [key]: !s[key] }))
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64 text-zinc-400">
+        <Loader2 size={24} className="animate-spin mr-2" /> Loading site settings…
+      </div>
+    )
   }
 
   return (
@@ -108,28 +230,21 @@ export default function SitePage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 flex items-center gap-2">
-            <Globe size={22} className="text-amber-500" />
+            <Globe size={22} className="text-green-700" />
             Your Website
           </h1>
-          <p className="text-zinc-500 text-sm mt-1">
-            Manage your public-facing Gray Wolf Workers website.
-          </p>
+          <p className="text-zinc-500 text-sm mt-1">Manage your public-facing Gray Wolf Workers website.</p>
         </div>
-        <a
-          href="/home"
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center gap-1.5 text-sm font-medium text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-4 py-2 rounded-full transition-colors shrink-0"
-        >
-          <Eye size={14} />
-          Preview Site
+        <a href="/home" target="_blank" rel="noreferrer"
+          className="flex items-center gap-1.5 text-sm font-medium text-green-700 hover:text-green-800 bg-green-50 hover:bg-green-100 border border-green-200 px-4 py-2 rounded-full transition-colors shrink-0">
+          <Eye size={14} /> Preview Site
         </a>
       </div>
 
       {/* URL bar */}
       <Card title="Website URL">
-        <div className="flex items-center gap-3">
-          <div className="flex-1 flex items-center gap-2 bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2.5">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex-1 min-w-0 flex items-center gap-2 bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2.5">
             <Globe size={14} className="text-zinc-400 shrink-0" />
             <span className="text-sm text-zinc-600 font-mono truncate">/home</span>
             <span className="ml-auto text-xs text-green-600 font-semibold bg-green-50 border border-green-200 px-2 py-0.5 rounded-full shrink-0">Live</span>
@@ -141,8 +256,7 @@ export default function SitePage() {
           </button>
           <a href="/home" target="_blank" rel="noreferrer"
             className="flex items-center gap-1.5 text-sm font-medium bg-white border border-zinc-200 hover:border-zinc-300 text-zinc-700 px-4 py-2.5 rounded-lg transition-colors shrink-0">
-            <ExternalLink size={14} />
-            Open
+            <ExternalLink size={14} /> Open
           </a>
         </div>
       </Card>
@@ -151,60 +265,68 @@ export default function SitePage() {
         {/* Business info */}
         <Card title="Business Info">
           <Field label="Business Name">
-            <input className={inputClass} defaultValue={info.name} />
+            <input className={inputCls} value={name} onChange={e => setName(e.target.value)} />
           </Field>
-          <Field label="Tagline / Hero Headline">
-            <input className={inputClass} defaultValue={info.tagline} />
+          <Field label="Hero Headline / Tagline">
+            <input className={inputCls} value={tagline} onChange={e => setTagline(e.target.value)} />
           </Field>
           <Field label="Location">
-            <input className={inputClass} defaultValue={info.location} />
+            <input className={inputCls} value={location} onChange={e => setLocation(e.target.value)} />
           </Field>
           <Field label="Contact Email">
-            <input className={inputClass} type="email" defaultValue={info.email} />
+            <input className={inputCls} type="email" value={email} onChange={e => setEmail(e.target.value)} />
           </Field>
-          <button className="w-full mt-1 bg-amber-400 hover:bg-amber-300 text-zinc-900 font-semibold text-sm py-2.5 rounded-xl transition-colors">
-            Save Changes
-          </button>
+          <SaveButton loading={savingInfo} onClick={handleSaveInfo} />
         </Card>
 
-        {/* About text */}
-        <Card title="About Section Text">
-          <Field label="About Us Paragraph" hint="Shown in the 'Our Story' section of your website.">
-            <textarea className={textareaClass} rows={5} defaultValue={info.about} />
+        {/* About section */}
+        <Card title="About Section">
+          <Field label="About Us Text" hint="Shown in the 'Our Story' section.">
+            <textarea className={`${inputCls} resize-none`} rows={5}
+              value={about} onChange={e => setAbout(e.target.value)} />
           </Field>
-          <Field label="Stat 1 — Number">
-            <input className={inputClass} defaultValue="50+" />
+          <Field label="Customers Stat (e.g. 50+)">
+            <input className={inputCls} value={stat1} onChange={e => setStat1(e.target.value)} />
           </Field>
-          <Field label="Stat 2 — Number">
-            <input className={inputClass} defaultValue="3+" />
+          <Field label="Years in Business (e.g. 3+)">
+            <input className={inputCls} value={stat2} onChange={e => setStat2(e.target.value)} />
           </Field>
-          <button className="w-full mt-1 bg-amber-400 hover:bg-amber-300 text-zinc-900 font-semibold text-sm py-2.5 rounded-xl transition-colors">
-            Save Changes
-          </button>
+          <SaveButton loading={savingAbout} onClick={handleSaveAbout} />
         </Card>
       </div>
 
-      {/* Section visibility */}
+      {/* Section toggles */}
       <Card title="Show / Hide Sections">
-        <p className="text-xs text-zinc-400 mb-4">Toggle which sections appear on your public website.</p>
-        <SectionToggle label="Services Section" description="The 4 service cards (Mowing, Cleanup, etc.)" enabled={sections.services} onChange={() => toggleSection('services')} />
-        <SectionToggle label="About / Our Story" description="Team photo, story, and stats" enabled={sections.about} onChange={() => toggleSection('about')} />
-        <SectionToggle label="Why Choose Us" description="The 4 trust pillars" enabled={sections.whyUs} onChange={() => toggleSection('whyUs')} />
-        <SectionToggle label="Photo Gallery" description="Grid of your lawn photos" enabled={sections.gallery} onChange={() => toggleSection('gallery')} />
-        <SectionToggle label="Service Areas" description="Yellow section with city badges" enabled={sections.areas} onChange={() => toggleSection('areas')} />
-        <SectionToggle label="CTA Banner" description="'Ready for a Lawn You're Proud Of?' section" enabled={sections.cta} onChange={() => toggleSection('cta')} />
-        <SectionToggle label="Footer" description="Bottom bar with links and contact info" enabled={sections.footer} onChange={() => toggleSection('footer')} />
+        <p className="text-xs text-zinc-400 mb-4">Changes save instantly. Toggle any section on or off on your live site.</p>
+        {([
+          ['services', 'Services Section',    'The 4 service cards (Mowing, Cleanup, etc.)'],
+          ['about',    'About / Our Story',   'Team photo, story paragraph, and stats'],
+          ['whyUs',    'Why Choose Us',       'The 4 trust pillars grid'],
+          ['gallery',  'Photo Gallery',       'Grid of your 4 lawn photos'],
+          ['areas',    'Service Areas',       'Section with city name badges'],
+          ['cta',      'CTA Banner',          '"Ready for a Lawn You\'re Proud Of?" section'],
+          ['footer',   'Footer',              'Bottom bar with links and contact info'],
+        ] as const).map(([key, label, desc]) => (
+          <SectionToggle key={key}
+            label={label} description={desc}
+            enabled={sections[key]}
+            saving={togglingKey === key}
+            onChange={() => handleToggle(key)}
+          />
+        ))}
       </Card>
 
-      {/* Service areas */}
+      {/* Service areas display */}
       <Card title="Service Areas">
-        <p className="text-xs text-zinc-400 mb-4">Cities shown on your website. Manage available cities in <strong>Automation → Quote Settings</strong>.</p>
+        <p className="text-xs text-zinc-400 mb-4">
+          Cities displayed on your website. To add/remove cities, go to <strong>Automation → Quote Settings</strong>.
+        </p>
         <div className="flex flex-wrap gap-2">
           {SERVICE_AREAS.map(area => (
             <span key={area}
               className={`px-3 py-1.5 rounded-full text-xs font-semibold border
                 ${area === 'Kendallville'
-                  ? 'bg-amber-50 border-amber-300 text-amber-700'
+                  ? 'bg-green-50 border-green-300 text-green-800'
                   : 'bg-zinc-50 border-zinc-200 text-zinc-600'}`}>
               {area === 'Kendallville' ? '★ ' : ''}{area}
             </span>
@@ -212,38 +334,35 @@ export default function SitePage() {
         </div>
       </Card>
 
-      {/* Preview device links */}
+      {/* Preview */}
       <Card title="Preview Your Site">
         <div className="flex gap-3">
           <a href="/home" target="_blank" rel="noreferrer"
             className="flex-1 flex items-center justify-center gap-2 bg-zinc-900 hover:bg-zinc-800 text-white font-medium text-sm py-3 rounded-xl transition-colors">
-            <Monitor size={16} />
-            Desktop Preview
+            <Monitor size={16} /> Desktop Preview
           </a>
           <a href="/home" target="_blank" rel="noreferrer"
             className="flex-1 flex items-center justify-center gap-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-medium text-sm py-3 rounded-xl transition-colors">
-            <Smartphone size={16} />
-            Mobile Preview
+            <Smartphone size={16} /> Mobile Preview
           </a>
         </div>
         <p className="text-xs text-zinc-400 mt-3 text-center">
-          Your site is live at <span className="font-mono text-zinc-600">/home</span> — share this link with customers.
+          Live at <span className="font-mono text-zinc-600">/home</span> — share this link with customers.
         </p>
       </Card>
 
-      {/* Get-a-quote link */}
+      {/* Quote page */}
       <Card title="Quote Page">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-zinc-800">Get-a-Quote Wizard</p>
             <p className="text-xs text-zinc-400 mt-0.5">
-              Your quote form lives at <span className="font-mono">/get-a-quote</span> — all website buttons link here.
+              Your quote form lives at <span className="font-mono">/get-a-quote</span>. Every &quot;Get a Free Quote&quot; button on the site links here.
             </p>
           </div>
           <a href="/get-a-quote" target="_blank" rel="noreferrer"
-            className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 hover:text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full transition-colors shrink-0">
-            <ExternalLink size={12} />
-            Open Form
+            className="flex items-center gap-1.5 text-xs font-semibold text-green-700 hover:text-green-800 bg-green-50 border border-green-200 px-3 py-1.5 rounded-full transition-colors shrink-0">
+            <ExternalLink size={12} /> Open Form
           </a>
         </div>
       </Card>
