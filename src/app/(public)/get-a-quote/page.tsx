@@ -156,23 +156,38 @@ const DAY_ABBR: Record<string, string> = {
 const GALLERY = ['/lawn1.jpg', '/lawn2.jpg', '/lawn3.jpg', '/lawn4.jpg']
 
 function BackgroundCollage() {
+  const [current, setCurrent] = useState(0)
+  const [visible, setVisible] = useState(true)
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      // fade out
+      setVisible(false)
+      setTimeout(() => {
+        setCurrent(c => (c + 1) % GALLERY.length)
+        setVisible(true)
+      }, 800)
+    }, 5000)
+    return () => clearInterval(timer)
+  }, [])
+
   return (
     <>
-      {/* 2×2 photo grid — fixed so it stays put while content scrolls */}
-      <div className="fixed inset-0 z-0 grid grid-cols-2 grid-rows-2" aria-hidden>
-        {GALLERY.map((src, i) => (
-          <div key={i} className="overflow-hidden">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={src}
-              alt=""
-              className="w-full h-full object-cover scale-105"
-              style={{ animation: `slowZoom${i % 2 === 0 ? 'In' : 'Out'} 20s ease-in-out infinite alternate` }}
-            />
-          </div>
-        ))}
+      {/* single full-screen photo that rotates every 5 s */}
+      <div className="fixed inset-0 z-0 overflow-hidden" aria-hidden>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={GALLERY[current]}
+          alt=""
+          className="w-full h-full object-cover"
+          style={{
+            animation: 'slowZoomIn 6s ease-in-out forwards',
+            opacity: visible ? 1 : 0,
+            transition: 'opacity 0.8s ease-in-out',
+          }}
+        />
       </div>
-      {/* Overlay: green tint so photos read as "lawn business" without competing with form */}
+      {/* soft green overlay so the form stays readable */}
       <div className="fixed inset-0 z-0 bg-[#eef3e8]/[0.82]" />
     </>
   )
