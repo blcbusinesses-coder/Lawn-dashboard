@@ -85,13 +85,6 @@ function LoadingScreen() {
         @keyframes shimmer     { 0%{background-position:-200% center} 100%{background-position:200% center} }
         @keyframes pulse-ring  { 0%{transform:scale(1);opacity:.6} 100%{transform:scale(1.5);opacity:0} }
       `}</style>
-      <div className="relative inline-flex items-center justify-center mb-8">
-        <div className="absolute w-20 h-20 rounded-full bg-[#2d5a1b]/20"
-          style={{ animation: 'pulse-ring 1.5s ease-out infinite' }} />
-        <div className="relative w-16 h-16 bg-[#2d5a1b] rounded-2xl flex items-center justify-center shadow-lg">
-          <span className="text-2xl" key={msgIdx} style={{ animation: 'fadeUp 0.4s ease-out' }}>{m.icon}</span>
-        </div>
-      </div>
       <p className="text-xl font-bold text-[#1e3d12] mb-2" key={msgIdx} style={{ animation: 'fadeUp 0.4s ease-out' }}>
         {m.text}
       </p>
@@ -532,8 +525,8 @@ export default function GetAQuotePage() {
 
           {/* Start day picker */}
           <div className="px-4 py-4">
-            <p className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-1">Preferred mow day</p>
-            <p className="text-xs text-zinc-400 mb-3">We&apos;ll mow your lawn on this day every week.</p>
+            <p className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-1">Start Day</p>
+            <p className="text-xs text-zinc-400 mb-3">Pick the day you&apos;d like us to start — this will be your regular mow day each week.</p>
             {availDays.length === 0 ? (
               <p className="text-sm text-zinc-400 italic">We&apos;ll reach out to schedule your first mow.</p>
             ) : (
