@@ -291,6 +291,38 @@ export interface Database {
           }
         ]
       }
+      invoice_payments: {
+        Row: {
+          id: string
+          invoice_id: string
+          amount: number
+          paid_at: string
+          note: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          invoice_id: string
+          amount: number
+          paid_at?: string
+          note?: string | null
+          created_at?: string
+        }
+        Update: {
+          amount?: number
+          paid_at?: string
+          note?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'invoice_payments_invoice_id_fkey'
+            columns: ['invoice_id']
+            isOneToOne: false
+            referencedRelation: 'invoices'
+            referencedColumns: ['id']
+          }
+        ]
+      }
       time_logs: {
         Row: {
           id: string
