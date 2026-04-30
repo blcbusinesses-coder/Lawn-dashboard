@@ -152,22 +152,53 @@ const DAY_ABBR: Record<string, string> = {
   Friday: 'Fri', Saturday: 'Sat', Sunday: 'Sun',
 }
 
+// ── Background collage ────────────────────────────────────────────────────────
+const GALLERY = ['/lawn1.jpg', '/lawn2.jpg', '/lawn3.jpg', '/lawn4.jpg']
+
+function BackgroundCollage() {
+  return (
+    <>
+      {/* 2×2 photo grid — fixed so it stays put while content scrolls */}
+      <div className="fixed inset-0 z-0 grid grid-cols-2 grid-rows-2" aria-hidden>
+        {GALLERY.map((src, i) => (
+          <div key={i} className="overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={src}
+              alt=""
+              className="w-full h-full object-cover scale-105"
+              style={{ animation: `slowZoom${i % 2 === 0 ? 'In' : 'Out'} 20s ease-in-out infinite alternate` }}
+            />
+          </div>
+        ))}
+      </div>
+      {/* Overlay: green tint so photos read as "lawn business" without competing with form */}
+      <div className="fixed inset-0 z-0 bg-[#eef3e8]/[0.82]" />
+    </>
+  )
+}
+
 // ── Shell wrapper — always horizontally centered ───────────────────────────────
 // scrollable=true → vertically top-aligned (for taller steps that need scroll)
 // scrollable=false → vertically centered (for short steps)
 function Shell({ children, scrollable = false }: { children: React.ReactNode; scrollable?: boolean }) {
   return (
-    <div className="min-h-screen bg-[#eef3e8] flex flex-col overflow-x-hidden">
+    <div className="min-h-screen bg-[#eef3e8] flex flex-col overflow-x-hidden relative">
       <style>{`
-        @keyframes drawCircle { from{stroke-dashoffset:226} to{stroke-dashoffset:0} }
-        @keyframes drawCheck  { from{stroke-dashoffset:60}  to{stroke-dashoffset:0} }
-        @keyframes fadeUp     { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes slideIn    { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes drawCircle   { from{stroke-dashoffset:226} to{stroke-dashoffset:0} }
+        @keyframes drawCheck    { from{stroke-dashoffset:60}  to{stroke-dashoffset:0} }
+        @keyframes fadeUp       { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes slideIn      { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes slowZoomIn   { from{transform:scale(1.05)} to{transform:scale(1.12)} }
+        @keyframes slowZoomOut  { from{transform:scale(1.12)} to{transform:scale(1.05)} }
       `}</style>
-      <div className={`flex-1 flex justify-center px-4 ${scrollable ? 'items-start py-8' : 'items-center py-10'}`}>
+
+      <BackgroundCollage />
+
+      <div className={`relative z-10 flex-1 flex justify-center px-4 ${scrollable ? 'items-start py-8' : 'items-center py-10'}`}>
         {children}
       </div>
-      <div className="pointer-events-none overflow-hidden">
+      <div className="relative z-10 pointer-events-none overflow-hidden">
         <GrassRow />
       </div>
     </div>
