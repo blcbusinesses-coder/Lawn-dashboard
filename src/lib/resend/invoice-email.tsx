@@ -67,7 +67,7 @@ export function InvoiceEmail({
               {/* Wolf logo — black bg blends with header */}
               <Column style={{ width: '72px', verticalAlign: 'middle' }}>
                 <Img
-                  src={`${BASE_URL}/wolf-logo.png`}
+                  src={`${BASE_URL}/logo.png`}
                   alt="Gray Wolf Workers"
                   width="60"
                   height="60"
