@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('invoices')
-    .select('*, customers(full_name, email), invoice_line_items(*), invoice_payments(*)')
+    .select('*, customers(full_name, email, extra_emails), invoice_line_items(*), invoice_payments(*)')
     .order('created_at', { ascending: false })
 
   if (status) query = query.eq('status', status as 'draft' | 'sent' | 'paid' | 'void')

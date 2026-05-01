@@ -45,7 +45,7 @@ interface Invoice {
   ai_message: string | null
   sent_at: string | null
   paid_at: string | null
-  customers: { full_name: string; email: string | null }
+  customers: { full_name: string; email: string | null; extra_emails: string[] | null }
   invoice_line_items: LineItem[]
   invoice_payments: Payment[]
 }
@@ -314,7 +314,10 @@ export default function InvoicesPage() {
                       {format(new Date(inv.period_start + 'T00:00:00'), 'MMM d')}
                       {' – '}
                       {format(new Date(inv.period_end + 'T00:00:00'), 'MMM d, yyyy')}
-                      {inv.customers?.email && <span className="ml-2">· {inv.customers.email}</span>}
+                      {(() => {
+                        const all = [inv.customers?.email, ...(inv.customers?.extra_emails ?? [])].filter(Boolean)
+                        return all.length > 0 ? <span className="ml-2">· {all.join(', ')}</span> : null
+                      })()}
                     </p>
                   </div>
 
@@ -336,7 +339,7 @@ export default function InvoicesPage() {
                     <div className="flex gap-2 flex-wrap">
                       {inv.status === 'draft' && (
                         <>
-                          {inv.customers?.email ? (
+                          {[inv.customers?.email, ...(inv.customers?.extra_emails ?? [])].filter(Boolean).length > 0 ? (
                             <Button size="sm" onClick={() => handleSend(inv.id)} disabled={sending === inv.id}>
                               {sending === inv.id ? 'Sending…' : 'Send Email'}
                             </Button>
