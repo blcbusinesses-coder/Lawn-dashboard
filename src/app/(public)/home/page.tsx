@@ -72,9 +72,9 @@ function Nav() {
     <header
       className="fixed top-0 inset-x-0 z-50 transition-all duration-300"
       style={{
-        background: scrolled ? 'rgba(30,61,18,0.97)' : 'transparent',
+        background: scrolled ? 'rgba(45,90,27,0.96)' : 'transparent',
         backdropFilter: scrolled ? 'blur(14px)' : 'none',
-        borderBottom: scrolled ? '1px solid rgba(255,255,255,0.08)' : 'none',
+        borderBottom: scrolled ? '1px solid rgba(255,255,255,0.1)' : 'none',
       }}
     >
       <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
@@ -134,7 +134,7 @@ function Hero() {
       <img src="/lawn2.jpg" alt="" className="absolute inset-0 w-full h-full object-cover scale-105"
         style={{ animation: 'heroZoom 22s ease-in-out infinite alternate' }} />
       {/* Deep green overlay — matches quote page feel */}
-      <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(20,45,12,0.72) 0%, rgba(20,45,12,0.55) 50%, rgba(20,45,12,0.72) 100%)' }} />
+      <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(30,61,18,0.60) 0%, rgba(30,61,18,0.40) 50%, rgba(30,61,18,0.62) 100%)' }} />
 
       <style>{`
         @keyframes heroZoom { from { transform:scale(1.05) } to { transform:scale(1.12) } }
@@ -232,12 +232,12 @@ function Services() {
 // ── About ──────────────────────────────────────────────────────────────────────
 function About() {
   return (
-    <section id="about" className="py-24 overflow-hidden" style={{ background: '#1e3d12' }}>
+    <section id="about" className="py-24 overflow-hidden" style={{ background: '#eef3e8' }}>
       <div className="max-w-6xl mx-auto px-5">
         <div className="grid md:grid-cols-2 gap-16 items-center">
           {/* Photo */}
           <div className="relative">
-            <div className="aspect-[4/3] rounded-2xl overflow-hidden shadow-2xl">
+            <div className="aspect-[4/3] rounded-2xl overflow-hidden shadow-lg">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/lawn3.jpg" alt="Gray Wolf Workers crew at work" className="w-full h-full object-cover" />
             </div>
@@ -245,34 +245,34 @@ function About() {
 
           {/* Text */}
           <div>
-            <p className="font-bold text-sm tracking-widest uppercase mb-4" style={{ color: '#7ecb5f' }}>Our Story</p>
-            <h2 className="text-4xl font-extrabold leading-tight mb-6 text-white">
+            <p className="font-bold text-sm tracking-widest uppercase mb-4" style={{ color: '#4a9030', letterSpacing: '0.18em' }}>Our Story</p>
+            <h2 className="text-4xl font-extrabold leading-tight mb-6" style={{ color: '#1e3d12' }}>
               A Local Crew That<br />
-              <span style={{ color: '#a8dba8' }}>Takes Pride in the Work</span>
+              <span style={{ color: '#2d5a1b' }}>Takes Pride in the Work</span>
             </h2>
-            <p className="leading-relaxed mb-5" style={{ color: '#8ab88a' }}>
+            <p className="leading-relaxed mb-5" style={{ color: '#4a6a3a' }}>
               Gray Wolf Workers started right here in Kendallville. We&apos;re not a big franchise with a
               call center — we&apos;re your neighbors, and we treat your yard like it&apos;s our own.
             </p>
-            <p className="leading-relaxed mb-8" style={{ color: '#8ab88a' }}>
+            <p className="leading-relaxed mb-8" style={{ color: '#4a6a3a' }}>
               From the first cut of spring to the last cleanup in fall, we show up on time, do the job
               right, and leave your property looking its best. Every time.
             </p>
 
             <div className="grid grid-cols-3 gap-4 mb-10">
               {[['3+','Years in Business'],['50+','Lawns Maintained'],['5★','Average Rating']].map(([n, l]) => (
-                <div key={l} className="text-center p-4 rounded-xl" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
-                  <p className="text-2xl font-extrabold text-white">{n}</p>
-                  <p className="text-xs mt-1 leading-tight" style={{ color: '#8ab88a' }}>{l}</p>
+                <div key={l} className="text-center p-4 rounded-xl" style={{ background: '#fff', border: '1px solid #c8dfc0' }}>
+                  <p className="text-2xl font-extrabold" style={{ color: '#1e3d12' }}>{n}</p>
+                  <p className="text-xs mt-1 leading-tight" style={{ color: '#5a7a4a' }}>{l}</p>
                 </div>
               ))}
             </div>
 
             <Link href="/get-a-quote"
               className="inline-flex items-center gap-2 font-bold px-7 py-3.5 rounded-full text-sm transition-all hover:scale-105"
-              style={{ background: '#fff', color: '#1e3d12' }}
-              onMouseEnter={e => (e.currentTarget.style.background = '#eef3e8')}
-              onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+              style={{ background: '#2d5a1b', color: '#fff' }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#1e3d12')}
+              onMouseLeave={e => (e.currentTarget.style.background = '#2d5a1b')}>
               Start with a Free Quote →
             </Link>
           </div>
@@ -358,25 +358,25 @@ function Areas() {
 // ── CTA Banner ────────────────────────────────────────────────────────────────
 function CTABanner() {
   return (
-    <section className="relative py-28 overflow-hidden" style={{ background: '#142d0a' }}>
+    <section className="relative py-28 overflow-hidden" style={{ background: '#2d5a1b' }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/lawn4.jpg" alt="" className="absolute inset-0 w-full h-full object-cover opacity-15" />
-      <div className="absolute inset-0" style={{ background: 'linear-gradient(to right, #142d0a, rgba(20,45,10,0.88), #142d0a)' }} />
+      <img src="/lawn4.jpg" alt="" className="absolute inset-0 w-full h-full object-cover opacity-10" />
+      <div className="absolute inset-0" style={{ background: 'linear-gradient(to right, rgba(45,90,27,0.95), rgba(45,90,27,0.80), rgba(45,90,27,0.95))' }} />
 
       <div className="relative z-10 max-w-3xl mx-auto px-5 text-center">
-        <p className="font-bold text-sm tracking-widest uppercase mb-5" style={{ color: '#7ecb5f' }}>Get Started Today</p>
+        <p className="font-bold text-sm tracking-widest uppercase mb-5" style={{ color: '#a8dba8', letterSpacing: '0.18em' }}>Get Started Today</p>
         <h2 className="text-4xl md:text-5xl font-extrabold text-white mb-6 leading-tight">
           Ready for a Lawn<br />You&apos;re Proud Of?
         </h2>
-        <p className="text-lg mb-10 max-w-lg mx-auto" style={{ color: '#8ab88a' }}>
+        <p className="text-lg mb-10 max-w-lg mx-auto" style={{ color: 'rgba(255,255,255,0.75)' }}>
           Enter your address and get a custom quote in under a minute. No calls, no salespeople.
           Just an honest price for honest work.
         </p>
         <Link href="/get-a-quote"
           className="inline-flex items-center gap-2 font-extrabold px-10 py-4 rounded-full text-lg transition-all hover:scale-105 active:scale-95"
-          style={{ background: '#2d5a1b', color: '#fff', boxShadow: '0 8px 30px rgba(45,90,27,0.4)' }}
-          onMouseEnter={e => (e.currentTarget.style.background = '#3a7a22')}
-          onMouseLeave={e => (e.currentTarget.style.background = '#2d5a1b')}>
+          style={{ background: '#fff', color: '#1e3d12', boxShadow: '0 8px 30px rgba(0,0,0,0.15)' }}
+          onMouseEnter={e => (e.currentTarget.style.background = '#eef3e8')}
+          onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
           Get My Free Quote
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
