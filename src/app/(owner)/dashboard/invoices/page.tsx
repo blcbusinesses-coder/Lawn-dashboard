@@ -14,6 +14,7 @@ import {
 import { toast } from 'sonner'
 import { formatCurrency } from '@/lib/utils/currency'
 import { format } from 'date-fns'
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -45,6 +46,7 @@ interface Invoice {
   ai_message: string | null
   sent_at: string | null
   paid_at: string | null
+  created_at: string
   customers: { full_name: string; email: string | null; extra_emails: string[] | null }
   invoice_line_items: LineItem[]
   invoice_payments: Payment[]
@@ -110,7 +112,12 @@ export default function InvoicesPage() {
   // Expand payment history per invoice
   const [expandedPayments, setExpandedPayments] = useState<Set<string>>(new Set())
 
+  // Summary tab state
+  const [summaryInvoices, setSummaryInvoices] = useState<Invoice[]>([])
+  const [summaryLoading, setSummaryLoading] = useState(false)
+
   const load = useCallback(async () => {
+    if (filterStatus === 'summary') return
     try {
       const res = await fetch(`/api/invoices?status=${filterStatus}`)
       if (!res.ok) throw new Error(await res.text())
@@ -121,6 +128,29 @@ export default function InvoicesPage() {
   }, [filterStatus])
 
   useEffect(() => { setLoading(true); load() }, [load])
+
+  // Load summary: all non-void invoices, deduplicated per customer+month
+  useEffect(() => {
+    if (filterStatus !== 'summary') return
+    setSummaryLoading(true)
+    fetch('/api/invoices')
+      .then((r) => r.json())
+      .then((data: Invoice[]) => {
+        const all = (Array.isArray(data) ? data : []).filter((inv) => inv.status !== 'void')
+        // Keep only the latest invoice per customer per month
+        const map = new Map<string, Invoice>()
+        for (const inv of all) {
+          const key = `${inv.customer_id}__${inv.period_start.slice(0, 7)}`
+          const existing = map.get(key)
+          if (!existing || inv.created_at > existing.created_at) map.set(key, inv)
+        }
+        setSummaryInvoices(Array.from(map.values()).sort((a, b) =>
+          b.period_start.localeCompare(a.period_start)
+        ))
+      })
+      .catch(() => setSummaryInvoices([]))
+      .finally(() => setSummaryLoading(false))
+  }, [filterStatus])
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
@@ -270,10 +300,140 @@ export default function InvoicesPage() {
             onClick={() => setFilterStatus(s)} className="capitalize">{s}</Button>
         ))}
         <Button size="sm" variant={filterStatus === '' ? 'default' : 'outline'} onClick={() => setFilterStatus('')}>All</Button>
+        <Button size="sm" variant={filterStatus === 'summary' ? 'default' : 'outline'} onClick={() => setFilterStatus('summary')}>Summary</Button>
       </div>
 
+      {/* ── Summary Tab ─────────────────────────────────────────────────────── */}
+      {filterStatus === 'summary' && (() => {
+        const totalOwed = summaryInvoices.reduce((s, inv) => s + balanceDue(inv), 0)
+        const totalPaid = summaryInvoices.reduce((s, inv) => s + amountPaid(inv), 0)
+        const totalBilled = summaryInvoices.reduce((s, inv) => s + inv.total_amount, 0)
+        const chartData = [
+          { name: 'Collected', value: totalPaid, color: '#16a34a' },
+          { name: 'Still Owed', value: totalOwed, color: '#f97316' },
+        ].filter((d) => d.value > 0)
+
+        return summaryLoading ? (
+          <div className="space-y-3">
+            {[1,2,3].map((i) => <div key={i} className="bg-white rounded-xl border border-zinc-200 p-5"><Skeleton className="h-5 w-48 mb-3" /><Skeleton className="h-4 w-64" /></div>)}
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {/* Donut + stats card */}
+            <div className="bg-white rounded-xl border border-zinc-200 p-6">
+              <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wider mb-5">Payment Overview</h2>
+              <div className="flex flex-col sm:flex-row items-center gap-8">
+
+                {/* Donut chart */}
+                <div className="relative shrink-0">
+                  <ResponsiveContainer width={200} height={200}>
+                    <PieChart>
+                      <Pie
+                        data={chartData.length ? chartData : [{ name: 'No data', value: 1, color: '#e4e4e7' }]}
+                        cx="50%" cy="50%"
+                        innerRadius={62} outerRadius={88}
+                        paddingAngle={chartData.length > 1 ? 3 : 0}
+                        dataKey="value"
+                        startAngle={90} endAngle={-270}
+                      >
+                        {(chartData.length ? chartData : [{ color: '#e4e4e7' }]).map((entry, i) => (
+                          <Cell key={i} fill={entry.color} stroke="none" />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(v) => formatCurrency(Number(v))}
+                        contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e4e4e7' }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  {/* Center label */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <p className="text-xs text-zinc-400 font-medium">Billed</p>
+                    <p className="text-lg font-bold text-zinc-900">{formatCurrency(totalBilled)}</p>
+                  </div>
+                </div>
+
+                {/* Stat blocks */}
+                <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4 w-full">
+                  <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-4">
+                    <p className="text-xs text-zinc-400 font-medium uppercase tracking-wider mb-1">Total Billed</p>
+                    <p className="text-2xl font-bold text-zinc-900">{formatCurrency(totalBilled)}</p>
+                    <p className="text-xs text-zinc-400 mt-1">{summaryInvoices.length} invoice{summaryInvoices.length !== 1 ? 's' : ''}</p>
+                  </div>
+                  <div className="rounded-lg border border-green-100 bg-green-50 px-4 py-4">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <div className="w-2 h-2 rounded-full bg-green-500" />
+                      <p className="text-xs text-green-700 font-medium uppercase tracking-wider">Collected</p>
+                    </div>
+                    <p className="text-2xl font-bold text-green-700">{formatCurrency(totalPaid)}</p>
+                    <p className="text-xs text-green-600 mt-1">
+                      {totalBilled > 0 ? Math.round((totalPaid / totalBilled) * 100) : 0}% of billed
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-orange-100 bg-orange-50 px-4 py-4">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <div className="w-2 h-2 rounded-full bg-orange-500" />
+                      <p className="text-xs text-orange-700 font-medium uppercase tracking-wider">Still Owed</p>
+                    </div>
+                    <p className="text-2xl font-bold text-orange-600">{formatCurrency(totalOwed)}</p>
+                    <p className="text-xs text-orange-500 mt-1">
+                      {summaryInvoices.filter((i) => balanceDue(i) > 0).length} outstanding
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Per-invoice breakdown (deduplicated) */}
+            <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
+              <div className="px-5 py-3 border-b border-zinc-100 bg-zinc-50">
+                <p className="text-sm font-semibold text-zinc-700">Latest Invoice Per Customer Per Month</p>
+                <p className="text-xs text-zinc-400 mt-0.5">Duplicates from re-generating the same month are excluded</p>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-100 text-xs text-zinc-400 uppercase tracking-wider">
+                    <th className="text-left px-5 py-2.5 font-medium">Customer</th>
+                    <th className="text-left px-3 py-2.5 font-medium">Period</th>
+                    <th className="text-right px-3 py-2.5 font-medium">Billed</th>
+                    <th className="text-right px-3 py-2.5 font-medium">Paid</th>
+                    <th className="text-right px-5 py-2.5 font-medium">Balance</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-50">
+                  {summaryInvoices.map((inv) => {
+                    const paid = amountPaid(inv)
+                    const bal = balanceDue(inv)
+                    return (
+                      <tr key={inv.id} className="hover:bg-zinc-50 transition-colors">
+                        <td className="px-5 py-3 font-medium text-zinc-900">{inv.customers?.full_name}</td>
+                        <td className="px-3 py-3 text-zinc-500">
+                          {format(new Date(inv.period_start + 'T00:00:00'), 'MMM yyyy')}
+                        </td>
+                        <td className="px-3 py-3 text-right text-zinc-700">{formatCurrency(inv.total_amount)}</td>
+                        <td className="px-3 py-3 text-right text-green-600 font-medium">
+                          {paid > 0 ? formatCurrency(paid) : <span className="text-zinc-300">—</span>}
+                        </td>
+                        <td className="px-5 py-3 text-right font-semibold">
+                          {bal > 0
+                            ? <span className="text-orange-600">{formatCurrency(bal)}</span>
+                            : <span className="text-green-600">Paid</span>}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  {summaryInvoices.length === 0 && (
+                    <tr><td colSpan={5} className="px-5 py-8 text-center text-zinc-400">No invoices yet</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* List */}
-      {loading ? (
+      {filterStatus !== 'summary' && (loading ? (
         <div className="space-y-3">
           {Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="bg-white rounded-xl border border-zinc-200 p-5">
@@ -453,7 +613,7 @@ export default function InvoicesPage() {
             )
           })}
         </div>
-      )}
+      ))}
 
       {/* ── Record Payment Dialog ────────────────────────────────────────────── */}
       <Dialog open={!!payInv} onOpenChange={(o) => { if (!o) setPayInv(null) }}>
