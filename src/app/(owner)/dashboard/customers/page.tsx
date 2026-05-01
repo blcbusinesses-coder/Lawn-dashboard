@@ -16,11 +16,13 @@ import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
 import { parseCSVString } from '@/lib/csv/parser'
+import { Plus, X } from 'lucide-react'
 
 interface Customer {
   id: string
   full_name: string
   email: string | null
+  extra_emails: string[]
   phone: string | null
   address: string | null
   notes: string | null
@@ -57,6 +59,7 @@ export default function CustomersPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Customer | null>(null)
   const [form, setForm] = useState(EMPTY_CUSTOMER)
+  const [extraEmails, setExtraEmails] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [importOpen, setImportOpen] = useState(false)
@@ -84,12 +87,14 @@ export default function CustomersPage() {
   function openAdd() {
     setEditing(null)
     setForm(EMPTY_CUSTOMER)
+    setExtraEmails([])
     setFormOpen(true)
   }
 
   function openEdit(c: Customer) {
     setEditing(c)
     setForm({ full_name: c.full_name, email: c.email ?? '', phone: c.phone ?? '', address: c.address ?? '', notes: c.notes ?? '' })
+    setExtraEmails(c.extra_emails ?? [])
     setFormOpen(true)
   }
 
@@ -100,10 +105,12 @@ export default function CustomersPage() {
     const url = editing ? `/api/customers/${editing.id}` : '/api/customers'
     const method = editing ? 'PUT' : 'POST'
 
+    const cleanExtra = extraEmails.map((e) => e.trim()).filter(Boolean)
+
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify({ ...form, extra_emails: cleanExtra }),
     })
 
     if (!res.ok) {
@@ -263,7 +270,16 @@ export default function CustomersPage() {
               filtered.map((c) => (
                 <tr key={c.id} className="border-b border-zinc-50 hover:bg-zinc-50 transition-colors">
                   <td className="px-4 py-3 font-medium text-zinc-900">{c.full_name}</td>
-                  <td className="px-4 py-3 text-zinc-600">{c.email ?? <span className="text-zinc-300">—</span>}</td>
+                  <td className="px-4 py-3 text-zinc-600">
+                    {c.email ? (
+                      <div className="space-y-0.5">
+                        <div>{c.email}</div>
+                        {(c.extra_emails ?? []).map((e, i) => (
+                          <div key={i} className="text-zinc-400 text-xs">{e}</div>
+                        ))}
+                      </div>
+                    ) : <span className="text-zinc-300">—</span>}
+                  </td>
                   <td className="px-4 py-3 text-zinc-600">{c.phone ?? <span className="text-zinc-300">—</span>}</td>
                   <td className="px-4 py-3 text-zinc-600 max-w-xs truncate">{c.address ?? <span className="text-zinc-300">—</span>}</td>
                   <td className="px-4 py-3">
@@ -287,23 +303,64 @@ export default function CustomersPage() {
             <DialogTitle>{editing ? 'Edit Customer' : 'Add Customer'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            {CUSTOMER_FORM_FIELDS.map((f) => (
-              <div key={f.key} className="space-y-1">
-                <Label>{f.label}</Label>
-                {f.key === 'notes' ? (
-                  <Textarea
-                    value={(form as Record<string, string>)[f.key]}
-                    onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
-                    rows={3}
-                  />
-                ) : (
+            <div className="space-y-1">
+              <Label>Full Name *</Label>
+              <Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
+            </div>
+
+            {/* Multi-email section */}
+            <div className="space-y-1.5">
+              <Label>Email(s)</Label>
+              <Input
+                placeholder="Primary email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+              />
+              {extraEmails.map((email, i) => (
+                <div key={i} className="flex gap-2">
                   <Input
-                    value={(form as Record<string, string>)[f.key]}
-                    onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                    placeholder={`Email ${i + 2}`}
+                    value={email}
+                    onChange={(e) => {
+                      const updated = [...extraEmails]
+                      updated[i] = e.target.value
+                      setExtraEmails(updated)
+                    }}
                   />
-                )}
-              </div>
-            ))}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="px-2 text-zinc-400 hover:text-red-500 shrink-0"
+                    onClick={() => setExtraEmails(extraEmails.filter((_, j) => j !== i))}
+                  >
+                    <X size={15} />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs h-8"
+                onClick={() => setExtraEmails([...extraEmails, ''])}
+              >
+                <Plus size={13} /> Add another email
+              </Button>
+            </div>
+
+            <div className="space-y-1">
+              <Label>Phone</Label>
+              <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            </div>
+            <div className="space-y-1">
+              <Label>Address</Label>
+              <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+            </div>
+            <div className="space-y-1">
+              <Label>Notes</Label>
+              <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button>

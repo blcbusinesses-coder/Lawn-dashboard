@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
   // Fetch invoice with all relations
   const { data: invoice, error } = await supabase
     .from('invoices')
-    .select('*, customers(full_name, email), invoice_line_items(*)')
+    .select('*, customers(full_name, email, extra_emails), invoice_line_items(*)')
     .eq('id', invoice_id)
     .single()
 
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
   }
 
-  const customer = invoice.customers as { full_name: string; email: string | null }
+  const customer = invoice.customers as unknown as { full_name: string; email: string | null; extra_emails: string[] | null }
   const lineItems = invoice.invoice_line_items as Array<{
     description: string
     quantity: number
@@ -31,6 +31,8 @@ export async function POST(request: NextRequest) {
   if (!customer.email) {
     return NextResponse.json({ error: 'Customer has no email address' }, { status: 400 })
   }
+
+  const allEmails = [customer.email, ...(customer.extra_emails ?? [])].filter(Boolean)
 
   const periodLabel = format(new Date(invoice.period_start), 'MMMM yyyy')
 
@@ -56,7 +58,7 @@ export async function POST(request: NextRequest) {
   try {
     await getMailer().sendMail({
       from: MAIL_FROM,
-      to: customer.email,
+      to: allEmails.join(', '),
       subject: `Invoice from Gray Wolf Workers — ${periodLabel}`,
       html: emailHtml,
     })
