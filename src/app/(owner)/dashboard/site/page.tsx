@@ -14,14 +14,16 @@ const SERVICE_AREAS = [
 // ── Supabase helpers ───────────────────────────────────────────────────────────
 async function loadSettings() {
   const supabase = createClient()
-  const { data, error } = await supabase.from('site_settings').select('key, value')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).from('site_settings').select('key, value')
   if (error) throw error
-  return Object.fromEntries((data ?? []).map(r => [r.key, r.value])) as Record<string, string>
+  return Object.fromEntries((data ?? []).map((r: { key: string; value: string }) => [r.key, r.value])) as Record<string, string>
 }
 
 async function saveSetting(key: string, value: string) {
   const supabase = createClient()
-  const { error } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
     .from('site_settings')
     .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' })
   if (error) throw error
@@ -32,7 +34,8 @@ async function saveMany(pairs: Record<string, string>) {
   const rows = Object.entries(pairs).map(([key, value]) => ({
     key, value, updated_at: new Date().toISOString(),
   }))
-  const { error } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
     .from('site_settings')
     .upsert(rows, { onConflict: 'key' })
   if (error) throw error
