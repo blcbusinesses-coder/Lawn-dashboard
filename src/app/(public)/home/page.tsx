@@ -194,39 +194,31 @@ function Hero() {
 function Services() {
   return (
     <section id="services" className="py-24" style={{ background: '#fff' }}>
-      <div className="max-w-5xl mx-auto px-5">
+      <div className="max-w-6xl mx-auto px-5">
 
-        {/* Header row */}
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-16">
-          <div>
-            <p className="text-xs font-semibold tracking-widest uppercase mb-3" style={{ color: '#4a9030', letterSpacing: '0.18em' }}>What We Offer</p>
-            <h2 className="text-4xl md:text-5xl font-extrabold leading-tight" style={{ color: '#1e3d12' }}>
-              Services Built<br />for Your Yard
-            </h2>
-          </div>
-          <p className="text-base max-w-xs md:text-right leading-relaxed" style={{ color: '#4a6a3a' }}>
-            Great work, fair prices, and a yard you&apos;re proud of — no hassle, no surprises.
+        <div className="mb-14">
+          <h2 className="text-4xl md:text-5xl font-extrabold mb-4" style={{ color: '#1e3d12' }}>What We Do</h2>
+          <p className="text-lg" style={{ color: '#4a6a3a', maxWidth: '38ch' }}>
+            Every service we offer comes with the same standard — done right, on time, no corners cut.
           </p>
         </div>
 
-        {/* Service rows */}
-        <div style={{ borderTop: '1px solid #d4e4cc' }}>
+        <div className="grid sm:grid-cols-2 gap-px" style={{ background: '#d4e4cc', border: '1px solid #d4e4cc', borderRadius: '16px', overflow: 'hidden' }}>
           {SERVICES.map((s, i) => (
-            <div key={i} className="group flex flex-col sm:flex-row sm:items-start gap-5 py-9 transition-colors"
-              style={{ borderBottom: '1px solid #d4e4cc' }}>
-              <span className="text-xs font-bold tabular-nums shrink-0 mt-1"
-                style={{ color: '#b8d4ae', letterSpacing: '0.1em' }}>
-                0{i + 1}
-              </span>
-              <div className="flex-1 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                <h3 className="font-bold text-xl" style={{ color: '#1e3d12' }}>{s.title}</h3>
-                <p className="text-base leading-relaxed sm:max-w-xs sm:text-right" style={{ color: '#4a6a3a' }}>{s.desc}</p>
-              </div>
+            <div key={i} className="group relative px-8 py-9 transition-colors duration-200"
+              style={{ background: '#fff' }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#f7fbf4')}
+              onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+              {/* Accent bar */}
+              <div className="w-8 h-0.5 mb-6 transition-all duration-300 group-hover:w-14"
+                style={{ background: '#2d5a1b' }} />
+              <h3 className="text-xl font-bold mb-3" style={{ color: '#1e3d12' }}>{s.title}</h3>
+              <p className="text-sm leading-relaxed" style={{ color: '#4a6a3a' }}>{s.desc}</p>
             </div>
           ))}
         </div>
 
-        <div className="mt-12">
+        <div className="mt-10">
           <Link href="/get-a-quote"
             className="inline-flex items-center gap-2 font-semibold px-7 py-3.5 rounded-full text-sm transition-all hover:scale-105"
             style={{ background: '#1e3d12', color: '#fff' }}
@@ -299,32 +291,40 @@ function About() {
 // ── Why Us ────────────────────────────────────────────────────────────────────
 function WhyUs() {
   return (
-    <section className="py-24" style={{ background: '#eef3e8', borderTop: '1px solid #c8dfc0', borderBottom: '1px solid #c8dfc0' }}>
-      <div className="max-w-5xl mx-auto px-5">
+    <section className="py-24" style={{ background: '#0f2208' }}>
+      <div className="max-w-6xl mx-auto px-5">
 
-        <div className="flex flex-col md:flex-row md:gap-24 gap-14">
-          {/* Left — heading block */}
-          <div className="md:w-72 shrink-0">
-            <p className="text-xs font-semibold tracking-widest uppercase mb-4" style={{ color: '#4a9030', letterSpacing: '0.18em' }}>Why Gray Wolf</p>
-            <h2 className="text-4xl font-extrabold leading-tight mb-6" style={{ color: '#1e3d12' }}>
-              The Difference<br />You&apos;ll Notice
-            </h2>
-            <p className="text-base leading-relaxed" style={{ color: '#4a6a3a' }}>
-              We built this business on reliability. Not marketing. If we say we&apos;ll be there Tuesday, we&apos;ll be there Tuesday.
-            </p>
-          </div>
-
-          {/* Right — two-column pillar list */}
-          <div className="flex-1 grid sm:grid-cols-2 gap-x-10 gap-y-0" style={{ borderTop: '1px solid #c8dfc0' }}>
-            {PILLARS.map((p, i) => (
-              <div key={i} className="py-8" style={{ borderBottom: '1px solid #c8dfc0' }}>
-                <h3 className="font-bold text-base mb-2" style={{ color: '#1e3d12' }}>{p.title}</h3>
-                <p className="text-sm leading-relaxed" style={{ color: '#4a6a3a' }}>{p.desc}</p>
-              </div>
-            ))}
-          </div>
+        {/* Top line */}
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-16"
+          style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '2.5rem' }}>
+          <h2 className="text-4xl md:text-5xl font-extrabold text-white leading-tight">
+            Why Gray Wolf
+          </h2>
+          <p className="text-base md:text-right max-w-sm leading-relaxed" style={{ color: '#6a9a5a' }}>
+            We&apos;re not the biggest lawn company in Indiana. We&apos;re just the ones who show up.
+          </p>
         </div>
 
+        {/* Pillars — horizontal rows, no boxes */}
+        <div className="space-y-0">
+          {PILLARS.map((p, i) => (
+            <div key={i} className="flex flex-col sm:flex-row sm:items-start gap-4 sm:gap-16 py-8"
+              style={{ borderBottom: i < PILLARS.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
+              <h3 className="text-lg font-bold text-white sm:w-52 shrink-0">{p.title}</h3>
+              <p className="text-base leading-relaxed" style={{ color: '#7a9a6a' }}>{p.desc}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-14">
+          <Link href="/get-a-quote"
+            className="inline-flex items-center gap-2 font-bold px-7 py-3.5 rounded-full text-sm transition-all hover:scale-105"
+            style={{ background: '#2d5a1b', color: '#fff' }}
+            onMouseEnter={e => (e.currentTarget.style.background = '#3a7a22')}
+            onMouseLeave={e => (e.currentTarget.style.background = '#2d5a1b')}>
+            Get a Free Quote →
+          </Link>
+        </div>
       </div>
     </section>
   )
