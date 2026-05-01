@@ -57,10 +57,10 @@ const SERVICES = [
 ]
 
 const PILLARS = [
-  { icon: '⏰', title: 'Always On Time',           desc: "We show up when we say we will — every week, no excuses." },
-  { icon: '🛡️', title: 'Professional & Insured',  desc: 'Fully insured so your property is always protected.' },
-  { icon: '📍', title: 'Locally Owned',            desc: "Born and raised in Kendallville. Your neighbors, not a franchise." },
-  { icon: '💵', title: 'Fair, Flat Pricing',       desc: 'Get an instant online quote. No surprise fees, no upsells.' },
+  { title: 'Always On Time',          desc: "We show up when we say we will — every week, no excuses. Your schedule matters and we respect it." },
+  { title: 'Professional & Insured',  desc: 'Fully insured, so your property is always protected. We take the work seriously.' },
+  { title: 'Locally Owned',           desc: "Born and raised in Kendallville. We're your neighbors, not a call center franchise." },
+  { title: 'Fair, Flat Pricing',      desc: 'Get an instant online quote. No surprise fees, no upsells, no awkward conversations.' },
 ]
 
 // ── Nav ────────────────────────────────────────────────────────────────────────
@@ -148,11 +148,10 @@ function Hero() {
       `}</style>
 
       <div className="relative z-10 text-center px-5 max-w-4xl mx-auto">
-        <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 text-white/90 text-xs font-semibold tracking-widest uppercase px-4 py-1.5 rounded-full mb-8"
-          style={{ animation: 'fadeUp 0.6s ease-out both' }}>
-          <span className="w-1.5 h-1.5 rounded-full bg-[#7ecb5f] animate-pulse" />
+        <p className="text-xs font-semibold tracking-widest uppercase mb-8 text-white/50"
+          style={{ animation: 'fadeUp 0.6s ease-out both', letterSpacing: '0.2em' }}>
           Serving Northeast Indiana
-        </div>
+        </p>
 
         <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold text-white leading-[1.05] tracking-tight mb-6"
           style={{ animation: 'fadeUp 0.6s ease-out 0.15s both' }}>
@@ -195,32 +194,39 @@ function Hero() {
 function Services() {
   return (
     <section id="services" className="py-24" style={{ background: '#fff' }}>
-      <div className="max-w-6xl mx-auto px-5">
-        <div className="text-center mb-16">
-          <p className="font-bold text-sm tracking-widest uppercase mb-3" style={{ color: '#4a9030' }}>What We Offer</p>
-          <h2 className="text-4xl font-extrabold mb-4" style={{ color: '#1e3d12' }}>Services Built for Your Yard</h2>
-          <p className="text-lg max-w-xl mx-auto" style={{ color: '#4a6a3a' }}>
-            We keep it simple — great work, fair prices, and a yard you&apos;re proud of.
+      <div className="max-w-5xl mx-auto px-5">
+
+        {/* Header row */}
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-16">
+          <div>
+            <p className="text-xs font-semibold tracking-widest uppercase mb-3" style={{ color: '#4a9030', letterSpacing: '0.18em' }}>What We Offer</p>
+            <h2 className="text-4xl md:text-5xl font-extrabold leading-tight" style={{ color: '#1e3d12' }}>
+              Services Built<br />for Your Yard
+            </h2>
+          </div>
+          <p className="text-base max-w-xs md:text-right leading-relaxed" style={{ color: '#4a6a3a' }}>
+            Great work, fair prices, and a yard you&apos;re proud of — no hassle, no surprises.
           </p>
         </div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {/* Service rows */}
+        <div style={{ borderTop: '1px solid #d4e4cc' }}>
           {SERVICES.map((s, i) => (
-            <div key={i} className="group p-7 rounded-2xl border transition-all duration-200 hover:shadow-md"
-              style={{ background: '#fff', borderColor: '#c8dfc0' }}
-              onMouseEnter={e => (e.currentTarget.style.background = '#eef3e8')}
-              onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
-              <div className="w-13 h-13 w-12 h-12 rounded-xl flex items-center justify-center mb-5 transition-colors"
-                style={{ background: '#eef3e8', color: '#2d5a1b' }}>
-                {s.icon}
+            <div key={i} className="group flex flex-col sm:flex-row sm:items-start gap-5 py-9 transition-colors"
+              style={{ borderBottom: '1px solid #d4e4cc' }}>
+              <span className="text-xs font-bold tabular-nums shrink-0 mt-1"
+                style={{ color: '#b8d4ae', letterSpacing: '0.1em' }}>
+                0{i + 1}
+              </span>
+              <div className="flex-1 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                <h3 className="font-bold text-xl" style={{ color: '#1e3d12' }}>{s.title}</h3>
+                <p className="text-base leading-relaxed sm:max-w-xs sm:text-right" style={{ color: '#4a6a3a' }}>{s.desc}</p>
               </div>
-              <h3 className="font-bold text-lg mb-2" style={{ color: '#1e3d12' }}>{s.title}</h3>
-              <p className="text-sm leading-relaxed" style={{ color: '#4a6a3a' }}>{s.desc}</p>
             </div>
           ))}
         </div>
 
-        <div className="mt-12 text-center">
+        <div className="mt-12">
           <Link href="/get-a-quote"
             className="inline-flex items-center gap-2 font-semibold px-7 py-3.5 rounded-full text-sm transition-all hover:scale-105"
             style={{ background: '#1e3d12', color: '#fff' }}
@@ -293,21 +299,32 @@ function About() {
 // ── Why Us ────────────────────────────────────────────────────────────────────
 function WhyUs() {
   return (
-    <section className="py-20" style={{ background: '#eef3e8', borderTop: '1px solid #c8dfc0', borderBottom: '1px solid #c8dfc0' }}>
-      <div className="max-w-6xl mx-auto px-5">
-        <div className="text-center mb-14">
-          <p className="font-bold text-sm tracking-widest uppercase mb-3" style={{ color: '#4a9030' }}>Why Gray Wolf</p>
-          <h2 className="text-4xl font-extrabold" style={{ color: '#1e3d12' }}>The Difference You&apos;ll Notice</h2>
+    <section className="py-24" style={{ background: '#eef3e8', borderTop: '1px solid #c8dfc0', borderBottom: '1px solid #c8dfc0' }}>
+      <div className="max-w-5xl mx-auto px-5">
+
+        <div className="flex flex-col md:flex-row md:gap-24 gap-14">
+          {/* Left — heading block */}
+          <div className="md:w-72 shrink-0">
+            <p className="text-xs font-semibold tracking-widest uppercase mb-4" style={{ color: '#4a9030', letterSpacing: '0.18em' }}>Why Gray Wolf</p>
+            <h2 className="text-4xl font-extrabold leading-tight mb-6" style={{ color: '#1e3d12' }}>
+              The Difference<br />You&apos;ll Notice
+            </h2>
+            <p className="text-base leading-relaxed" style={{ color: '#4a6a3a' }}>
+              We built this business on reliability. Not marketing. If we say we&apos;ll be there Tuesday, we&apos;ll be there Tuesday.
+            </p>
+          </div>
+
+          {/* Right — two-column pillar list */}
+          <div className="flex-1 grid sm:grid-cols-2 gap-x-10 gap-y-0" style={{ borderTop: '1px solid #c8dfc0' }}>
+            {PILLARS.map((p, i) => (
+              <div key={i} className="py-8" style={{ borderBottom: '1px solid #c8dfc0' }}>
+                <h3 className="font-bold text-base mb-2" style={{ color: '#1e3d12' }}>{p.title}</h3>
+                <p className="text-sm leading-relaxed" style={{ color: '#4a6a3a' }}>{p.desc}</p>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {PILLARS.map((p, i) => (
-            <div key={i} className="text-center p-7 rounded-2xl" style={{ background: '#fff', border: '1px solid #c8dfc0' }}>
-              <div className="text-4xl mb-4">{p.icon}</div>
-              <h3 className="font-bold text-base mb-2" style={{ color: '#1e3d12' }}>{p.title}</h3>
-              <p className="text-sm leading-relaxed" style={{ color: '#4a6a3a' }}>{p.desc}</p>
-            </div>
-          ))}
-        </div>
+
       </div>
     </section>
   )
