@@ -56,12 +56,6 @@ const SERVICES = [
   },
 ]
 
-const PILLARS = [
-  { title: 'Always On Time',          desc: "We show up when we say we will — every week, no excuses. Your schedule matters and we respect it." },
-  { title: 'Professional & Insured',  desc: 'Fully insured, so your property is always protected. We take the work seriously.' },
-  { title: 'Locally Owned',           desc: "Born and raised in Kendallville. We're your neighbors, not a call center franchise." },
-  { title: 'Fair, Flat Pricing',      desc: 'Get an instant online quote. No surprise fees, no upsells, no awkward conversations.' },
-]
 
 // ── Nav ────────────────────────────────────────────────────────────────────────
 function Nav() {
@@ -288,47 +282,6 @@ function About() {
   )
 }
 
-// ── Why Us ────────────────────────────────────────────────────────────────────
-function WhyUs() {
-  return (
-    <section className="py-24" style={{ background: '#0f2208' }}>
-      <div className="max-w-6xl mx-auto px-5">
-
-        {/* Top line */}
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-16"
-          style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '2.5rem' }}>
-          <h2 className="text-4xl md:text-5xl font-extrabold text-white leading-tight">
-            Why Gray Wolf
-          </h2>
-          <p className="text-base md:text-right max-w-sm leading-relaxed" style={{ color: '#6a9a5a' }}>
-            We&apos;re not the biggest lawn company in Indiana. We&apos;re just the ones who show up.
-          </p>
-        </div>
-
-        {/* Pillars — horizontal rows, no boxes */}
-        <div className="space-y-0">
-          {PILLARS.map((p, i) => (
-            <div key={i} className="flex flex-col sm:flex-row sm:items-start gap-4 sm:gap-16 py-8"
-              style={{ borderBottom: i < PILLARS.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
-              <h3 className="text-lg font-bold text-white sm:w-52 shrink-0">{p.title}</h3>
-              <p className="text-base leading-relaxed" style={{ color: '#7a9a6a' }}>{p.desc}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-14">
-          <Link href="/get-a-quote"
-            className="inline-flex items-center gap-2 font-bold px-7 py-3.5 rounded-full text-sm transition-all hover:scale-105"
-            style={{ background: '#2d5a1b', color: '#fff' }}
-            onMouseEnter={e => (e.currentTarget.style.background = '#3a7a22')}
-            onMouseLeave={e => (e.currentTarget.style.background = '#2d5a1b')}>
-            Get a Free Quote →
-          </Link>
-        </div>
-      </div>
-    </section>
-  )
-}
 
 // ── Gallery ───────────────────────────────────────────────────────────────────
 function Gallery() {
@@ -523,7 +476,6 @@ export default function HomePage() {
       <Hero />
       <Services />
       <About />
-      <WhyUs />
       <Gallery />
       <Areas />
       <CTABanner />
