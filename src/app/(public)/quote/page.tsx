@@ -237,6 +237,7 @@ export default function QuotePage() {
 
   /* ── Success ──────────────────────────────────────────────────────────────── */
   if (step === 'success') {
+    const satelliteUrl = `/api/satellite?address=${encodeURIComponent(form.address)}`
     return (
       <>
         <style>{`
@@ -264,11 +265,27 @@ export default function QuotePage() {
               We texted your custom quote to <strong className="text-[#1e3d12]">{form.phone}</strong>.
             </p>
             <p
-              className="text-sm text-[#6a8a5a] mb-8"
+              className="text-sm text-[#6a8a5a] mb-5"
               style={{ animation: 'fadeUp 0.5s ease-out 1.1s both' }}
             >
               Reply to that text to lock in your first mow. No contracts, cancel anytime.
             </p>
+
+            {/* Satellite view of the property */}
+            <div
+              className="rounded-xl overflow-hidden border border-[#c8dfc0] mb-5 shadow-sm"
+              style={{ animation: 'fadeUp 0.5s ease-out 1.15s both' }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={satelliteUrl}
+                alt="Property aerial view"
+                className="w-full h-44 object-cover"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+              />
+              <p className="text-xs text-[#7a9a6a] py-1.5 bg-white/60">{form.address}</p>
+            </div>
+
             <div
               className="bg-white border border-[#c8dfc0] rounded-xl px-5 py-3 text-sm text-[#4a6a3a]"
               style={{ animation: 'fadeUp 0.5s ease-out 1.2s both' }}

@@ -13,7 +13,7 @@ import {
 } from 'recharts'
 import {
   TrendingUp, TrendingDown, Minus, RefreshCw, AlertTriangle,
-  CheckCircle2, XCircle, Users, DollarSign, Zap, Eye, Settings,
+  CheckCircle2, XCircle, Users, DollarSign, Zap, Eye, Settings, Search, ExternalLink,
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { toast } from 'sonner'
@@ -180,6 +180,15 @@ export default function AdsPage() {
   const [conversions, setConversions] = useState<Conversion[]>([])
   const [convsLoading, setConvsLoading] = useState(true)
 
+  const [competitorName, setCompetitorName] = useState('')
+  const [competitorResults, setCompetitorResults] = useState<{
+    configured: boolean
+    ads?: Array<{ id: string; page_name: string; ad_creative_bodies?: string[]; ad_creative_link_titles?: string[]; ad_snapshot_url?: string; ad_delivery_start_time?: string; spend?: { lower_bound?: string; upper_bound?: string } }>
+    searchLinks?: { facebook: string; google: string }
+    error?: string
+  } | null>(null)
+  const [competitorLoading, setCompetitorLoading] = useState(false)
+
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settings, setSettings] = useState<AdsSettings>({
     baselineCpl: 0,
@@ -301,6 +310,19 @@ export default function AdsPage() {
   }
 
   // ── Update conversion status ─────────────────────────────────────────────────
+  async function searchCompetitor() {
+    if (!competitorName.trim()) return
+    setCompetitorLoading(true)
+    setCompetitorResults(null)
+    try {
+      const res = await fetch(`/api/ads/competitor-search?name=${encodeURIComponent(competitorName)}`)
+      setCompetitorResults(await res.json())
+    } catch {
+      toast.error('Search failed')
+    }
+    setCompetitorLoading(false)
+  }
+
   async function updateStatus(id: string, status: 'confirmed' | 'rejected') {
     try {
       await fetch('/api/ads/conversions', {
@@ -768,6 +790,102 @@ export default function AdsPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Competitor Research */}
+      <Card className="border-zinc-800 bg-zinc-900">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-white text-base">Competitor Ad Research</CardTitle>
+          <p className="text-zinc-400 text-xs mt-0.5">Search for competitor ads on Facebook and Google</p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Input
+              placeholder="Competitor business name…"
+              value={competitorName}
+              onChange={(e) => setCompetitorName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && searchCompetitor()}
+              className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 flex-1"
+            />
+            <Button onClick={searchCompetitor} disabled={competitorLoading || !competitorName.trim()} variant="outline" className="border-zinc-700 text-zinc-200 hover:bg-zinc-800">
+              <Search size={14} className="mr-1.5" />
+              {competitorLoading ? 'Searching…' : 'Search'}
+            </Button>
+          </div>
+
+          {competitorResults && (
+            <div className="space-y-3">
+              {/* Quick links always shown */}
+              {competitorResults.searchLinks && (
+                <div className="flex gap-2 flex-wrap">
+                  <a
+                    href={competitorResults.searchLinks.facebook}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs bg-blue-900/30 text-blue-400 border border-blue-900/50 px-3 py-1.5 rounded-lg hover:bg-blue-900/50 transition-colors"
+                  >
+                    <ExternalLink size={11} />
+                    Browse Facebook Ad Library
+                  </a>
+                  <a
+                    href={competitorResults.searchLinks.google}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs bg-zinc-800 text-zinc-300 border border-zinc-700 px-3 py-1.5 rounded-lg hover:bg-zinc-700 transition-colors"
+                  >
+                    <ExternalLink size={11} />
+                    Google Ads Transparency
+                  </a>
+                </div>
+              )}
+
+              {/* API results */}
+              {competitorResults.configured && competitorResults.ads && competitorResults.ads.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs text-zinc-400 font-medium uppercase tracking-wider">{competitorResults.ads.length} active ads found</p>
+                  {competitorResults.ads.map((ad) => (
+                    <div key={ad.id} className="bg-zinc-800/60 border border-zinc-700 rounded-lg p-3">
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <p className="text-sm font-semibold text-white">{ad.page_name}</p>
+                        {ad.spend && (
+                          <span className="text-xs text-zinc-400 shrink-0">
+                            ${ad.spend.lower_bound}–${ad.spend.upper_bound} spent
+                          </span>
+                        )}
+                      </div>
+                      {ad.ad_creative_link_titles?.[0] && (
+                        <p className="text-xs font-medium text-zinc-300 mb-1">{ad.ad_creative_link_titles[0]}</p>
+                      )}
+                      {ad.ad_creative_bodies?.[0] && (
+                        <p className="text-xs text-zinc-500 line-clamp-2">{ad.ad_creative_bodies[0]}</p>
+                      )}
+                      {ad.ad_snapshot_url && (
+                        <a href={ad.ad_snapshot_url} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-2 transition-colors">
+                          <ExternalLink size={10} /> View ad
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {competitorResults.configured && competitorResults.ads?.length === 0 && (
+                <p className="text-sm text-zinc-500">No active ads found via API. Try the direct library links above.</p>
+              )}
+
+              {!competitorResults.configured && (
+                <p className="text-xs text-zinc-500">
+                  Add <code className="bg-zinc-800 px-1 rounded">FACEBOOK_AD_LIBRARY_TOKEN</code> to your environment to see ads inline. Use the links above to browse manually.
+                </p>
+              )}
+
+              {competitorResults.error && (
+                <p className="text-xs text-red-400">API error: {competitorResults.error}</p>
+              )}
             </div>
           )}
         </CardContent>

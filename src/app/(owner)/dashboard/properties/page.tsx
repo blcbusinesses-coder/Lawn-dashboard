@@ -17,6 +17,9 @@ import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { formatCurrency } from '@/lib/utils/currency'
 import { parseCSVString } from '@/lib/csv/parser'
+import { MapPin } from 'lucide-react'
+
+const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 interface Customer {
   id: string
@@ -32,10 +35,11 @@ interface Property {
   notes: string | null
   is_active: boolean
   customer_id: string
+  scheduled_days: string[] | null
   customers: Customer
 }
 
-const EMPTY_FORM = { address: '', customer_id: '', price_per_mow: '', notes: '', is_active: true }
+const EMPTY_FORM = { address: '', customer_id: '', price_per_mow: '', notes: '', is_active: true, scheduled_days: [] as string[] }
 
 export default function PropertiesPage() {
   const [properties, setProperties] = useState<Property[]>([])
@@ -88,8 +92,13 @@ export default function PropertiesPage() {
       price_per_mow: String(p.price_per_mow),
       notes: p.notes ?? '',
       is_active: p.is_active,
+      scheduled_days: p.scheduled_days ?? [],
     })
     setFormOpen(true)
+  }
+
+  function mapsUrl(address: string) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
   }
 
   async function handleSave() {
@@ -99,7 +108,7 @@ export default function PropertiesPage() {
 
     const url = editing ? `/api/properties/${editing.id}` : '/api/properties'
     const method = editing ? 'PUT' : 'POST'
-    const body = { ...form, price_per_mow: parseFloat(form.price_per_mow) || 0 }
+    const body = { ...form, price_per_mow: parseFloat(form.price_per_mow) || 0, scheduled_days: form.scheduled_days }
 
     const res = await fetch(url, {
       method,
@@ -199,6 +208,7 @@ export default function PropertiesPage() {
             <tr className="border-b border-zinc-100 bg-zinc-50">
               <th className="text-left px-4 py-3 font-medium text-zinc-600">Address</th>
               <th className="text-left px-4 py-3 font-medium text-zinc-600">Customer</th>
+              <th className="text-left px-4 py-3 font-medium text-zinc-600">Days</th>
               <th className="text-left px-4 py-3 font-medium text-zinc-600">Price/Mow</th>
               <th className="text-left px-4 py-3 font-medium text-zinc-600">Status</th>
               <th className="px-4 py-3" />
@@ -219,8 +229,22 @@ export default function PropertiesPage() {
             ) : (
               filtered.map((p) => (
                 <tr key={p.id} className="border-b border-zinc-50 hover:bg-zinc-50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-zinc-900">{p.address}</td>
+                  <td className="px-4 py-3 font-medium text-zinc-900">
+                    <div className="flex items-center gap-2">
+                      <span>{p.address}</span>
+                      <a href={mapsUrl(p.address)} target="_blank" rel="noopener noreferrer"
+                        title="Open in Google Maps"
+                        className="text-zinc-400 hover:text-blue-500 transition-colors shrink-0">
+                        <MapPin size={14} />
+                      </a>
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-zinc-600">{p.customers?.full_name}</td>
+                  <td className="px-4 py-3">
+                    {(p.scheduled_days ?? []).length > 0
+                      ? <span className="text-xs text-zinc-600">{(p.scheduled_days ?? []).join(', ')}</span>
+                      : <span className="text-zinc-300 text-xs">—</span>}
+                  </td>
                   <td className="px-4 py-3 text-zinc-600">{formatCurrency(p.price_per_mow)}</td>
                   <td className="px-4 py-3">
                     <Badge variant={p.is_active ? 'default' : 'secondary'}>{p.is_active ? 'Active' : 'Inactive'}</Badge>
@@ -267,6 +291,28 @@ export default function PropertiesPage() {
             <div className="space-y-1">
               <Label>Notes</Label>
               <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Scheduled Days</Label>
+              <div className="flex gap-1.5 flex-wrap">
+                {DAYS.map((d) => {
+                  const active = form.scheduled_days.includes(d)
+                  return (
+                    <button key={d} type="button"
+                      onClick={() => setForm((f) => ({
+                        ...f,
+                        scheduled_days: active
+                          ? f.scheduled_days.filter((x) => x !== d)
+                          : [...f.scheduled_days, d],
+                      }))}
+                      className={`px-3 py-1.5 rounded-md text-xs font-semibold border transition-colors ${
+                        active ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-500 border-zinc-200 hover:border-zinc-400'
+                      }`}>
+                      {d}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <input type="checkbox" id="active" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />

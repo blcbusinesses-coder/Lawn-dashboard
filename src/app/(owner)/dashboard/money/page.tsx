@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   BarChart,
   Bar,
@@ -15,7 +15,18 @@ import {
 } from 'recharts'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
 import { formatCurrency } from '@/lib/utils/currency'
+import { toast } from 'sonner'
+import { Download, Plus, Trash2 } from 'lucide-react'
 
 interface MonthData {
   month: string
@@ -25,10 +36,33 @@ interface MonthData {
   profit: number
 }
 
+interface Customer {
+  id: string
+  full_name: string
+}
+
+interface Prepayment {
+  id: string
+  customer_id: string
+  amount: number
+  for_month: string
+  note: string | null
+  created_at: string
+  customers: { full_name: string } | null
+}
+
 export default function MoneyPage() {
   const [data, setData] = useState<MonthData[]>([])
   const [loading, setLoading] = useState(true)
   const [range, setRange] = useState(12)
+  const [exporting, setExporting] = useState(false)
+
+  const [prepayments, setPrepayments] = useState<Prepayment[]>([])
+  const [prepLoading, setPrepLoading] = useState(true)
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [addOpen, setAddOpen] = useState(false)
+  const [form, setForm] = useState({ customer_id: '', amount: '', for_month: '', note: '' })
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     setLoading(true)
@@ -36,6 +70,64 @@ export default function MoneyPage() {
       .then((r) => r.json())
       .then((d) => { setData(d); setLoading(false) })
   }, [range])
+
+  const loadPrepayments = useCallback(async () => {
+    setPrepLoading(true)
+    const [prepRes, custRes] = await Promise.all([
+      fetch('/api/money/prepayments'),
+      fetch('/api/customers'),
+    ])
+    if (prepRes.ok) setPrepayments(await prepRes.json())
+    if (custRes.ok) setCustomers(await custRes.json())
+    setPrepLoading(false)
+  }, [])
+
+  useEffect(() => { loadPrepayments() }, [loadPrepayments])
+
+  async function handleExport() {
+    setExporting(true)
+    try {
+      const res = await fetch(`/api/money/export?months=${range}`)
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `gray-wolf-financials-${new Date().toISOString().slice(0, 10)}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error('Export failed')
+    }
+    setExporting(false)
+  }
+
+  async function handleAddPrepayment() {
+    if (!form.customer_id || !form.amount || !form.for_month) {
+      toast.error('Customer, amount, and month are required')
+      return
+    }
+    setSaving(true)
+    const res = await fetch('/api/money/prepayments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...form, amount: parseFloat(form.amount) }),
+    })
+    if (res.ok) {
+      toast.success('Prepayment recorded')
+      setAddOpen(false)
+      setForm({ customer_id: '', amount: '', for_month: '', note: '' })
+      loadPrepayments()
+    } else {
+      toast.error('Failed to save')
+    }
+    setSaving(false)
+  }
+
+  async function handleDeletePrepayment(id: string) {
+    const res = await fetch(`/api/money/prepayments?id=${id}`, { method: 'DELETE' })
+    if (res.ok) { toast.success('Removed'); loadPrepayments() }
+    else toast.error('Failed to remove')
+  }
 
   const totals = data.reduce(
     (acc, m) => ({
@@ -51,6 +143,8 @@ export default function MoneyPage() {
   const formatTooltip = (value: any) =>
     value != null ? formatCurrency(Number(value)) : ''
 
+  const totalPrepaid = prepayments.reduce((s, p) => s + p.amount, 0)
+
   return (
     <div className="p-4 md:p-8">
       <div className="flex items-center justify-between flex-wrap gap-y-2 mb-4 md:mb-6">
@@ -58,12 +152,16 @@ export default function MoneyPage() {
           <h1 className="text-2xl font-bold text-zinc-900">Money</h1>
           <p className="text-sm text-zinc-500 mt-1">Revenue, expenses, and profit overview</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {[1, 3, 6, 12].map((r) => (
             <Button key={r} size="sm" variant={range === r ? 'default' : 'outline'} onClick={() => setRange(r)}>
               {r}M
             </Button>
           ))}
+          <Button size="sm" variant="outline" onClick={handleExport} disabled={exporting}>
+            <Download size={14} className="mr-1.5" />
+            {exporting ? 'Exporting…' : 'Export CSV'}
+          </Button>
         </div>
       </div>
 
@@ -84,6 +182,58 @@ export default function MoneyPage() {
             )}
           </div>
         ))}
+      </div>
+
+      {/* Prepaid Revenue */}
+      <div className="bg-white rounded-xl border border-zinc-200 mb-6">
+        <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-zinc-800">Pre-collected Revenue</h2>
+            <p className="text-xs text-zinc-500 mt-0.5">Payments collected in advance for future months</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {!prepLoading && (
+              <span className="text-sm font-semibold text-green-600">{formatCurrency(totalPrepaid)} held</span>
+            )}
+            <Button size="sm" onClick={() => setAddOpen(true)}>
+              <Plus size={14} className="mr-1" /> Add
+            </Button>
+          </div>
+        </div>
+        {prepLoading ? (
+          <div className="p-5 space-y-2">
+            {[1, 2].map((i) => <Skeleton key={i} className="h-8 w-full" />)}
+          </div>
+        ) : prepayments.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-zinc-400 text-center">No prepayments recorded</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-zinc-100 bg-zinc-50">
+                <th className="text-left px-4 py-2.5 font-medium text-zinc-600">Customer</th>
+                <th className="text-left px-4 py-2.5 font-medium text-zinc-600">For Month</th>
+                <th className="text-left px-4 py-2.5 font-medium text-zinc-600">Note</th>
+                <th className="text-right px-4 py-2.5 font-medium text-zinc-600">Amount</th>
+                <th className="px-4 py-2.5" />
+              </tr>
+            </thead>
+            <tbody>
+              {prepayments.map((p) => (
+                <tr key={p.id} className="border-b border-zinc-50 hover:bg-zinc-50">
+                  <td className="px-4 py-2.5 font-medium text-zinc-800">{p.customers?.full_name ?? '—'}</td>
+                  <td className="px-4 py-2.5 text-zinc-600">{p.for_month}</td>
+                  <td className="px-4 py-2.5 text-zinc-500">{p.note ?? '—'}</td>
+                  <td className="px-4 py-2.5 text-right font-semibold text-green-600">{formatCurrency(p.amount)}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    <button onClick={() => handleDeletePrepayment(p.id)} className="text-zinc-400 hover:text-red-500 transition-colors">
+                      <Trash2 size={14} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {loading ? (
@@ -134,43 +284,81 @@ export default function MoneyPage() {
               <h2 className="text-base font-semibold text-zinc-800">Monthly Breakdown</h2>
             </div>
             <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-zinc-100 bg-zinc-50">
-                  <th className="text-left px-4 py-3 font-medium text-zinc-600">Month</th>
-                  <th className="text-right px-4 py-3 font-medium text-zinc-600">Revenue</th>
-                  <th className="text-right px-4 py-3 font-medium text-zinc-600">Expenses</th>
-                  <th className="text-right px-4 py-3 font-medium text-zinc-600">Payroll</th>
-                  <th className="text-right px-4 py-3 font-medium text-zinc-600">Profit</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...data].reverse().map((row) => (
-                  <tr key={row.month} className="border-b border-zinc-50 hover:bg-zinc-50">
-                    <td className="px-4 py-2.5 font-medium text-zinc-700">{row.month}</td>
-                    <td className="px-4 py-2.5 text-right text-green-600">{formatCurrency(row.revenue)}</td>
-                    <td className="px-4 py-2.5 text-right text-red-500">{formatCurrency(row.expenses)}</td>
-                    <td className="px-4 py-2.5 text-right text-orange-500">{formatCurrency(row.payroll)}</td>
-                    <td className={`px-4 py-2.5 text-right font-semibold ${row.profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                      {formatCurrency(row.profit)}
-                    </td>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-100 bg-zinc-50">
+                    <th className="text-left px-4 py-3 font-medium text-zinc-600">Month</th>
+                    <th className="text-right px-4 py-3 font-medium text-zinc-600">Revenue</th>
+                    <th className="text-right px-4 py-3 font-medium text-zinc-600">Expenses</th>
+                    <th className="text-right px-4 py-3 font-medium text-zinc-600">Payroll</th>
+                    <th className="text-right px-4 py-3 font-medium text-zinc-600">Profit</th>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t border-zinc-200 bg-zinc-50">
-                  <td className="px-4 py-3 font-bold text-zinc-800">Total</td>
-                  <td className="px-4 py-3 text-right font-bold text-green-600">{formatCurrency(totals.revenue)}</td>
-                  <td className="px-4 py-3 text-right font-bold text-red-500">{formatCurrency(totals.expenses)}</td>
-                  <td className="px-4 py-3 text-right font-bold text-orange-500">{formatCurrency(totals.payroll)}</td>
-                  <td className={`px-4 py-3 text-right font-bold ${totals.profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(totals.profit)}</td>
-                </tr>
-              </tfoot>
-            </table>
+                </thead>
+                <tbody>
+                  {[...data].reverse().map((row) => (
+                    <tr key={row.month} className="border-b border-zinc-50 hover:bg-zinc-50">
+                      <td className="px-4 py-2.5 font-medium text-zinc-700">{row.month}</td>
+                      <td className="px-4 py-2.5 text-right text-green-600">{formatCurrency(row.revenue)}</td>
+                      <td className="px-4 py-2.5 text-right text-red-500">{formatCurrency(row.expenses)}</td>
+                      <td className="px-4 py-2.5 text-right text-orange-500">{formatCurrency(row.payroll)}</td>
+                      <td className={`px-4 py-2.5 text-right font-semibold ${row.profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                        {formatCurrency(row.profit)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-zinc-200 bg-zinc-50">
+                    <td className="px-4 py-3 font-bold text-zinc-800">Total</td>
+                    <td className="px-4 py-3 text-right font-bold text-green-600">{formatCurrency(totals.revenue)}</td>
+                    <td className="px-4 py-3 text-right font-bold text-red-500">{formatCurrency(totals.expenses)}</td>
+                    <td className="px-4 py-3 text-right font-bold text-orange-500">{formatCurrency(totals.payroll)}</td>
+                    <td className={`px-4 py-3 text-right font-bold ${totals.profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(totals.profit)}</td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
           </div>
         </div>
       )}
+
+      {/* Add Prepayment Dialog */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Record Pre-collected Revenue</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Customer</Label>
+              <select
+                className="w-full border border-zinc-200 rounded-md px-3 py-2 text-sm"
+                value={form.customer_id}
+                onChange={(e) => setForm({ ...form, customer_id: e.target.value })}
+              >
+                <option value="">Select a customer…</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>{c.full_name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label>Amount ($)</Label>
+              <Input type="number" step="0.01" placeholder="0.00" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
+            </div>
+            <div className="space-y-1">
+              <Label>For Month (YYYY-MM)</Label>
+              <Input type="month" value={form.for_month} onChange={(e) => setForm({ ...form, for_month: e.target.value })} />
+            </div>
+            <div className="space-y-1">
+              <Label>Note (optional)</Label>
+              <Input placeholder="e.g. paid in cash" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+            <Button onClick={handleAddPrepayment} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
