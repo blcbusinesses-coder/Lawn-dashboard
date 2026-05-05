@@ -48,10 +48,13 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   const { pathname } = request.nextUrl
 
-  // Public routes
+  // Public routes — no auth required
   if (
+    pathname === '/' ||
+    pathname.startsWith('/home') ||
+    pathname.startsWith('/get-a-quote') ||
+    pathname.startsWith('/quote') ||
     pathname.startsWith('/login') ||
-    pathname.startsWith('/quote') ||        // public lead form
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/')
   ) {
