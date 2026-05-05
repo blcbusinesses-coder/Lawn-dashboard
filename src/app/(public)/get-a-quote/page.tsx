@@ -1,4 +1,6 @@
-'use client'
+const PHONE = '+12602800653'
+const SMS_BODY = 'Hey Gray Wolf, I would like a quote. My address is: '
+const SMS_URL = `sms:${PHONE}&body=${encodeURIComponent(SMS_BODY)}`
 
 function GrassRow() {
   return (
@@ -25,12 +27,7 @@ function GrassRow() {
   )
 }
 
-const PHONE = process.env.NEXT_PUBLIC_BUSINESS_PHONE ?? '+12602800653'
-const SMS_BODY = 'Hey Gray Wolf, I would like a quote. My address is: '
-const SMS_URL = `sms:${PHONE}&body=${encodeURIComponent(SMS_BODY)}`
-
 export default function GetAQuotePage() {
-
   return (
     <div className="min-h-screen bg-[#eef3e8] flex flex-col overflow-x-hidden">
       <div className="flex-1 flex items-center justify-center px-5 py-12">
@@ -67,17 +64,18 @@ export default function GetAQuotePage() {
                 ))}
               </div>
 
-              {/* Big SMS button */}
-              <button
-                onClick={() => { window.location.href = SMS_URL }}
-                className="flex items-center justify-center gap-2.5 w-full bg-[#2d5a1b] text-white rounded-xl py-4 text-base font-bold hover:bg-[#1e3d12] active:scale-[0.98] transition-all shadow-sm select-none"
+              {/* Big SMS button — plain <a> so iOS opens Messages with no JS needed */}
+              <a
+                href={SMS_URL}
+                rel="external"
+                className="flex items-center justify-center gap-2.5 w-full bg-[#2d5a1b] text-white rounded-xl py-4 text-base font-bold active:scale-[0.98] transition-all shadow-sm select-none"
               >
                 <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                     d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
                 Text Us for a Quote!
-              </button>
+              </a>
 
               <p className="text-xs text-zinc-400 text-center leading-relaxed">
                 Opens your messages app with the text pre-filled —
