@@ -27,7 +27,7 @@ function GrassRow() {
   )
 }
 
-const PHONE = process.env.NEXT_PUBLIC_BUSINESS_PHONE ?? ''
+const PHONE = process.env.NEXT_PUBLIC_BUSINESS_PHONE ?? '+12602800653'
 const SMS_BODY = 'Hey Gray Wolf, I would like a quote. My address is: '
 
 export default function GetAQuotePage() {
