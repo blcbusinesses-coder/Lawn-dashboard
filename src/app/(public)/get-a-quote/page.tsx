@@ -1,7 +1,5 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-
 function GrassRow() {
   return (
     <svg viewBox="0 0 1440 90" className="w-full block" preserveAspectRatio="none" aria-hidden>
@@ -29,15 +27,9 @@ function GrassRow() {
 
 const PHONE = process.env.NEXT_PUBLIC_BUSINESS_PHONE ?? '+12602800653'
 const SMS_BODY = 'Hey Gray Wolf, I would like a quote. My address is: '
+const SMS_URL = `sms:${PHONE}&body=${encodeURIComponent(SMS_BODY)}`
 
 export default function GetAQuotePage() {
-  const [smsUrl, setSmsUrl] = useState(`sms:${PHONE}`)
-
-  useEffect(() => {
-    const isIOS = /iPad|iPhone|iPod/i.test(navigator.userAgent)
-    const encoded = encodeURIComponent(SMS_BODY)
-    setSmsUrl(isIOS ? `sms:${PHONE}&body=${encoded}` : `sms:${PHONE}?body=${encoded}`)
-  }, [])
 
   return (
     <div className="min-h-screen bg-[#eef3e8] flex flex-col overflow-x-hidden">
@@ -77,7 +69,7 @@ export default function GetAQuotePage() {
 
               {/* Big SMS button */}
               <a
-                href={smsUrl}
+                href={SMS_URL}
                 className="flex items-center justify-center gap-2.5 w-full bg-[#2d5a1b] text-white rounded-xl py-4 text-base font-bold hover:bg-[#1e3d12] active:scale-[0.98] transition-all shadow-sm select-none"
               >
                 <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
