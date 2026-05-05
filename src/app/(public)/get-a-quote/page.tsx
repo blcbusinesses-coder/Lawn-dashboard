@@ -1,6 +1,11 @@
-const PHONE = '+12602800653'
+'use client'
+
+import { useEffect, useState } from 'react'
+
+const PHONE_DISPLAY = '(260) 280-0653'
+const PHONE_E164 = '+12602800653'
 const SMS_BODY = 'Hey Gray Wolf, I would like a quote. My address is: '
-const SMS_URL = `sms:${PHONE}&body=${encodeURIComponent(SMS_BODY)}`
+const SMS_URL = `sms:${PHONE_E164}&body=${encodeURIComponent(SMS_BODY)}`
 
 function GrassRow() {
   return (
@@ -27,7 +32,20 @@ function GrassRow() {
   )
 }
 
+function isInAppBrowser() {
+  const ua = navigator.userAgent
+  return /FBAN|FBAV|Instagram|Twitter|LinkedInApp|MicroMessenger|Line\/|Snapchat/i.test(ua)
+}
+
 export default function GetAQuotePage() {
+  const [inApp, setInApp] = useState(false)
+  const [pageUrl, setPageUrl] = useState('')
+
+  useEffect(() => {
+    setInApp(isInAppBrowser())
+    setPageUrl(window.location.href)
+  }, [])
+
   return (
     <div className="min-h-screen bg-[#eef3e8] flex flex-col overflow-x-hidden">
       <div className="flex-1 flex items-center justify-center px-5 py-12">
@@ -46,41 +64,78 @@ export default function GetAQuotePage() {
           {/* Card */}
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-6">
             <div className="h-1.5 bg-[#2d5a1b]" />
-            <div className="p-6 space-y-6">
+            <div className="p-6 space-y-5">
 
-              {/* Steps */}
-              <div className="space-y-4">
-                {[
-                  { n: '1', text: 'Tap the button below to open your messages' },
-                  { n: '2', text: 'Fill in your property address at the end of the message' },
-                  { n: '3', text: 'Hit send — we\'ll text your quote right back!' },
-                ].map(({ n, text }) => (
-                  <div key={n} className="flex items-start gap-3">
-                    <div className="w-7 h-7 rounded-full bg-[#eef3e8] border border-[#c8dfc0] flex items-center justify-center shrink-0 mt-0.5">
-                      <span className="text-xs font-bold text-[#2d5a1b]">{n}</span>
-                    </div>
-                    <p className="text-sm text-zinc-600 leading-snug pt-1">{text}</p>
+              {inApp ? (
+                /* ── In-app browser warning ── */
+                <div className="space-y-4">
+                  <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-center">
+                    <p className="text-sm font-semibold text-amber-800 mb-1">Open in Safari first</p>
+                    <p className="text-xs text-amber-700 leading-relaxed">
+                      This browser can&apos;t open your Messages app.
+                      Tap the <strong>···</strong> or <strong>⋮</strong> menu and choose{' '}
+                      <strong>&ldquo;Open in Safari&rdquo;</strong> or{' '}
+                      <strong>&ldquo;Open in Browser&rdquo;</strong>, then tap the button.
+                    </p>
                   </div>
-                ))}
+
+                  {pageUrl && (
+                    <div className="rounded-xl bg-[#eef3e8] border border-[#c8dfc0] p-3 text-center">
+                      <p className="text-xs text-[#5a7a4a] mb-1">Or copy this link and open it in Safari:</p>
+                      <p className="text-xs font-mono text-[#2d5a1b] break-all">{pageUrl}</p>
+                    </div>
+                  )}
+
+                  <div className="text-center pt-1">
+                    <p className="text-xs text-zinc-500 mb-2">Or just text us directly:</p>
+                    <a href={`sms:${PHONE_E164}`}
+                      className="text-xl font-bold text-[#2d5a1b] underline underline-offset-2">
+                      {PHONE_DISPLAY}
+                    </a>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      Include your address and we&apos;ll quote you right back.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                /* ── Normal browser ── */
+                <>
+                  <div className="space-y-4">
+                    {[
+                      { n: '1', text: 'Tap the button below to open your messages' },
+                      { n: '2', text: 'Fill in your property address at the end of the message' },
+                      { n: '3', text: 'Hit send — we\'ll text your quote right back!' },
+                    ].map(({ n, text }) => (
+                      <div key={n} className="flex items-start gap-3">
+                        <div className="w-7 h-7 rounded-full bg-[#eef3e8] border border-[#c8dfc0] flex items-center justify-center shrink-0 mt-0.5">
+                          <span className="text-xs font-bold text-[#2d5a1b]">{n}</span>
+                        </div>
+                        <p className="text-sm text-zinc-600 leading-snug pt-1">{text}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <a
+                    href={SMS_URL}
+                    rel="external"
+                    className="flex items-center justify-center gap-2.5 w-full bg-[#2d5a1b] text-white rounded-xl py-4 text-base font-bold active:scale-[0.98] transition-all shadow-sm select-none"
+                  >
+                    <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    Text Us for a Quote!
+                  </a>
+                </>
+              )}
+
+              {/* Always-visible phone fallback */}
+              <div className="border-t border-zinc-100 pt-4 text-center">
+                <p className="text-xs text-zinc-400 mb-1">You can also text us directly at</p>
+                <a href={`sms:${PHONE_E164}`} className="text-sm font-bold text-[#2d5a1b]">
+                  {PHONE_DISPLAY}
+                </a>
               </div>
-
-              {/* Big SMS button — plain <a> so iOS opens Messages with no JS needed */}
-              <a
-                href={SMS_URL}
-                rel="external"
-                className="flex items-center justify-center gap-2.5 w-full bg-[#2d5a1b] text-white rounded-xl py-4 text-base font-bold active:scale-[0.98] transition-all shadow-sm select-none"
-              >
-                <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-                Text Us for a Quote!
-              </a>
-
-              <p className="text-xs text-zinc-400 text-center leading-relaxed">
-                Opens your messages app with the text pre-filled —
-                just add your address and hit send.
-              </p>
             </div>
           </div>
 
