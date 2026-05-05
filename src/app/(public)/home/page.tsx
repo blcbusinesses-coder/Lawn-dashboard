@@ -95,7 +95,7 @@ function Nav() {
 
         <Link href="/get-a-quote"
           className="hidden md:inline-flex items-center gap-1.5 bg-white text-[#1e3d12] font-bold px-5 py-2 rounded-full text-sm hover:bg-[#eef3e8] transition-colors shadow-sm">
-          Get a Free Quote →
+          Text Us for a Quote →
         </Link>
 
         {/* Hamburger */}
@@ -118,7 +118,7 @@ function Nav() {
           ))}
           <Link href="/get-a-quote" onClick={() => setOpen(false)}
             className="mt-3 w-full flex items-center justify-center bg-white text-[#1e3d12] font-bold py-3 rounded-xl text-sm">
-            Get a Free Quote →
+            Text Us for a Quote →
           </Link>
         </div>
       )}
@@ -166,7 +166,7 @@ function Hero() {
             style={{ background: '#2d5a1b', color: '#fff' }}
             onMouseEnter={e => (e.currentTarget.style.background = '#3a7a22')}
             onMouseLeave={e => (e.currentTarget.style.background = '#2d5a1b')}>
-            Get My Free Quote →
+            Text Us for a Quote →
           </Link>
           <a href="#work"
             className="bg-white/10 hover:bg-white/20 border border-white/25 text-white font-semibold px-8 py-4 rounded-full text-base transition-colors backdrop-blur-sm">
@@ -218,7 +218,7 @@ function Services() {
             style={{ background: '#1e3d12', color: '#fff' }}
             onMouseEnter={e => (e.currentTarget.style.background = '#2d5a1b')}
             onMouseLeave={e => (e.currentTarget.style.background = '#1e3d12')}>
-            Get an Instant Quote
+            Text Us for a Quote
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
             </svg>
@@ -273,7 +273,7 @@ function About() {
               style={{ background: '#2d5a1b', color: '#fff' }}
               onMouseEnter={e => (e.currentTarget.style.background = '#1e3d12')}
               onMouseLeave={e => (e.currentTarget.style.background = '#2d5a1b')}>
-              Start with a Free Quote →
+              Text Us for a Free Quote →
             </Link>
           </div>
         </div>
@@ -348,7 +348,7 @@ function Areas() {
           style={{ background: '#1e3d12', color: '#fff' }}
           onMouseEnter={e => (e.currentTarget.style.background = '#2d5a1b')}
           onMouseLeave={e => (e.currentTarget.style.background = '#1e3d12')}>
-          Check Your Address →
+          Text Us to Check →
         </Link>
       </div>
     </section>
@@ -369,7 +369,7 @@ function CTABanner() {
           Ready for a Lawn<br />You&apos;re Proud Of?
         </h2>
         <p className="text-lg mb-10 max-w-lg mx-auto" style={{ color: 'rgba(255,255,255,0.75)' }}>
-          Enter your address and get a custom quote in under a minute. No calls, no salespeople.
+          Text us your address and get a custom quote in under a minute. No calls, no salespeople.
           Just an honest price for honest work.
         </p>
         <Link href="/get-a-quote"
@@ -377,7 +377,7 @@ function CTABanner() {
           style={{ background: '#fff', color: '#1e3d12', boxShadow: '0 8px 30px rgba(0,0,0,0.15)' }}
           onMouseEnter={e => (e.currentTarget.style.background = '#eef3e8')}
           onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
-          Get My Free Quote
+          Text Us for a Quote
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
           </svg>
@@ -412,7 +412,7 @@ function Footer() {
               ))}
               <li>
                 <Link href="/get-a-quote" className="font-semibold transition-colors hover:text-white" style={{ color: '#7ecb5f' }}>
-                  Get a Free Quote →
+                  Text Us for a Quote →
                 </Link>
               </li>
             </ul>
@@ -452,7 +452,7 @@ function Footer() {
                   style={{ background: '#2d5a1b', color: '#fff' }}
                   onMouseEnter={e => (e.currentTarget.style.background = '#3a7a22')}
                   onMouseLeave={e => (e.currentTarget.style.background = '#2d5a1b')}>
-                  Book Online →
+                  Text Us →
                 </Link>
               </li>
             </ul>
