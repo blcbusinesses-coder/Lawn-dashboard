@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/dialog'
 import { formatCurrency } from '@/lib/utils/currency'
 import { toast } from 'sonner'
-import { Download, Plus, Trash2 } from 'lucide-react'
+import { Download, Plus, Trash2, FileSpreadsheet } from 'lucide-react'
 
 interface MonthData {
   month: string
@@ -56,6 +56,13 @@ export default function MoneyPage() {
   const [loading, setLoading] = useState(true)
   const [range, setRange] = useState(12)
   const [exporting, setExporting] = useState(false)
+  const [monthExportOpen, setMonthExportOpen] = useState(false)
+  const [monthExportValue, setMonthExportValue] = useState(() => {
+    const d = new Date()
+    d.setMonth(d.getMonth() - 1)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  })
+  const [monthExporting, setMonthExporting] = useState(false)
 
   const [prepayments, setPrepayments] = useState<Prepayment[]>([])
   const [prepLoading, setPrepLoading] = useState(true)
@@ -83,6 +90,25 @@ export default function MoneyPage() {
   }, [])
 
   useEffect(() => { loadPrepayments() }, [loadPrepayments])
+
+  async function handleMonthExport() {
+    setMonthExporting(true)
+    try {
+      const res = await fetch(`/api/money/monthly-export?month=${monthExportValue}`)
+      if (!res.ok) { toast.error('Export failed'); return }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `gray-wolf-${monthExportValue}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+      setMonthExportOpen(false)
+    } catch {
+      toast.error('Export failed')
+    }
+    setMonthExporting(false)
+  }
 
   async function handleExport() {
     setExporting(true)
@@ -161,6 +187,10 @@ export default function MoneyPage() {
           <Button size="sm" variant="outline" onClick={handleExport} disabled={exporting}>
             <Download size={14} className="mr-1.5" />
             {exporting ? 'Exporting…' : 'Export CSV'}
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setMonthExportOpen(true)}>
+            <FileSpreadsheet size={14} className="mr-1.5" />
+            Monthly Detail
           </Button>
         </div>
       </div>
@@ -321,6 +351,27 @@ export default function MoneyPage() {
           </div>
         </div>
       )}
+
+      {/* Monthly Export Dialog */}
+      <Dialog open={monthExportOpen} onOpenChange={setMonthExportOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Export Month to Google Sheets</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-1">
+            <p className="text-sm text-zinc-500">Exports a full breakdown for one month — income by job, expenses by category, employee hours and pay. Import the CSV directly into Google Sheets.</p>
+            <div className="space-y-1">
+              <Label>Month</Label>
+              <Input type="month" value={monthExportValue} onChange={(e) => setMonthExportValue(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMonthExportOpen(false)}>Cancel</Button>
+            <Button onClick={handleMonthExport} disabled={monthExporting}>
+              <FileSpreadsheet size={14} className="mr-1.5" />
+              {monthExporting ? 'Exporting…' : 'Download CSV'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Prepayment Dialog */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
