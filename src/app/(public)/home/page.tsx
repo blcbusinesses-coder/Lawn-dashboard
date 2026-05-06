@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-
-const SMS_URL = `sms:+12602800653&body=${encodeURIComponent('Hey Gray Wolf, I would like a quote. My address is: ')}`
+import Link from 'next/link'
 
 // ── Colors (matches get-a-quote palette) ──────────────────────────────────────
 // dark:   #1e3d12   (headings, nav, footer)
@@ -94,10 +93,10 @@ function Nav() {
           <a href="#areas"    className="hover:text-white transition-colors">Service Areas</a>
         </nav>
 
-        <a href={SMS_URL} rel="external"
+        <Link href="/get-a-quote"
           className="hidden md:inline-flex items-center gap-1.5 bg-white text-[#1e3d12] font-bold px-5 py-2 rounded-full text-sm hover:bg-[#eef3e8] transition-colors shadow-sm">
           Text Us for a Quote →
-        </a>
+        </Link>
 
         {/* Hamburger */}
         <button onClick={() => setOpen(o => !o)} className="md:hidden text-white p-2" aria-label="Menu">
@@ -117,10 +116,10 @@ function Nav() {
               {label}
             </a>
           ))}
-          <a href={SMS_URL} rel="external"
+          <Link href="/get-a-quote" onClick={() => setOpen(false)}
             className="mt-3 w-full flex items-center justify-center bg-white text-[#1e3d12] font-bold py-3 rounded-xl text-sm">
             Text Us for a Quote →
-          </a>
+          </Link>
         </div>
       )}
     </header>
@@ -162,13 +161,13 @@ function Hero() {
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center"
           style={{ animation: 'fadeUp 0.6s ease-out 0.45s both' }}>
-          <a href={SMS_URL} rel="external"
+          <Link href="/get-a-quote"
             className="font-bold px-8 py-4 rounded-full text-base transition-all hover:scale-105 active:scale-95 shadow-lg"
             style={{ background: '#2d5a1b', color: '#fff' }}
             onMouseEnter={e => (e.currentTarget.style.background = '#3a7a22')}
             onMouseLeave={e => (e.currentTarget.style.background = '#2d5a1b')}>
             Text Us for a Quote →
-          </a>
+          </Link>
           <a href="#work"
             className="bg-white/10 hover:bg-white/20 border border-white/25 text-white font-semibold px-8 py-4 rounded-full text-base transition-colors backdrop-blur-sm">
             See Our Work ↓
@@ -214,7 +213,7 @@ function Services() {
         </div>
 
         <div className="mt-10">
-          <a href={SMS_URL} rel="external"
+          <Link href="/get-a-quote"
             className="inline-flex items-center gap-2 font-semibold px-7 py-3.5 rounded-full text-sm transition-all hover:scale-105"
             style={{ background: '#1e3d12', color: '#fff' }}
             onMouseEnter={e => (e.currentTarget.style.background = '#2d5a1b')}
@@ -223,7 +222,7 @@ function Services() {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
             </svg>
-          </a>
+          </Link>
         </div>
       </div>
     </section>
@@ -269,13 +268,13 @@ function About() {
               ))}
             </div>
 
-            <a href={SMS_URL} rel="external"
+            <Link href="/get-a-quote"
               className="inline-flex items-center gap-2 font-bold px-7 py-3.5 rounded-full text-sm transition-all hover:scale-105"
               style={{ background: '#2d5a1b', color: '#fff' }}
               onMouseEnter={e => (e.currentTarget.style.background = '#1e3d12')}
               onMouseLeave={e => (e.currentTarget.style.background = '#2d5a1b')}>
               Text Us for a Free Quote →
-            </a>
+            </Link>
           </div>
         </div>
       </div>
@@ -344,13 +343,13 @@ function Areas() {
         </div>
 
         <p className="text-sm mb-5" style={{ color: '#7a9a6a' }}>Don&apos;t see your city? We may still be able to help.</p>
-        <a href={SMS_URL} rel="external"
+        <Link href="/get-a-quote"
           className="inline-flex items-center gap-2 font-bold px-7 py-3.5 rounded-full text-sm transition-all hover:scale-105"
           style={{ background: '#1e3d12', color: '#fff' }}
           onMouseEnter={e => (e.currentTarget.style.background = '#2d5a1b')}
           onMouseLeave={e => (e.currentTarget.style.background = '#1e3d12')}>
           Text Us to Check →
-        </a>
+        </Link>
       </div>
     </section>
   )
@@ -373,7 +372,7 @@ function CTABanner() {
           Text us your address and get a custom quote in under a minute. No calls, no salespeople.
           Just an honest price for honest work.
         </p>
-        <a href={SMS_URL} rel="external"
+        <Link href="/get-a-quote"
           className="inline-flex items-center gap-2 font-extrabold px-10 py-4 rounded-full text-lg transition-all hover:scale-105 active:scale-95"
           style={{ background: '#fff', color: '#1e3d12', boxShadow: '0 8px 30px rgba(0,0,0,0.15)' }}
           onMouseEnter={e => (e.currentTarget.style.background = '#eef3e8')}
@@ -382,7 +381,7 @@ function CTABanner() {
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
           </svg>
-        </a>
+        </Link>
       </div>
     </section>
   )
@@ -412,9 +411,9 @@ function Footer() {
                 <li key={l}><a href={h} className="hover:text-white transition-colors">{l}</a></li>
               ))}
               <li>
-                <a href={SMS_URL} rel="external" className="font-semibold transition-colors hover:text-white" style={{ color: '#7ecb5f' }}>
+                <Link href="/get-a-quote" className="font-semibold transition-colors hover:text-white" style={{ color: '#7ecb5f' }}>
                   Text Us for a Quote →
-                </a>
+                </Link>
               </li>
             </ul>
           </div>
@@ -448,13 +447,13 @@ function Footer() {
                 </a>
               </li>
               <li className="pt-2">
-                <a href={SMS_URL} rel="external"
+                <Link href="/get-a-quote"
                   className="inline-block font-bold px-5 py-2.5 rounded-full text-xs transition-colors"
                   style={{ background: '#2d5a1b', color: '#fff' }}
                   onMouseEnter={e => (e.currentTarget.style.background = '#3a7a22')}
                   onMouseLeave={e => (e.currentTarget.style.background = '#2d5a1b')}>
                   Text Us →
-                </a>
+                </Link>
               </li>
             </ul>
           </div>
