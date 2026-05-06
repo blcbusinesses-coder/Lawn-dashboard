@@ -1,7 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
+
+const PAGE_SIZE = 9
 
 // ── Colors (matches get-a-quote palette) ──────────────────────────────────────
 // dark:   #1e3d12   (headings, nav, footer)
@@ -231,6 +234,29 @@ function Services() {
 
 // ── About ──────────────────────────────────────────────────────────────────────
 function About() {
+  const [stats, setStats] = useState({ years: '3+', lawns: '30+', rating: '5★' })
+
+  useEffect(() => {
+    const supabase = createClient()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(supabase as any).from('site_settings').select('key, value').in('key', ['stat_years', 'stat_lawns', 'stat_rating'])
+      .then(({ data }: { data: Array<{ key: string; value: string }> | null }) => {
+        if (!data) return
+        const map = Object.fromEntries(data.map(r => [r.key, r.value]))
+        setStats({
+          years:  map.stat_years  ?? '3+',
+          lawns:  map.stat_lawns  ?? '30+',
+          rating: map.stat_rating ?? '5★',
+        })
+      })
+  }, [])
+
+  const statItems = [
+    [stats.years,  'Years in Business'],
+    [stats.lawns,  'Lawns Maintained'],
+    [stats.rating, 'Average Rating'],
+  ]
+
   return (
     <section id="about" className="py-24 overflow-hidden" style={{ background: '#eef3e8' }}>
       <div className="max-w-6xl mx-auto px-5">
@@ -260,7 +286,7 @@ function About() {
             </p>
 
             <div className="grid grid-cols-3 gap-4 mb-10">
-              {[['3+','Years in Business'],['50+','Lawns Maintained'],['5★','Average Rating']].map(([n, l]) => (
+              {statItems.map(([n, l]) => (
                 <div key={l} className="text-center p-4 rounded-xl" style={{ background: '#fff', border: '1px solid #c8dfc0' }}>
                   <p className="text-2xl font-extrabold" style={{ color: '#1e3d12' }}>{n}</p>
                   <p className="text-xs mt-1 leading-tight" style={{ color: '#5a7a4a' }}>{l}</p>
@@ -284,38 +310,109 @@ function About() {
 
 
 // ── Gallery ───────────────────────────────────────────────────────────────────
-function Gallery() {
-  return (
-    <section id="work" className="py-24" style={{ background: '#fff' }}>
-      <div className="max-w-6xl mx-auto px-5">
-        <div className="text-center mb-14">
-          <p className="font-bold text-sm tracking-widest uppercase mb-3" style={{ color: '#4a9030' }}>Our Work</p>
-          <h2 className="text-4xl font-extrabold mb-4" style={{ color: '#1e3d12' }}>Results You Can See</h2>
-          <p className="max-w-md mx-auto" style={{ color: '#4a6a3a' }}>
-            Real yards, real results. Every property we touch gets the same care and attention.
-          </p>
-        </div>
+const FALLBACK_PHOTOS = ['/lawn1.jpg', '/lawn4.jpg', '/lawn2.jpg', '/lawn3.jpg']
 
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
-          <div className="col-span-2 md:col-span-2 aspect-[16/9] md:aspect-[4/3] rounded-2xl overflow-hidden">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/lawn1.jpg" alt="Freshly mowed lawn" className="w-full h-full object-cover hover:scale-105 transition-transform duration-700" />
+function Gallery() {
+  const [photos, setPhotos] = useState<string[]>([])
+  const [visible, setVisible] = useState(PAGE_SIZE)
+  const [lightbox, setLightbox] = useState<string | null>(null)
+
+  const loadPhotos = useCallback(async () => {
+    try {
+      const supabase = createClient()
+      const { data } = await supabase.storage.from('gallery').list('', {
+        limit: 200, sortBy: { column: 'created_at', order: 'desc' },
+      })
+      if (data && data.length > 0) {
+        const urls = data
+          .filter(f => f.name !== '.emptyFolderPlaceholder')
+          .map(f => supabase.storage.from('gallery').getPublicUrl(f.name).data.publicUrl)
+        setPhotos(urls)
+      } else {
+        setPhotos(FALLBACK_PHOTOS)
+      }
+    } catch {
+      setPhotos(FALLBACK_PHOTOS)
+    }
+  }, [])
+
+  useEffect(() => { loadPhotos() }, [loadPhotos])
+
+  const shown = photos.slice(0, visible)
+  const hasMore = visible < photos.length
+
+  return (
+    <>
+      <section id="work" className="py-24" style={{ background: '#fff' }}>
+        <div className="max-w-6xl mx-auto px-5">
+          <div className="text-center mb-14">
+            <p className="font-bold text-sm tracking-widest uppercase mb-3" style={{ color: '#4a9030' }}>Our Work</p>
+            <h2 className="text-4xl font-extrabold mb-4" style={{ color: '#1e3d12' }}>Results You Can See</h2>
+            <p className="max-w-md mx-auto" style={{ color: '#4a6a3a' }}>
+              Real yards, real results. Every property we touch gets the same care and attention.
+            </p>
           </div>
-          <div className="aspect-square rounded-2xl overflow-hidden">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/lawn4.jpg" alt="Yard cleanup" className="w-full h-full object-cover hover:scale-105 transition-transform duration-700" />
+
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+            {shown.map((url, i) => (
+              <div
+                key={url}
+                onClick={() => setLightbox(url)}
+                className={`cursor-pointer rounded-2xl overflow-hidden ${
+                  i === 0 ? 'col-span-2 aspect-[16/9] md:aspect-[4/3]' : 'aspect-square'
+                }`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={url}
+                  alt={`Our work ${i + 1}`}
+                  className="w-full h-full object-cover hover:scale-105 transition-transform duration-700"
+                />
+              </div>
+            ))}
           </div>
-          <div className="aspect-square rounded-2xl overflow-hidden">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/lawn2.jpg" alt="Lawn edging" className="w-full h-full object-cover hover:scale-105 transition-transform duration-700" />
-          </div>
-          <div className="col-span-1 md:col-span-2 aspect-square md:aspect-[16/7] rounded-2xl overflow-hidden">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/lawn3.jpg" alt="Finished yard" className="w-full h-full object-cover hover:scale-105 transition-transform duration-700" />
-          </div>
+
+          {hasMore && (
+            <div className="text-center mt-10">
+              <button
+                onClick={() => setVisible(v => v + PAGE_SIZE)}
+                className="font-bold px-8 py-3.5 rounded-full text-sm border-2 transition-all hover:scale-105"
+                style={{ borderColor: '#2d5a1b', color: '#2d5a1b' }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#2d5a1b'; e.currentTarget.style.color = '#fff' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#2d5a1b' }}
+              >
+                Load More Photos ↓
+              </button>
+            </div>
+          )}
         </div>
-      </div>
-    </section>
+      </section>
+
+      {/* Lightbox */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.92)' }}
+          onClick={() => setLightbox(null)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightbox}
+            alt="Full size"
+            className="max-w-full max-h-full rounded-xl shadow-2xl object-contain"
+            style={{ maxHeight: '90vh', maxWidth: '90vw' }}
+            onClick={e => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setLightbox(null)}
+            className="absolute top-5 right-5 text-white/70 hover:text-white text-3xl font-light leading-none transition-colors"
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+      )}
+    </>
   )
 }
 

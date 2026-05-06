@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Globe, ExternalLink, Copy, Check, Eye, Smartphone, Monitor, Loader2 } from 'lucide-react'
+import { Globe, ExternalLink, Copy, Check, Eye, Smartphone, Monitor, Loader2, Upload, Trash2, ImageIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 
@@ -117,10 +117,17 @@ export default function SitePage() {
   const [savingInfo, setSavingInfo] = useState(false)
 
   // About section
-  const [about,    setAbout]    = useState("Gray Wolf Workers started right here in Kendallville. We're not a big franchise with a call center — we're your neighbors, and we treat your yard like it's our own.")
-  const [stat1,    setStat1]    = useState('50+')
-  const [stat2,    setStat2]    = useState('3+')
+  const [about,      setAbout]      = useState("Gray Wolf Workers started right here in Kendallville. We're not a big franchise with a call center — we're your neighbors, and we treat your yard like it's our own.")
+  const [statLawns,  setStatLawns]  = useState('30+')
+  const [statYears,  setStatYears]  = useState('3+')
+  const [statRating, setStatRating] = useState('5★')
   const [savingAbout, setSavingAbout] = useState(false)
+
+  // Gallery
+  const [galleryPhotos, setGalleryPhotos] = useState<string[]>([])
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [deletingPhoto, setDeletingPhoto] = useState<string | null>(null)
+  const galleryInputRef = useRef<HTMLInputElement>(null)
 
   // Section toggles
   const [sections, setSections] = useState({
@@ -138,9 +145,10 @@ export default function SitePage() {
         if (s.tagline)        setTagline(s.tagline)
         if (s.location)       setLocation(s.location)
         if (s.email)          setEmail(s.email)
-        if (s.about_text)     setAbout(s.about_text)
-        if (s.stat_customers) setStat1(s.stat_customers)
-        if (s.stat_years)     setStat2(s.stat_years)
+        if (s.about_text)  setAbout(s.about_text)
+        if (s.stat_lawns)  setStatLawns(s.stat_lawns)
+        if (s.stat_years)  setStatYears(s.stat_years)
+        if (s.stat_rating) setStatRating(s.stat_rating)
         setSections({
           services: s.show_services !== 'false',
           about:    s.show_about    !== 'false',
@@ -153,6 +161,9 @@ export default function SitePage() {
       })
       .catch(() => toast.error('Could not load site settings'))
       .finally(() => setLoading(false))
+
+    // Load gallery photos
+    loadGalleryPhotos()
   }, [])
 
   // Save business info
@@ -177,12 +188,60 @@ export default function SitePage() {
   async function handleSaveAbout() {
     setSavingAbout(true)
     try {
-      await saveMany({ about_text: about, stat_customers: stat1, stat_years: stat2 })
+      await saveMany({ about_text: about, stat_lawns: statLawns, stat_years: statYears, stat_rating: statRating })
       toast.success('About section saved!')
     } catch {
       toast.error('Could not save')
     } finally {
       setSavingAbout(false)
+    }
+  }
+
+  // Gallery helpers
+  async function loadGalleryPhotos() {
+    const supabase = createClient()
+    const { data, error } = await supabase.storage.from('gallery').list('', { sortBy: { column: 'created_at', order: 'asc' } })
+    if (error || !data) return
+    const urls = data
+      .filter(f => f.name !== '.emptyFolderPlaceholder')
+      .map(f => supabase.storage.from('gallery').getPublicUrl(f.name).data.publicUrl)
+    setGalleryPhotos(urls)
+  }
+
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingPhoto(true)
+    try {
+      const supabase = createClient()
+      const ext = file.name.split('.').pop()
+      const filename = `photo_${Date.now()}.${ext}`
+      const { error } = await supabase.storage.from('gallery').upload(filename, file, { upsert: false })
+      if (error) throw error
+      toast.success('Photo uploaded!')
+      await loadGalleryPhotos()
+    } catch {
+      toast.error('Upload failed — check storage bucket permissions')
+    } finally {
+      setUploadingPhoto(false)
+      if (galleryInputRef.current) galleryInputRef.current.value = ''
+    }
+  }
+
+  async function handlePhotoDelete(url: string) {
+    const filename = url.split('/').pop()
+    if (!filename) return
+    setDeletingPhoto(url)
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.storage.from('gallery').remove([filename])
+      if (error) throw error
+      toast.success('Photo deleted')
+      setGalleryPhotos(prev => prev.filter(p => p !== url))
+    } catch {
+      toast.error('Could not delete photo')
+    } finally {
+      setDeletingPhoto(null)
     }
   }
 
@@ -288,15 +347,74 @@ export default function SitePage() {
             <textarea className={`${inputCls} resize-none`} rows={5}
               value={about} onChange={e => setAbout(e.target.value)} />
           </Field>
-          <Field label="Customers Stat (e.g. 50+)">
-            <input className={inputCls} value={stat1} onChange={e => setStat1(e.target.value)} />
+          <Field label="Lawns Maintained (e.g. 30+)">
+            <input className={inputCls} value={statLawns} onChange={e => setStatLawns(e.target.value)} />
           </Field>
           <Field label="Years in Business (e.g. 3+)">
-            <input className={inputCls} value={stat2} onChange={e => setStat2(e.target.value)} />
+            <input className={inputCls} value={statYears} onChange={e => setStatYears(e.target.value)} />
+          </Field>
+          <Field label="Rating (e.g. 5★)">
+            <input className={inputCls} value={statRating} onChange={e => setStatRating(e.target.value)} />
           </Field>
           <SaveButton loading={savingAbout} onClick={handleSaveAbout} />
         </Card>
       </div>
+
+      {/* Gallery photos */}
+      <Card title="Our Work — Gallery Photos">
+        <p className="text-xs text-zinc-400 mb-4">
+          Upload photos that appear in the &quot;Our Work&quot; section on your website. Visitors can click any photo to view it fullscreen and load more with a button.
+        </p>
+
+        {/* Upload button */}
+        <div className="mb-5">
+          <input
+            ref={galleryInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handlePhotoUpload}
+          />
+          <button
+            onClick={() => galleryInputRef.current?.click()}
+            disabled={uploadingPhoto}
+            className="flex items-center gap-2 bg-[#2d5a1b] hover:bg-[#3a7a22] disabled:opacity-60 text-white font-semibold text-sm px-4 py-2.5 rounded-xl transition-colors"
+          >
+            {uploadingPhoto
+              ? <><Loader2 size={14} className="animate-spin" /> Uploading…</>
+              : <><Upload size={14} /> Upload Photo</>}
+          </button>
+        </div>
+
+        {/* Photo grid */}
+        {galleryPhotos.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed border-zinc-200 rounded-xl text-zinc-400">
+            <ImageIcon size={32} className="mb-2 opacity-40" />
+            <p className="text-sm">No photos yet — upload your first one above.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+            {galleryPhotos.map(url => (
+              <div key={url} className="relative group aspect-square rounded-lg overflow-hidden border border-zinc-200 bg-zinc-50">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt="Gallery" className="w-full h-full object-cover" />
+                <button
+                  onClick={() => handlePhotoDelete(url)}
+                  disabled={deletingPhoto === url}
+                  className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  {deletingPhoto === url
+                    ? <Loader2 size={18} className="text-white animate-spin" />
+                    : <Trash2 size={18} className="text-white" />}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="text-xs text-zinc-400 mt-3">
+          Hover a photo and click the trash icon to delete it. Photos appear on the website in upload order.
+        </p>
+      </Card>
 
       {/* Section toggles */}
       <Card title="Show / Hide Sections">

@@ -108,7 +108,36 @@ export default function AutomationPage() {
   const [surchargeAmount, setSurchargeAmount] = useState('')
 
   // Active tab
-  const [tab, setTab] = useState<'pricing' | 'leads' | 'quote_leads' | 'logs' | 'config'>('pricing')
+  const [tab, setTab] = useState<'calculator' | 'pricing' | 'leads' | 'quote_leads' | 'logs' | 'config'>('calculator')
+
+  // Quote calculator state
+  const [calcStreet, setCalcStreet] = useState('')
+  const [calcCity, setCalcCity] = useState('')
+  const [calcResult, setCalcResult] = useState<Record<string, unknown> | null>(null)
+  const [calcLoading, setCalcLoading] = useState(false)
+  const [calcError, setCalcError] = useState('')
+
+  const CALC_CITIES = [
+    'Kendallville', 'Albion', 'Avilla', 'Rome City', 'Ligonier',
+    'Wolcottville', 'Garrett', 'Howe', 'LaGrange', 'Auburn', 'Angola', 'Columbia City',
+  ]
+
+  async function runCalculator() {
+    if (!calcStreet.trim() || !calcCity) { setCalcError('Enter a street address and select a city.'); return }
+    setCalcLoading(true); setCalcResult(null); setCalcError('')
+    const address = `${calcStreet.trim()}, ${calcCity}, IN`
+    try {
+      const res = await fetch('/api/quote/estimate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setCalcError(data.error ?? 'Failed'); return }
+      setCalcResult(data)
+    } catch { setCalcError('Network error') }
+    finally { setCalcLoading(false) }
+  }
 
   const load = useCallback(async () => {
     const [settRes, logRes, leadRes, availRes] = await Promise.all([
@@ -263,7 +292,7 @@ export default function AutomationPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-zinc-200 flex-wrap">
-        {(['pricing', 'leads', 'quote_leads', 'logs', 'config'] as const).map((t) => (
+        {(['calculator', 'pricing', 'leads', 'quote_leads', 'logs', 'config'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -271,7 +300,8 @@ export default function AutomationPage() {
               tab === t ? 'border-zinc-900 text-zinc-900' : 'border-transparent text-zinc-400 hover:text-zinc-600'
             }`}
           >
-            {t === 'pricing'      ? '💰 Pricing'
+            {t === 'calculator'   ? '🧮 Quote Calculator'
+             : t === 'pricing'    ? '💰 Pricing'
              : t === 'leads'      ? '📋 Leads'
              : t === 'quote_leads'? `🌿 Quote Leads${quoteLeads.length ? ` (${quoteLeads.length})` : ''}`
              : t === 'logs'       ? '📊 Run Logs'
@@ -279,6 +309,88 @@ export default function AutomationPage() {
           </button>
         ))}
       </div>
+
+      {/* ── CALCULATOR TAB ──────────────────────────────────────────────────── */}
+      {tab === 'calculator' && (
+        <div className="space-y-4 max-w-xl">
+          <div className="bg-white rounded-xl border border-zinc-200 p-6 space-y-4">
+            <div>
+              <h2 className="font-semibold text-zinc-900">Quote Calculator</h2>
+              <p className="text-sm text-zinc-500 mt-0.5">Enter any address to instantly see what we'd quote — uses the same engine as the customer form.</p>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Street Address</Label>
+                <Input
+                  className="mt-1"
+                  placeholder="123 Main St"
+                  value={calcStreet}
+                  onChange={e => setCalcStreet(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && runCalculator()}
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">City</Label>
+                <select
+                  value={calcCity}
+                  onChange={e => setCalcCity(e.target.value)}
+                  className="mt-1 w-full h-9 px-3 rounded-md border border-zinc-200 text-sm text-zinc-800 bg-white focus:outline-none focus:ring-2 focus:ring-zinc-300"
+                >
+                  <option value="">Select city…</option>
+                  {CALC_CITIES.map(c => <option key={c} value={c}>{c}, IN</option>)}
+                </select>
+              </div>
+            </div>
+
+            {calcError && <p className="text-sm text-red-500">{calcError}</p>}
+
+            <Button onClick={runCalculator} disabled={calcLoading} className="w-full">
+              {calcLoading ? 'Looking up property…' : 'Calculate Quote'}
+            </Button>
+          </div>
+
+          {calcResult && (
+            <div className="bg-white rounded-xl border border-zinc-200 p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-zinc-900">Quote Result</h3>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                  calcResult.confidence === 'measured'
+                    ? 'bg-green-50 text-green-700 border border-green-200'
+                    : 'bg-amber-50 text-amber-700 border border-amber-200'
+                }`}>
+                  {calcResult.confidence === 'measured' ? 'Measured from Zillow' : 'Estimated'}
+                </span>
+              </div>
+
+              <div className="text-center py-4 bg-zinc-50 rounded-xl border border-zinc-100">
+                <p className="text-4xl font-extrabold text-zinc-900">${calcResult.total_price as number}</p>
+                <p className="text-sm text-zinc-500 mt-1">per mow</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                {[
+                  ['Base Price',    `$${calcResult.base_price}`],
+                  ['Drive Surcharge', calcResult.drive_surcharge ? `+$${calcResult.drive_surcharge}` : 'None'],
+                  ['Lot Size',      calcResult.lot_size_sqft ? `${(calcResult.lot_size_sqft as number).toLocaleString()} sq ft` : 'Not found'],
+                  ['Mowable Area',  calcResult.mowable_sqft  ? `${(calcResult.mowable_sqft  as number).toLocaleString()} sq ft` : 'Estimated'],
+                  ['Tier',          (calcResult.tier_label as string) || '—'],
+                  ['Distance',      calcResult.distance_miles ? `${calcResult.distance_miles} mi` : '—'],
+                ].map(([label, value]) => (
+                  <div key={label as string} className="bg-zinc-50 rounded-lg p-3 border border-zinc-100">
+                    <p className="text-xs text-zinc-500 mb-0.5">{label}</p>
+                    <p className="font-semibold text-zinc-900">{value as string}</p>
+                  </div>
+                ))}
+              </div>
+
+              <p className="text-xs text-zinc-400 text-center">
+                {calcResult.address as string}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── PRICING TAB ─────────────────────────────────────────────────────── */}
       {tab === 'pricing' && (
