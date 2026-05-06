@@ -9,10 +9,11 @@ import { toast } from 'sonner'
 import {
   Users, Home, ClipboardCheck, Receipt, FileText, Bot,
   TrendingUp, HardHat, MessageSquare, Inbox, Star, Settings2, LogOut,
-  CheckSquare, BarChart2, Wrench, Gauge, Globe, CloudSun, PenTool,
+  CheckSquare, BarChart2, Wrench, Gauge, Globe, CloudSun, PenTool, Filter,
 } from 'lucide-react'
 
 const navItems = [
+  { href: '/dashboard/leads',      label: 'Leads',           Icon: Filter },
   { href: '/dashboard/customers',  label: 'Customers',       Icon: Users },
   { href: '/dashboard/properties', label: 'Properties',      Icon: Home },
   { href: '/dashboard/jobs',       label: 'Jobs',            Icon: ClipboardCheck },

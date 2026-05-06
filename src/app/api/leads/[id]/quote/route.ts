@@ -172,6 +172,7 @@ export async function POST(
   const apifyActor: string                = (settings.apify_actor as string) ?? 'maxcopell~zillow-detail-scraper'
   const surchargeThresholdMiles: number   = (settings.drive_surcharge_miles as number) ?? 12
   const surchargeAmount: number           = (settings.drive_surcharge_amount as number) ?? 5
+  const twilioEnabled: boolean            = settings.twilio_enabled === true || settings.twilio_enabled === 'true'
 
   // ── 1. Property lookup via Apify ───────────────────────────────────────────
   const lookupStart = Date.now()
@@ -306,54 +307,63 @@ Rules:
     smsBody = `Hey ${firstName}, I just got your request for a quote. After looking at your property, does $${quote.amount} sound fair? If that works, we can get started ${startDate}. ${smsSignature}`
   }
 
-  // ── 5. Send SMS ────────────────────────────────────────────────────────────
+  // ── 5. Send SMS (only when twilio_enabled) ────────────────────────────────
   let twilioSid: string | null = null
   let smsSent = false
   const smsStart = Date.now()
 
-  try {
-    const twilio = getTwilioClient()
-    const message = await twilio.messages.create({
-      from: TWILIO_FROM,
-      to: lead.phone as string,
-      body: smsBody,
-    })
-    twilioSid = message.sid
-    smsSent = true
+  if (twilioEnabled) {
+    try {
+      const twilio = getTwilioClient()
+      const message = await twilio.messages.create({
+        from: TWILIO_FROM,
+        to: lead.phone as string,
+        body: smsBody,
+      })
+      twilioSid = message.sid
+      smsSent = true
 
-    await writeLog(adminClient, id, 'quote_sms_sent', 'success', {
-      phone:         lead.phone,
-      body:          smsBody,
-      twilio_sid:    twilioSid,
-      quote_amount:  quote.amount,
-      base_quote:          baseQuote.amount,
-      drive_surcharge:     driveSurcharge,
-      distance_miles:      distanceMiles,
-      lot_size_sqft:       lotSqft,
-      living_sqft:         livingSqft,
-      footprint_method:    footprintMethod,
-      estimated_footprint: estimatedFootprint,
-      mowable_sqft:        mowableSqft,
-      grass_ratio:         grassRatio,
-      tier:                quote.tier,
-    }, Date.now() - smsStart)
-  } catch (err) {
-    const errMsg = err instanceof Error ? err.message : 'Unknown error'
-    await writeLog(adminClient, id, 'quote_sms_sent', 'failed', {
-      phone: lead.phone,
-      error: errMsg,
+      await writeLog(adminClient, id, 'quote_sms_sent', 'success', {
+        phone:         lead.phone,
+        body:          smsBody,
+        twilio_sid:    twilioSid,
+        quote_amount:  quote.amount,
+        base_quote:          baseQuote.amount,
+        drive_surcharge:     driveSurcharge,
+        distance_miles:      distanceMiles,
+        lot_size_sqft:       lotSqft,
+        living_sqft:         livingSqft,
+        footprint_method:    footprintMethod,
+        estimated_footprint: estimatedFootprint,
+        mowable_sqft:        mowableSqft,
+        grass_ratio:         grassRatio,
+        tier:                quote.tier,
+      }, Date.now() - smsStart)
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : 'Unknown error'
+      await writeLog(adminClient, id, 'quote_sms_sent', 'failed', {
+        phone: lead.phone,
+        error: errMsg,
+      }, Date.now() - smsStart)
+    }
+  } else {
+    await writeLog(adminClient, id, 'quote_sms_sent', 'skipped', {
+      reason: 'twilio_enabled is false — draft saved for manual send',
+      phone:  lead.phone,
+      body:   smsBody,
     }, Date.now() - smsStart)
   }
 
   // ── 6. Persist results ─────────────────────────────────────────────────────
-  await adminClient
-    .from('leads')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (adminClient.from('leads') as any)
     .update({
-      status:          'quoted',
-      property_data:   (propertyData?.raw ?? null) as Json | null,
+      status:          smsSent ? 'quoted' : 'new',
+      drafted_text:    smsBody,
+      property_data:   (propertyData?.raw ?? null),
       lot_size_sqft:   lotSqft,
       quoted_amount:   quote.amount,
-      quote_sent_at:   new Date().toISOString(),
+      quote_sent_at:   smsSent ? new Date().toISOString() : null,
     })
     .eq('id', id)
 

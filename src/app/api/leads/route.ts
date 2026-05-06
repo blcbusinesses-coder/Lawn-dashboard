@@ -17,20 +17,21 @@ export async function POST(request: NextRequest) {
   // Use admin client so RLS doesn't block the public insert
   const adminClient = await createAdminClient()
   const body = await request.json()
-  const { name, phone, email, address, preferred_date } = body
+  const { name, phone, email, address, preferred_date, source } = body
 
   if (!name?.trim() || !phone?.trim() || !address?.trim()) {
     return NextResponse.json({ error: 'name, phone, and address are required' }, { status: 400 })
   }
 
-  const { data, error } = await adminClient
-    .from('leads')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (adminClient.from('leads') as any)
     .insert({
       name: name.trim(),
       phone: phone.trim(),
       email: email?.trim() || null,
       address: address.trim(),
       preferred_date: preferred_date || null,
+      source: source === 'facebook' ? 'facebook' : 'website',
       status: 'new',
     })
     .select()

@@ -1,11 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-
-const PHONE_DISPLAY = '(260) 280-0653'
-const PHONE_E164 = '+12602800653'
-const SMS_BODY = 'Hey Gray Wolf, I would like a quote. My address is: '
-const SMS_URL = `sms:${PHONE_E164}&body=${encodeURIComponent(SMS_BODY)}`
+import { useState } from 'react'
 
 function GrassRow() {
   return (
@@ -32,14 +27,36 @@ function GrassRow() {
   )
 }
 
-export default function GetAQuotePage() {
-  const [isFacebook, setIsFacebook] = useState(false)
-  const [pageUrl, setPageUrl] = useState('')
+type Step = 'form' | 'submitting' | 'done'
 
-  useEffect(() => {
-    setIsFacebook(/FBAN|FBAV|FB_IAB|FBIOS/i.test(navigator.userAgent))
-    setPageUrl(window.location.href)
-  }, [])
+export default function GetAQuotePage() {
+  const [step, setStep] = useState<Step>('form')
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [address, setAddress] = useState('')
+  const [error, setError] = useState('')
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+    if (!name.trim() || !phone.trim() || !address.trim()) {
+      setError('Please fill in all fields.')
+      return
+    }
+    setStep('submitting')
+    try {
+      const res = await fetch('/api/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), phone: phone.trim(), address: address.trim(), source: 'website' }),
+      })
+      if (!res.ok) throw new Error()
+      setStep('done')
+    } catch {
+      setError('Something went wrong. Please try again.')
+      setStep('form')
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[#eef3e8] flex flex-col overflow-x-hidden">
@@ -51,82 +68,87 @@ export default function GetAQuotePage() {
             <img src="/logo.png" alt="Gray Wolf Workers" className="w-16 h-16 object-contain mx-auto mb-3" />
             <h1 className="text-3xl font-bold text-[#1e3d12] tracking-tight">Get a Free Quote</h1>
             <p className="text-[#5a7a4a] mt-2 text-sm leading-relaxed max-w-xs mx-auto">
-              We&apos;ll text you back a custom price in under a minute — no forms, no waiting.
+              Fill in your info and we&apos;ll text you a custom price in under a minute.
             </p>
           </div>
 
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-6">
             <div className="h-1.5 bg-[#2d5a1b]" />
-            <div className="p-6 space-y-6">
+            <div className="p-6">
 
-              {isFacebook ? (
-                /* Facebook in-app browser — can't open Messages directly */
-                <div className="space-y-5 text-center">
+              {step === 'done' ? (
+                <div className="text-center py-4 space-y-3">
                   <div className="w-14 h-14 rounded-full bg-[#eef3e8] flex items-center justify-center mx-auto">
                     <svg className="w-7 h-7 text-[#2d5a1b]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
-
-                  <div className="text-center">
-                    <p className="font-bold text-[#1e3d12] text-base mb-1">Text us directly</p>
-                    <p className="text-sm text-zinc-500 leading-relaxed">
-                      Tap the number below — it&apos;ll open your Messages app so you can text us for a free quote.
-                    </p>
-                  </div>
-
-                  <a
-                    href={`sms:${PHONE_E164}`}
-                    className="flex flex-col items-center justify-center w-full bg-[#2d5a1b] text-white rounded-xl py-5 active:scale-[0.98] transition-all shadow-sm"
-                  >
-                    <svg className="w-6 h-6 mb-2 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                    </svg>
-                    <span className="text-2xl font-extrabold tracking-wide">{PHONE_DISPLAY}</span>
-                    <span className="text-xs opacity-75 mt-1">Tap to text us</span>
-                  </a>
-
-                  <p className="text-center text-xs text-zinc-400">
-                    Just send us your address and we&apos;ll text back a custom price.
+                  <p className="text-xl font-bold text-[#1e3d12]">You&apos;re all set!</p>
+                  <p className="text-sm text-zinc-500 leading-relaxed">
+                    We got your info and we&apos;re working on your quote right now.
+                    Expect a text from us shortly!
                   </p>
                 </div>
               ) : (
-                /* Normal browser */
-                <>
-                  <div className="space-y-4">
-                    {[
-                      { n: '1', text: 'Tap the button below to open your messages' },
-                      { n: '2', text: 'Fill in your property address at the end of the message' },
-                      { n: '3', text: "Hit send — we'll text your quote right back!" },
-                    ].map(({ n, text }) => (
-                      <div key={n} className="flex items-start gap-3">
-                        <div className="w-7 h-7 rounded-full bg-[#eef3e8] border border-[#c8dfc0] flex items-center justify-center shrink-0 mt-0.5">
-                          <span className="text-xs font-bold text-[#2d5a1b]">{n}</span>
-                        </div>
-                        <p className="text-sm text-zinc-600 leading-snug pt-1">{text}</p>
-                      </div>
-                    ))}
+                <form onSubmit={submit} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-[#2d5a1b] uppercase tracking-wide mb-1.5">
+                      Full Name
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="John Smith"
+                      value={name}
+                      onChange={e => setName(e.target.value)}
+                      required
+                      className="w-full px-4 py-3 rounded-xl border border-[#c8dfc0] bg-[#f7fbf4] text-[#1e3d12] placeholder-[#9ab890] text-sm focus:outline-none focus:border-[#2d5a1b] transition-colors"
+                    />
                   </div>
 
-                  <a
-                    href={SMS_URL}
-                    rel="external"
-                    className="flex items-center justify-center gap-2.5 w-full bg-[#2d5a1b] text-white rounded-xl py-4 text-base font-bold active:scale-[0.98] transition-all shadow-sm select-none"
+                  <div>
+                    <label className="block text-xs font-semibold text-[#2d5a1b] uppercase tracking-wide mb-1.5">
+                      Phone Number
+                    </label>
+                    <input
+                      type="tel"
+                      placeholder="(260) 555-0100"
+                      value={phone}
+                      onChange={e => setPhone(e.target.value)}
+                      required
+                      className="w-full px-4 py-3 rounded-xl border border-[#c8dfc0] bg-[#f7fbf4] text-[#1e3d12] placeholder-[#9ab890] text-sm focus:outline-none focus:border-[#2d5a1b] transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-[#2d5a1b] uppercase tracking-wide mb-1.5">
+                      Property Address
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="123 Main St, Kendallville, IN"
+                      value={address}
+                      onChange={e => setAddress(e.target.value)}
+                      required
+                      className="w-full px-4 py-3 rounded-xl border border-[#c8dfc0] bg-[#f7fbf4] text-[#1e3d12] placeholder-[#9ab890] text-sm focus:outline-none focus:border-[#2d5a1b] transition-colors"
+                    />
+                  </div>
+
+                  {error && (
+                    <p className="text-xs text-red-500 text-center">{error}</p>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={step === 'submitting'}
+                    className="w-full bg-[#2d5a1b] text-white rounded-xl py-4 text-base font-bold hover:bg-[#1e3d12] active:scale-[0.98] transition-all shadow-sm disabled:opacity-60"
                   >
-                    <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                    </svg>
-                    Text Us for a Quote!
-                  </a>
+                    {step === 'submitting' ? 'Sending…' : 'Get My Free Quote →'}
+                  </button>
 
                   <p className="text-xs text-zinc-400 text-center">
-                    Opens your messages app with the text pre-filled —
-                    just add your address and hit send.
+                    We&apos;ll text your quote to the number above. No spam, ever.
                   </p>
-                </>
+                </form>
               )}
             </div>
           </div>
