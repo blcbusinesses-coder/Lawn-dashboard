@@ -71,7 +71,7 @@ export default function GetAQuotePage() {
                     <p className="font-bold text-[#1e3d12] text-base mb-1">One quick step</p>
                     <p className="text-sm text-zinc-500 leading-relaxed">
                       Facebook&apos;s browser can&apos;t open your Messages app.
-                      Tap the <span className="font-semibold text-zinc-700">···</span> button at the bottom right, then choose{' '}
+                      Tap the <span className="font-semibold text-zinc-700">···</span> button at the top or bottom right of your screen, then choose{' '}
                       <span className="font-semibold text-zinc-700">&ldquo;Open in Safari&rdquo;</span>
                     </p>
                   </div>
