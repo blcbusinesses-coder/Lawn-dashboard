@@ -217,24 +217,42 @@ export async function POST(
 
   const baseQuote = calculateQuoteFromTiers(mowableSqft, tiers, fallbackPrice, overOneAcrePrice)
 
-  // ── 2b. Distance surcharge ─────────────────────────────────────────────────
-  let distanceMiles: number | null = null
-  let driveSurcharge = 0
-  let geocodeCoords: { lat: number; lon: number } | null = null
+  // ── 2b. City-based drive surcharge ────────────────────────────────────────
+  // Hardcoded per-city add-on based on distance from Kendallville base.
+  // Kendallville prices are the baseline; all others add the surcharge below.
+  const CITY_SURCHARGE: Record<string, number> = {
+    'kendallville':   0,
+    'albion':         0,
+    'avilla':         0,
+    'rome city':      5,
+    'ligonier':       5,
+    'wolcottville':   5,
+    'garrett':        5,
+    'howe':          10,
+    'lagrange':      10,
+    'auburn':        10,
+    'angola':        15,
+    'columbia city': 15,
+  }
 
+  const addressLower = (lead.address as string).toLowerCase()
+  const matchedCity = Object.keys(CITY_SURCHARGE).find(c => addressLower.includes(c))
+  const driveSurcharge = matchedCity != null ? CITY_SURCHARGE[matchedCity] : (surchargeAmount ?? 0)
+  const detectedCity = matchedCity ?? 'unknown'
+
+  // Keep geocoding only for logging/informational purposes
+  let distanceMiles: number | null = null
+  let geocodeCoords: { lat: number; lon: number } | null = null
   try {
     geocodeCoords = await geocodeAddress(lead.address as string)
     if (geocodeCoords) {
       distanceMiles = Math.round(haversineDistance(
         KENDALLVILLE_LAT, KENDALLVILLE_LNG,
         geocodeCoords.lat, geocodeCoords.lon
-      ) * 10) / 10 // round to 1 decimal
-      if (distanceMiles > surchargeThresholdMiles) {
-        driveSurcharge = surchargeAmount
-      }
+      ) * 10) / 10
     }
   } catch {
-    // Geocoding failed — no surcharge, continue
+    // Geocoding is informational only; surcharge already determined
   }
 
   const quote = {
@@ -243,13 +261,11 @@ export async function POST(
   }
 
   await writeLog(adminClient, id, 'distance_check',
-    geocodeCoords ? 'success' : 'skipped',
+    'success',
     {
       address:           lead.address,
-      lat:               geocodeCoords?.lat ?? null,
-      lon:               geocodeCoords?.lon ?? null,
+      detected_city:     detectedCity,
       distance_miles:    distanceMiles,
-      threshold_miles:   surchargeThresholdMiles,
       surcharge_applied: driveSurcharge,
       base_quote:        baseQuote.amount,
       final_quote:       quote.amount,

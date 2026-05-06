@@ -27,28 +27,49 @@ function GrassRow() {
   )
 }
 
+// Cities we service, ordered roughly by distance from Kendallville
+const SERVICE_CITIES = [
+  'Kendallville',
+  'Albion',
+  'Avilla',
+  'Rome City',
+  'Ligonier',
+  'Wolcottville',
+  'Garrett',
+  'Howe',
+  'LaGrange',
+  'Auburn',
+  'Angola',
+  'Columbia City',
+]
+
 type Step = 'form' | 'submitting' | 'done'
+
+const inputClass = "w-full px-4 py-3 rounded-xl border border-[#c8dfc0] bg-[#f7fbf4] text-[#1e3d12] placeholder-[#9ab890] text-sm focus:outline-none focus:border-[#2d5a1b] transition-colors"
+const labelClass = "block text-xs font-semibold text-[#2d5a1b] uppercase tracking-wide mb-1.5"
 
 export default function GetAQuotePage() {
   const [step, setStep] = useState<Step>('form')
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
-  const [address, setAddress] = useState('')
+  const [street, setStreet] = useState('')
+  const [city, setCity] = useState('')
   const [error, setError] = useState('')
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
-    if (!name.trim() || !phone.trim() || !address.trim()) {
+    if (!name.trim() || !phone.trim() || !street.trim() || !city) {
       setError('Please fill in all fields.')
       return
     }
     setStep('submitting')
+    const fullAddress = `${street.trim()}, ${city}, IN`
     try {
       const res = await fetch('/api/leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), phone: phone.trim(), address: address.trim(), source: 'website' }),
+        body: JSON.stringify({ name: name.trim(), phone: phone.trim(), address: fullAddress, source: 'website' }),
       })
       if (!res.ok) throw new Error()
       setStep('done')
@@ -92,45 +113,54 @@ export default function GetAQuotePage() {
               ) : (
                 <form onSubmit={submit} className="space-y-4">
                   <div>
-                    <label className="block text-xs font-semibold text-[#2d5a1b] uppercase tracking-wide mb-1.5">
-                      Full Name
-                    </label>
+                    <label className={labelClass}>Full Name</label>
                     <input
                       type="text"
                       placeholder="John Smith"
                       value={name}
                       onChange={e => setName(e.target.value)}
                       required
-                      className="w-full px-4 py-3 rounded-xl border border-[#c8dfc0] bg-[#f7fbf4] text-[#1e3d12] placeholder-[#9ab890] text-sm focus:outline-none focus:border-[#2d5a1b] transition-colors"
+                      className={inputClass}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-[#2d5a1b] uppercase tracking-wide mb-1.5">
-                      Phone Number
-                    </label>
+                    <label className={labelClass}>Phone Number</label>
                     <input
                       type="tel"
                       placeholder="(260) 555-0100"
                       value={phone}
                       onChange={e => setPhone(e.target.value)}
                       required
-                      className="w-full px-4 py-3 rounded-xl border border-[#c8dfc0] bg-[#f7fbf4] text-[#1e3d12] placeholder-[#9ab890] text-sm focus:outline-none focus:border-[#2d5a1b] transition-colors"
+                      className={inputClass}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-[#2d5a1b] uppercase tracking-wide mb-1.5">
-                      Property Address
-                    </label>
+                    <label className={labelClass}>Street Address</label>
                     <input
                       type="text"
-                      placeholder="123 Main St, Kendallville, IN"
-                      value={address}
-                      onChange={e => setAddress(e.target.value)}
+                      placeholder="123 Main St"
+                      value={street}
+                      onChange={e => setStreet(e.target.value)}
                       required
-                      className="w-full px-4 py-3 rounded-xl border border-[#c8dfc0] bg-[#f7fbf4] text-[#1e3d12] placeholder-[#9ab890] text-sm focus:outline-none focus:border-[#2d5a1b] transition-colors"
+                      className={inputClass}
                     />
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>City</label>
+                    <select
+                      value={city}
+                      onChange={e => setCity(e.target.value)}
+                      required
+                      className={`${inputClass} appearance-none`}
+                    >
+                      <option value="">Select your city…</option>
+                      {SERVICE_CITIES.map(c => (
+                        <option key={c} value={c}>{c}, IN</option>
+                      ))}
+                    </select>
                   </div>
 
                   {error && (
