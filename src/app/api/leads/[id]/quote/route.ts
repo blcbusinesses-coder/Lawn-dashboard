@@ -1,6 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { lookupProperty } from '@/lib/property/lookup'
-import { openai } from '@/lib/openai/client'
 import { getTwilioClient, TWILIO_FROM } from '@/lib/twilio/client'
 import { NextRequest, NextResponse } from 'next/server'
 import { format } from 'date-fns'
@@ -273,39 +272,16 @@ export async function POST(
     ? format(new Date((lead.preferred_date as string) + 'T12:00:00'), 'EEEE, MMM d')
     : null
 
-  // ── 4. Generate AI SMS ─────────────────────────────────────────────────────
-  let smsBody: string
+  // ── 4. Build SMS message ───────────────────────────────────────────────────
   const firstName = (lead.name as string).split(' ')[0]
 
   const startDate = availDates?.length
     ? format(new Date(availDates[0].available_date + 'T12:00:00'), 'EEEE, MMM d')
     : 'soon'
 
-  try {
-    const prompt = `Write an SMS quote message for a lawn mowing service. Follow this exact structure but make it sound natural — not robotic:
+  const displayDate = preferredText ?? startDate
 
-"Hey [first name], I just got your request for a quote. After looking at your property, does $[price] sound fair? If that works, we can get started [start date]. ${smsSignature}"
-
-Fill in:
-- First name: ${firstName}
-- Price: $${quote.amount}/mow
-- Start date: ${preferredText ? preferredText : startDate}
-
-Rules:
-- Keep the ENTIRE message under 300 characters
-- Casual, warm, like a real person texting
-- Do NOT add anything outside the structure above
-- End with exactly: ${smsSignature}`
-
-    const res = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 120,
-    })
-    smsBody = res.choices[0].message.content?.trim() ?? ''
-  } catch {
-    smsBody = `Hey ${firstName}, I just got your request for a quote. After looking at your property, does $${quote.amount} sound fair? If that works, we can get started ${startDate}. ${smsSignature}`
-  }
+  const smsBody = `Hey ${firstName}, I looked at your lawn. It would be $${quote.amount} a week for mowing and trimming. We can get started ${displayDate}. Does that work? ${smsSignature}`
 
   // ── 5. Send SMS (only when twilio_enabled) ────────────────────────────────
   let twilioSid: string | null = null

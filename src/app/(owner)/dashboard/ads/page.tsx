@@ -387,12 +387,12 @@ export default function AdsPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-white font-semibold text-xl">Ad Intelligence</h1>
-          {metrics?.fetchedAt && (
-            <p className="text-zinc-500 text-xs mt-0.5">
-              Updated {format(new Date(metrics.fetchedAt), 'MMM d, h:mm a')}
-            </p>
-          )}
+          <h1 className="text-2xl font-bold text-white">Ad Intelligence</h1>
+          <p className="text-zinc-400 text-sm mt-0.5">
+            {metrics?.fetchedAt
+              ? `Updated ${format(new Date(metrics.fetchedAt), 'MMM d, h:mm a')}`
+              : 'Facebook Ads performance & insights'}
+          </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Preset tabs */}
