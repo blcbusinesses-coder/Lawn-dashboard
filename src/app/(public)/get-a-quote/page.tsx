@@ -1,3 +1,7 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+
 const PHONE_DISPLAY = '(260) 280-0653'
 const PHONE_E164 = '+12602800653'
 const SMS_BODY = 'Hey Gray Wolf, I would like a quote. My address is: '
@@ -29,6 +33,12 @@ function GrassRow() {
 }
 
 export default function GetAQuotePage() {
+  const [isFacebook, setIsFacebook] = useState(false)
+
+  useEffect(() => {
+    setIsFacebook(/FBAN|FBAV|FB_IAB|FBIOS/i.test(navigator.userAgent))
+  }, [])
+
   return (
     <div className="min-h-screen bg-[#eef3e8] flex flex-col overflow-x-hidden">
       <div className="flex-1 flex items-center justify-center px-5 py-12">
@@ -47,39 +57,72 @@ export default function GetAQuotePage() {
             <div className="h-1.5 bg-[#2d5a1b]" />
             <div className="p-6 space-y-6">
 
-              <div className="space-y-4">
-                {[
-                  { n: '1', text: 'Tap the button below to open your messages' },
-                  { n: '2', text: 'Fill in your property address at the end of the message' },
-                  { n: '3', text: "Hit send — we'll text your quote right back!" },
-                ].map(({ n, text }) => (
-                  <div key={n} className="flex items-start gap-3">
-                    <div className="w-7 h-7 rounded-full bg-[#eef3e8] border border-[#c8dfc0] flex items-center justify-center shrink-0 mt-0.5">
-                      <span className="text-xs font-bold text-[#2d5a1b]">{n}</span>
-                    </div>
-                    <p className="text-sm text-zinc-600 leading-snug pt-1">{text}</p>
+              {isFacebook ? (
+                /* Facebook in-app browser — can't open Messages directly */
+                <div className="space-y-5 text-center">
+                  <div className="w-14 h-14 rounded-full bg-[#eef3e8] flex items-center justify-center mx-auto">
+                    <svg className="w-7 h-7 text-[#2d5a1b]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
                   </div>
-                ))}
-              </div>
 
-              <a
-                href={SMS_URL}
-                rel="external"
-                className="flex items-center justify-center gap-2.5 w-full bg-[#2d5a1b] text-white rounded-xl py-4 text-base font-bold active:scale-[0.98] transition-all shadow-sm select-none"
-              >
-                <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-                Text Us for a Quote!
-              </a>
+                  <div>
+                    <p className="font-bold text-[#1e3d12] text-base mb-1">One quick step</p>
+                    <p className="text-sm text-zinc-500 leading-relaxed">
+                      Facebook&apos;s browser can&apos;t open your Messages app.
+                      Tap the <span className="font-semibold text-zinc-700">···</span> button at the bottom right, then choose{' '}
+                      <span className="font-semibold text-zinc-700">&ldquo;Open in Safari&rdquo;</span>
+                    </p>
+                  </div>
 
-              <p className="text-xs text-zinc-400 text-center">
-                Button not opening?{' '}
-                <a href={`sms:${PHONE_E164}`} className="text-[#2d5a1b] font-semibold underline underline-offset-2">
-                  Tap to text {PHONE_DISPLAY}
-                </a>
-              </p>
+                  <div className="border-t border-zinc-100 pt-4">
+                    <p className="text-xs text-zinc-400 mb-2">Or text us directly</p>
+                    <a
+                      href={SMS_URL}
+                      className="text-2xl font-extrabold text-[#2d5a1b] tracking-wide"
+                    >
+                      {PHONE_DISPLAY}
+                    </a>
+                    <p className="text-xs text-zinc-400 mt-1">Just include your address and we&apos;ll quote you back</p>
+                  </div>
+                </div>
+              ) : (
+                /* Normal browser */
+                <>
+                  <div className="space-y-4">
+                    {[
+                      { n: '1', text: 'Tap the button below to open your messages' },
+                      { n: '2', text: 'Fill in your property address at the end of the message' },
+                      { n: '3', text: "Hit send — we'll text your quote right back!" },
+                    ].map(({ n, text }) => (
+                      <div key={n} className="flex items-start gap-3">
+                        <div className="w-7 h-7 rounded-full bg-[#eef3e8] border border-[#c8dfc0] flex items-center justify-center shrink-0 mt-0.5">
+                          <span className="text-xs font-bold text-[#2d5a1b]">{n}</span>
+                        </div>
+                        <p className="text-sm text-zinc-600 leading-snug pt-1">{text}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <a
+                    href={SMS_URL}
+                    rel="external"
+                    className="flex items-center justify-center gap-2.5 w-full bg-[#2d5a1b] text-white rounded-xl py-4 text-base font-bold active:scale-[0.98] transition-all shadow-sm select-none"
+                  >
+                    <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    Text Us for a Quote!
+                  </a>
+
+                  <p className="text-xs text-zinc-400 text-center">
+                    Opens your messages app with the text pre-filled —
+                    just add your address and hit send.
+                  </p>
+                </>
+              )}
             </div>
           </div>
 
