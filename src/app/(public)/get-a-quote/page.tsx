@@ -34,9 +34,11 @@ function GrassRow() {
 
 export default function GetAQuotePage() {
   const [isFacebook, setIsFacebook] = useState(false)
+  const [pageUrl, setPageUrl] = useState('')
 
   useEffect(() => {
     setIsFacebook(/FBAN|FBAV|FB_IAB|FBIOS/i.test(navigator.userAgent))
+    setPageUrl(window.location.href)
   }, [])
 
   return (
@@ -71,20 +73,29 @@ export default function GetAQuotePage() {
                     <p className="font-bold text-[#1e3d12] text-base mb-1">One quick step</p>
                     <p className="text-sm text-zinc-500 leading-relaxed">
                       Facebook&apos;s browser can&apos;t open your Messages app.
-                      Tap the <span className="font-semibold text-zinc-700">···</span> button at the top or bottom right of your screen, then choose{' '}
-                      <span className="font-semibold text-zinc-700">&ldquo;Open in Safari&rdquo;</span>
+                      Tap the button below to open this page in Safari, then hit &ldquo;Text Us&rdquo;.
                     </p>
                   </div>
 
-                  <div className="border-t border-zinc-100 pt-4">
-                    <p className="text-xs text-zinc-400 mb-2">Or text us directly</p>
+                  {pageUrl && (
                     <a
-                      href={SMS_URL}
-                      className="text-2xl font-extrabold text-[#2d5a1b] tracking-wide"
+                      href={pageUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center justify-center gap-2 w-full bg-[#2d5a1b] text-white rounded-xl py-4 text-base font-bold active:scale-[0.98] transition-all shadow-sm"
                     >
+                      <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                      Open in Safari
+                    </a>
+                  )}
+
+                  <div className="border-t border-zinc-100 pt-2 text-center">
+                    <p className="text-xs text-zinc-400 mb-1.5">Or text us directly</p>
+                    <a href={SMS_URL} className="text-xl font-extrabold text-[#2d5a1b] tracking-wide">
                       {PHONE_DISPLAY}
                     </a>
-                    <p className="text-xs text-zinc-400 mt-1">Just include your address and we&apos;ll quote you back</p>
                   </div>
                 </div>
               ) : (
