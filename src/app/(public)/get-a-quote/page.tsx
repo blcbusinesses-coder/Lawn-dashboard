@@ -69,34 +69,28 @@ export default function GetAQuotePage() {
                     </svg>
                   </div>
 
-                  <div>
-                    <p className="font-bold text-[#1e3d12] text-base mb-1">One quick step</p>
+                  <div className="text-center">
+                    <p className="font-bold text-[#1e3d12] text-base mb-1">Text us directly</p>
                     <p className="text-sm text-zinc-500 leading-relaxed">
-                      Facebook&apos;s browser can&apos;t open your Messages app.
-                      Tap the button below to open this page in Safari, then hit &ldquo;Text Us&rdquo;.
+                      Tap the number below — it&apos;ll open your Messages app so you can text us for a free quote.
                     </p>
                   </div>
 
-                  {pageUrl && (
-                    <a
-                      href={pageUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center justify-center gap-2 w-full bg-[#2d5a1b] text-white rounded-xl py-4 text-base font-bold active:scale-[0.98] transition-all shadow-sm"
-                    >
-                      <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                      Open in Safari
-                    </a>
-                  )}
+                  <a
+                    href={`sms:${PHONE_E164}`}
+                    className="flex flex-col items-center justify-center w-full bg-[#2d5a1b] text-white rounded-xl py-5 active:scale-[0.98] transition-all shadow-sm"
+                  >
+                    <svg className="w-6 h-6 mb-2 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    <span className="text-2xl font-extrabold tracking-wide">{PHONE_DISPLAY}</span>
+                    <span className="text-xs opacity-75 mt-1">Tap to text us</span>
+                  </a>
 
-                  <div className="border-t border-zinc-100 pt-2 text-center">
-                    <p className="text-xs text-zinc-400 mb-1.5">Or text us directly</p>
-                    <a href={SMS_URL} className="text-xl font-extrabold text-[#2d5a1b] tracking-wide">
-                      {PHONE_DISPLAY}
-                    </a>
-                  </div>
+                  <p className="text-center text-xs text-zinc-400">
+                    Just send us your address and we&apos;ll text back a custom price.
+                  </p>
                 </div>
               ) : (
                 /* Normal browser */
