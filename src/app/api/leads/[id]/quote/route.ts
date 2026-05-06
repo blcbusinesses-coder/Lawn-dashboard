@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { lookupProperty } from '@/lib/property/lookup'
+import { openai } from '@/lib/openai/client'
 import { getTwilioClient, TWILIO_FROM } from '@/lib/twilio/client'
 import { NextRequest, NextResponse } from 'next/server'
 import { format } from 'date-fns'
@@ -272,7 +273,7 @@ export async function POST(
     ? format(new Date((lead.preferred_date as string) + 'T12:00:00'), 'EEEE, MMM d')
     : null
 
-  // ── 4. Build SMS message ───────────────────────────────────────────────────
+  // ── 4. AI price review + SMS draft ────────────────────────────────────────
   const firstName = (lead.name as string).split(' ')[0]
 
   const startDate = availDates?.length
@@ -281,7 +282,75 @@ export async function POST(
 
   const displayDate = preferredText ?? startDate
 
-  const smsBody = `Hey ${firstName}, I looked at your lawn. It would be $${quote.amount} a week for mowing and trimming. We can get started ${displayDate}. Does that work? ${smsSignature}`
+  let finalPrice = quote.amount
+  let smsBody: string
+
+  const aiStart = Date.now()
+  try {
+    const propertyContext = lotSqft
+      ? `Lot: ${lotSqft.toLocaleString()} sq ft. Mowable area: ~${mowableSqft?.toLocaleString() ?? 'unknown'} sq ft (${ratioLabel ?? 'estimate'}). Living area: ${livingSqft ? livingSqft.toLocaleString() + ' sq ft' : 'not found'}. Distance from base: ${distanceMiles != null ? distanceMiles + ' miles' : 'unknown'}.`
+      : `Property data unavailable — using default estimate.`
+
+    const systemPrompt = `You are a pricing assistant for Gray Wolf Workers, a lawn mowing service in the Kendallville, Indiana area.
+Your job is to review a tier-based price quote and draft a short, friendly SMS to send to the customer.
+
+Pricing context:
+- Tier-based system calculated price: $${quote.amount}/mow (base: $${baseQuote.amount}, drive surcharge: $${driveSurcharge})
+- Confidence: ${quote.confidence} (${quote.tier})
+- ${propertyContext}
+
+Rules for price adjustment:
+- If confidence is "estimate" (no property data), keep the calculated price as-is.
+- If the mowable area seems unusually large or small for the tier, you may nudge the price up or down by $5 at most.
+- Round to a whole number. Never go below $25 or above $200.
+- Return the final price as a plain integer on the first line, nothing else.
+
+Rules for SMS draft:
+- Second line onward: the full text message to send.
+- Casual, warm, texting style — like a real local business owner, NOT corporate.
+- Under 300 characters total for the message.
+- Mention the price, that you looked at their property/lawn, and the start date.
+- End with exactly: ${smsSignature}
+- Do NOT add quotes around the message.
+
+Format your entire response as:
+PRICE: <integer>
+MESSAGE: <the sms text>`
+
+    const res = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: systemPrompt }],
+      max_tokens: 180,
+      temperature: 0.4,
+    })
+
+    const raw = res.choices[0].message.content?.trim() ?? ''
+    const priceMatch = raw.match(/^PRICE:\s*(\d+)/m)
+    const messageMatch = raw.match(/^MESSAGE:\s*([\s\S]+)/m)
+
+    if (priceMatch) {
+      const parsed = parseInt(priceMatch[1], 10)
+      if (parsed >= 25 && parsed <= 200) finalPrice = parsed
+    }
+
+    smsBody = messageMatch
+      ? messageMatch[1].trim()
+      : `Hey ${firstName}, I looked at your lawn. It would be $${finalPrice}/mow for mowing and trimming. We can get started ${displayDate}. Does that work? ${smsSignature}`
+
+    await writeLog(adminClient, id, 'ai_quote_draft', 'success', {
+      raw_response:   raw,
+      tier_price:     quote.amount,
+      final_price:    finalPrice,
+      price_adjusted: finalPrice !== quote.amount,
+    }, Date.now() - aiStart)
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : 'Unknown'
+    smsBody = `Hey ${firstName}, I looked at your lawn. It would be $${finalPrice}/mow for mowing and trimming. We can get started ${displayDate}. Does that work? ${smsSignature}`
+    await writeLog(adminClient, id, 'ai_quote_draft', 'failed', { error: errMsg }, Date.now() - aiStart)
+  }
+
+  // Use AI-reviewed price from here on
+  const finalQuote = { ...quote, amount: finalPrice }
 
   // ── 5. Send SMS (only when twilio_enabled) ────────────────────────────────
   let twilioSid: string | null = null
@@ -303,7 +372,7 @@ export async function POST(
         phone:         lead.phone,
         body:          smsBody,
         twilio_sid:    twilioSid,
-        quote_amount:  quote.amount,
+        quote_amount:  finalQuote.amount,
         base_quote:          baseQuote.amount,
         drive_surcharge:     driveSurcharge,
         distance_miles:      distanceMiles,
@@ -338,7 +407,7 @@ export async function POST(
       drafted_text:    smsBody,
       property_data:   (propertyData?.raw ?? null),
       lot_size_sqft:   lotSqft,
-      quoted_amount:   quote.amount,
+      quoted_amount:   finalQuote.amount,
       quote_sent_at:   smsSent ? new Date().toISOString() : null,
     })
     .eq('id', id)
@@ -372,7 +441,7 @@ export async function POST(
 
   return NextResponse.json({
     success:       true,
-    quote_amount:  quote.amount,
+    quote_amount:  finalQuote.amount,
     base_quote:    baseQuote.amount,
     drive_surcharge: driveSurcharge,
     distance_miles:  distanceMiles,
