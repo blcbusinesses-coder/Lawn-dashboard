@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { format, startOfMonth, endOfMonth, eachWeekOfInterval, parseISO } from 'date-fns'
 
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'month param required (YYYY-MM)' }, { status: 400 })
   }
 
-  const supabase = await createClient()
+  const supabase = await createAdminClient()
   const monthDate = parseISO(`${monthParam}-01`)
   const monthStart = startOfMonth(monthDate)
   const monthEnd = endOfMonth(monthDate)

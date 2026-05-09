@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { format, subMonths, startOfMonth, endOfMonth, eachWeekOfInterval } from 'date-fns'
 
@@ -9,7 +9,7 @@ function csv(rows: string[][]): string {
 }
 
 export async function GET(request: NextRequest) {
-  const supabase = await createClient()
+  const supabase = await createAdminClient()
   const { searchParams } = new URL(request.url)
   const months = parseInt(searchParams.get('months') ?? '12')
 
