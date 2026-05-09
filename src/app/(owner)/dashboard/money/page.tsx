@@ -26,7 +26,8 @@ import {
 } from '@/components/ui/dialog'
 import { formatCurrency } from '@/lib/utils/currency'
 import { toast } from 'sonner'
-import { Download, Plus, Trash2, FileSpreadsheet } from 'lucide-react'
+import { Download, Plus, Trash2, FileSpreadsheet, Check } from 'lucide-react'
+import { format, subMonths } from 'date-fns'
 
 interface MonthData {
   month: string
@@ -56,13 +57,18 @@ export default function MoneyPage() {
   const [loading, setLoading] = useState(true)
   const [range, setRange] = useState(12)
   const [exporting, setExporting] = useState(false)
-  const [monthExportOpen, setMonthExportOpen] = useState(false)
-  const [monthExportValue, setMonthExportValue] = useState(() => {
-    const d = new Date()
-    d.setMonth(d.getMonth() - 1)
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  const [monthExportOpen, setMonthExportOpen]       = useState(false)
+  const [monthExporting, setMonthExporting]         = useState(false)
+  const [selectedExportMonths, setSelectedExportMonths] = useState<Set<string>>(() => {
+    const last = subMonths(new Date(), 1)
+    return new Set([format(last, 'yyyy-MM')])
   })
-  const [monthExporting, setMonthExporting] = useState(false)
+
+  // Build last 12 months as options
+  const exportMonthOptions = Array.from({ length: 12 }, (_, i) => {
+    const d = subMonths(new Date(), i)
+    return { value: format(d, 'yyyy-MM'), label: format(d, 'MMMM yyyy') }
+  })
 
   const [prepayments, setPrepayments] = useState<Prepayment[]>([])
   const [prepLoading, setPrepLoading] = useState(true)
@@ -91,19 +97,34 @@ export default function MoneyPage() {
 
   useEffect(() => { loadPrepayments() }, [loadPrepayments])
 
+  function toggleExportMonth(m: string) {
+    setSelectedExportMonths(prev => {
+      const next = new Set(prev)
+      next.has(m) ? next.delete(m) : next.add(m)
+      return next
+    })
+  }
+
   async function handleMonthExport() {
+    if (!selectedExportMonths.size) { toast.error('Select at least one month'); return }
     setMonthExporting(true)
     try {
-      const res = await fetch(`/api/money/monthly-export?month=${monthExportValue}`)
+      const sorted = [...selectedExportMonths].sort()
+      const params = sorted.length === 1
+        ? `month=${sorted[0]}`
+        : `months=${sorted.join(',')}`
+      const res = await fetch(`/api/money/monthly-export?${params}`)
       if (!res.ok) { toast.error('Export failed'); return }
       const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `gray-wolf-${monthExportValue}.csv`
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      const fileLabel = sorted.length === 1 ? sorted[0] : `${sorted[0]}_to_${sorted[sorted.length - 1]}`
+      a.download = `gray-wolf-${fileLabel}.xlsx`
       a.click()
       URL.revokeObjectURL(url)
       setMonthExportOpen(false)
+      toast.success('Downloaded!')
     } catch {
       toast.error('Export failed')
     }
@@ -354,20 +375,40 @@ export default function MoneyPage() {
 
       {/* Monthly Export Dialog */}
       <Dialog open={monthExportOpen} onOpenChange={setMonthExportOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Export Month to Google Sheets</DialogTitle></DialogHeader>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Export to Spreadsheet</DialogTitle></DialogHeader>
           <div className="space-y-3 py-1">
-            <p className="text-sm text-zinc-500">Exports a full breakdown for one month — income by job, expenses by category, employee hours and pay. Import the CSV directly into Google Sheets.</p>
-            <div className="space-y-1">
-              <Label>Month</Label>
-              <Input type="month" value={monthExportValue} onChange={(e) => setMonthExportValue(e.target.value)} />
+            <p className="text-sm text-zinc-500">
+              Select one or more months. Downloads a real <strong>.xlsx</strong> file with 5 tabs: Summary, Income, Expenses, Payroll, and Bonuses — fully broken down.
+            </p>
+            <div className="space-y-1 max-h-64 overflow-y-auto border border-zinc-200 rounded-lg divide-y divide-zinc-100">
+              {exportMonthOptions.map(opt => {
+                const selected = selectedExportMonths.has(opt.value)
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => toggleExportMonth(opt.value)}
+                    className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors text-left ${
+                      selected ? 'bg-zinc-900 text-white' : 'hover:bg-zinc-50 text-zinc-700'
+                    }`}
+                  >
+                    {opt.label}
+                    {selected && <Check size={14} />}
+                  </button>
+                )
+              })}
             </div>
+            {selectedExportMonths.size > 0 && (
+              <p className="text-xs text-zinc-500">
+                {selectedExportMonths.size} month{selectedExportMonths.size !== 1 ? 's' : ''} selected
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setMonthExportOpen(false)}>Cancel</Button>
-            <Button onClick={handleMonthExport} disabled={monthExporting}>
+            <Button onClick={handleMonthExport} disabled={monthExporting || !selectedExportMonths.size}>
               <FileSpreadsheet size={14} className="mr-1.5" />
-              {monthExporting ? 'Exporting…' : 'Download CSV'}
+              {monthExporting ? 'Exporting…' : `Download .xlsx`}
             </Button>
           </DialogFooter>
         </DialogContent>
