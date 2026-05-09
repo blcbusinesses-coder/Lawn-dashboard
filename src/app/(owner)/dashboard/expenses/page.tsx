@@ -57,17 +57,19 @@ export default function ExpensesPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [parsing, setParsing] = useState(false)
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
+    setLoadError(null)
     try {
       const res = await fetch(`/api/expenses?month=${selectedMonth}`)
-      if (!res.ok) throw new Error(await res.text())
       const data = await res.json()
+      if (!res.ok) { setLoadError(data?.error ?? `Error ${res.status}`); setLoading(false); return }
       setExpenses(Array.isArray(data) ? data : [])
       setLoading(false)
     } catch (err) {
-      console.error(err)
+      setLoadError(String(err))
       setLoading(false)
     }
   }, [selectedMonth])
@@ -205,6 +207,12 @@ export default function ExpensesPage() {
             <p className="text-xs text-zinc-400">Total</p>
             <p className="text-lg font-bold text-white mt-1">{formatCurrency(grandTotal)}</p>
           </div>
+        </div>
+      )}
+
+      {loadError && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700 mb-4">
+          <strong>Error loading expenses:</strong> {loadError}
         </div>
       )}
 
