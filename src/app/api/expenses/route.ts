@@ -1,8 +1,8 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
-  const supabase = await createClient()
+  const supabase = await createAdminClient()
   const { searchParams } = new URL(request.url)
   const month = searchParams.get('month') // format: YYYY-MM
 
@@ -21,13 +21,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createAdminClient()
   const body = await request.json()
 
   const { data, error } = await supabase
     .from('expenses')
-    .insert({ ...body, created_by: user?.id })
+    .insert({ ...body })
     .select()
     .single()
 
