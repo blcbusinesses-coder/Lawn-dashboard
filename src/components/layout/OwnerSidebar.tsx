@@ -2,38 +2,91 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import {
   Users, Home, ClipboardCheck, Receipt, FileText, Bot,
-  TrendingUp, HardHat, MessageSquare, Inbox, Star, Settings2, LogOut,
+  TrendingUp, HardHat, MessageSquare, Inbox, Star, Settings2,
   CheckSquare, BarChart2, Wrench, Gauge, Globe, CloudSun, PenTool, Filter,
+  Megaphone, DollarSign, ChevronDown, LogOut, Zap,
 } from 'lucide-react'
 
-const navItems = [
-  { href: '/dashboard/leads',      label: 'Leads',           Icon: Filter },
-  { href: '/dashboard/customers',  label: 'Customers',       Icon: Users },
-  { href: '/dashboard/properties', label: 'Properties',      Icon: Home },
-  { href: '/dashboard/jobs',       label: 'Jobs',            Icon: ClipboardCheck },
-  { href: '/dashboard/expenses',   label: 'Expenses',        Icon: Receipt },
-  { href: '/dashboard/invoices',   label: 'Invoices',        Icon: FileText },
-  { href: '/dashboard/todos',      label: 'To-Do',           Icon: CheckSquare },
-  { href: '/dashboard/equipment',  label: 'Equipment',       Icon: Wrench },
-  { href: '/dashboard/efficiency', label: 'Efficiency',      Icon: Gauge },
-  { href: '/dashboard/weather',    label: 'Weather',         Icon: CloudSun },
-  { href: '/dashboard/content',    label: 'Content',         Icon: PenTool },
-  { href: '/dashboard/agent',      label: 'Agent',           Icon: Bot },
-  { href: '/dashboard/money',      label: 'Money',           Icon: TrendingUp },
-  { href: '/dashboard/ads',        label: 'Ad Intelligence', Icon: BarChart2 },
-  { href: '/dashboard/employees',  label: 'Employees',       Icon: HardHat },
-  { href: '/dashboard/sms',        label: 'SMS',             Icon: MessageSquare },
-  { href: '/dashboard/inbox',      label: 'Inbox',           Icon: Inbox },
-  { href: '/dashboard/important',  label: 'Important',       Icon: Star },
-  { href: '/dashboard/automation', label: 'Automation',      Icon: Settings2 },
-  { href: '/dashboard/site',       label: 'Site',            Icon: Globe },
+const NAV_GROUPS = [
+  {
+    id: 'marketing',
+    label: 'Marketing',
+    Icon: Megaphone,
+    accent: 'text-purple-400',
+    dot: 'bg-purple-400',
+    items: [
+      { href: '/dashboard/ads',     label: 'Ad Intelligence', Icon: BarChart2 },
+      { href: '/dashboard/content', label: 'Content',         Icon: PenTool },
+      { href: '/dashboard/site',    label: 'Website',         Icon: Globe },
+    ],
+  },
+  {
+    id: 'crm',
+    label: 'Leads & CRM',
+    Icon: Filter,
+    accent: 'text-blue-400',
+    dot: 'bg-blue-400',
+    items: [
+      { href: '/dashboard/leads',      label: 'Leads',      Icon: Filter },
+      { href: '/dashboard/sms',        label: 'SMS',        Icon: MessageSquare },
+      { href: '/dashboard/inbox',      label: 'Inbox',      Icon: Inbox },
+      { href: '/dashboard/automation', label: 'Automation', Icon: Settings2 },
+    ],
+  },
+  {
+    id: 'operations',
+    label: 'Operations',
+    Icon: Wrench,
+    accent: 'text-green-400',
+    dot: 'bg-green-400',
+    items: [
+      { href: '/dashboard/customers',  label: 'Customers',  Icon: Users },
+      { href: '/dashboard/properties', label: 'Properties', Icon: Home },
+      { href: '/dashboard/jobs',       label: 'Jobs',       Icon: ClipboardCheck },
+      { href: '/dashboard/equipment',  label: 'Equipment',  Icon: Wrench },
+      { href: '/dashboard/weather',    label: 'Weather',    Icon: CloudSun },
+      { href: '/dashboard/efficiency', label: 'Efficiency', Icon: Gauge },
+      { href: '/dashboard/todos',      label: 'To-Do',      Icon: CheckSquare },
+    ],
+  },
+  {
+    id: 'money',
+    label: 'Money',
+    Icon: DollarSign,
+    accent: 'text-yellow-400',
+    dot: 'bg-yellow-400',
+    items: [
+      { href: '/dashboard/money',     label: 'Overview',  Icon: TrendingUp },
+      { href: '/dashboard/expenses',  label: 'Expenses',  Icon: Receipt },
+      { href: '/dashboard/invoices',  label: 'Invoices',  Icon: FileText },
+      { href: '/dashboard/employees', label: 'Employees', Icon: HardHat },
+    ],
+  },
+  {
+    id: 'intelligence',
+    label: 'Intelligence',
+    Icon: Zap,
+    accent: 'text-cyan-400',
+    dot: 'bg-cyan-400',
+    items: [
+      { href: '/dashboard/agent',     label: 'AI Agent',  Icon: Bot },
+      { href: '/dashboard/important', label: 'Important', Icon: Star },
+    ],
+  },
 ]
+
+function getGroupForPath(pathname: string): string | null {
+  for (const group of NAV_GROUPS) {
+    if (group.items.some(item => pathname.startsWith(item.href))) return group.id
+  }
+  return null
+}
 
 interface OwnerSidebarProps {
   open?: boolean
@@ -41,10 +94,33 @@ interface OwnerSidebarProps {
 }
 
 export function OwnerSidebar({ open = false, onClose }: OwnerSidebarProps) {
-  const pathname = usePathname()
-  const router = useRouter()
+  const pathname  = usePathname()
+  const router    = useRouter()
+  const activeGroupId = getGroupForPath(pathname)
+
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
+    return new Set(activeGroupId ? [activeGroupId] : ['operations'])
+  })
+
+  // Auto-open the group containing the active page
+  useEffect(() => {
+    if (activeGroupId) {
+      setOpenGroups(prev => {
+        if (prev.has(activeGroupId)) return prev
+        return new Set([...prev, activeGroupId])
+      })
+    }
+  }, [activeGroupId])
 
   useEffect(() => { onClose?.() }, [pathname]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function toggleGroup(id: string) {
+    setOpenGroups(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
 
   async function handleSignOut() {
     const supabase = createClient()
@@ -84,32 +160,65 @@ export function OwnerSidebar({ open = false, onClose }: OwnerSidebarProps) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-3 px-3">
-        <ul className="space-y-0.5">
-          {navItems.map(({ href, label, Icon }) => {
-            const active = pathname === href
-            return (
-              <li key={href}>
-                <Link
-                  href={href}
-                  className={cn(
-                    'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                    active
-                      ? 'bg-white/10 text-white'
-                      : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-100'
-                  )}
-                >
-                  <Icon size={16} strokeWidth={active ? 2.5 : 2} className={active ? 'text-white' : 'text-zinc-500'} />
-                  {label}
-                </Link>
-              </li>
-            )
-          })}
-        </ul>
+      <nav className="flex-1 overflow-y-auto py-3 px-2">
+        {NAV_GROUPS.map(group => {
+          const isOpen   = openGroups.has(group.id)
+          const isActive = activeGroupId === group.id
+
+          return (
+            <div key={group.id} className="mb-1">
+              {/* Group header */}
+              <button
+                onClick={() => toggleGroup(group.id)}
+                className={cn(
+                  'w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-colors',
+                  isActive
+                    ? 'text-white bg-white/5'
+                    : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', group.dot, isActive ? 'opacity-100' : 'opacity-50')} />
+                  <group.Icon size={13} className={cn(isActive ? group.accent : '')} />
+                  {group.label}
+                </div>
+                <ChevronDown
+                  size={13}
+                  className={cn('transition-transform duration-200', isOpen ? 'rotate-0' : '-rotate-90')}
+                />
+              </button>
+
+              {/* Items */}
+              {isOpen && (
+                <ul className="mt-0.5 ml-3 pl-3 border-l border-zinc-800 space-y-0.5">
+                  {group.items.map(({ href, label, Icon }) => {
+                    const active = pathname === href
+                    return (
+                      <li key={href}>
+                        <Link
+                          href={href}
+                          className={cn(
+                            'flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors',
+                            active
+                              ? 'bg-white/10 text-white'
+                              : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-100'
+                          )}
+                        >
+                          <Icon size={14} strokeWidth={active ? 2.5 : 2} className={active ? 'text-white' : 'text-zinc-500'} />
+                          {label}
+                        </Link>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+          )
+        })}
       </nav>
 
       {/* Sign out */}
-      <div className="px-3 py-4 border-t border-zinc-800 shrink-0">
+      <div className="px-2 py-4 border-t border-zinc-800 shrink-0">
         <button
           onClick={handleSignOut}
           className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-zinc-400 hover:bg-white/5 hover:text-zinc-100 transition-colors"

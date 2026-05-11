@@ -1,332 +1,395 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { Send, Paperclip, X, Loader2, ChevronDown, ChevronUp, Zap, RefreshCw } from 'lucide-react'
 
-// A message can have text content or a mixed content array (text + image)
-type MessageContent = string | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }>
+interface ToolCall {
+  tool: string
+  input: Record<string, unknown>
+}
 
 interface Message {
-  role: 'user' | 'assistant'
-  content: MessageContent
-}
-
-interface Task {
   id: string
-  title: string
-  description: string | null
-  trigger_type: string
-  trigger_date: string | null
-  status: 'pending' | 'done' | 'cancelled'
+  role: 'user' | 'assistant'
+  content: string
+  toolCalls?: ToolCall[]
+  imageUrl?: string
 }
 
-function messageText(content: MessageContent): string {
-  if (typeof content === 'string') return content
-  return content.filter((c) => c.type === 'text').map((c) => (c as { type: 'text'; text: string }).text).join(' ')
+const TOOL_LABELS: Record<string, string> = {
+  query_customers:          'Looking up customers…',
+  query_jobs:               'Fetching job data…',
+  query_expenses:           'Checking expenses…',
+  query_revenue:            'Pulling revenue…',
+  query_properties:         'Loading properties…',
+  query_employee_hours:     'Checking employee hours…',
+  create_customer:          'Creating customer…',
+  update_customer:          'Updating customer…',
+  create_property:          'Adding property…',
+  bulk_create_properties:   'Creating properties…',
+  update_property:          'Updating property…',
+  create_job_log:           'Logging job…',
+  create_expense:           'Recording expense…',
+  send_sms:                 'Sending SMS…',
+  generate_monthly_invoices:'Generating invoices…',
+  create_scheduled_task:    'Creating task…',
+  list_scheduled_tasks:     'Loading tasks…',
+  update_scheduled_task:    'Updating task…',
+  list_one_off_jobs:        'Loading one-off jobs…',
+  create_one_off_job:       'Creating one-off job…',
+  complete_one_off_job:     'Completing job…',
+}
+
+const QUICK_PROMPTS = [
+  'How much revenue did we make this month?',
+  'Show me all active properties',
+  'Which customers haven\'t been mowed in 2 weeks?',
+  'What are our expenses this month by category?',
+  'Who are our top 5 customers by revenue?',
+  'Generate invoices for last month',
+]
+
+function ToolCallBadge({ toolCalls }: { toolCalls: ToolCall[] }) {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <div className="mb-2">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-1.5 text-xs text-cyan-400/70 hover:text-cyan-400 transition-colors"
+      >
+        <Zap size={11} className="text-cyan-400" />
+        Used {toolCalls.length} tool{toolCalls.length !== 1 ? 's' : ''}
+        {expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+      </button>
+      {expanded && (
+        <div className="mt-1.5 space-y-1">
+          {toolCalls.map((t, i) => (
+            <div key={i} className="flex items-start gap-2 bg-white/5 rounded-lg px-2.5 py-1.5 text-xs font-mono">
+              <span className="text-cyan-400 shrink-0">{t.tool}</span>
+              <span className="text-zinc-500 truncate">{JSON.stringify(t.input)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AssistantMessage({ msg }: { msg: Message }) {
+  return (
+    <div className="flex gap-3 max-w-4xl">
+      {/* Wolf avatar */}
+      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shrink-0 mt-0.5 shadow-lg shadow-cyan-500/20">
+        <Zap size={13} className="text-white" />
+      </div>
+      <div className="flex-1 min-w-0">
+        {msg.toolCalls && msg.toolCalls.length > 0 && (
+          <ToolCallBadge toolCalls={msg.toolCalls} />
+        )}
+        <div className="prose prose-invert prose-sm max-w-none
+          prose-p:text-zinc-200 prose-p:leading-relaxed
+          prose-strong:text-white prose-strong:font-semibold
+          prose-headings:text-white prose-headings:font-semibold
+          prose-code:text-cyan-300 prose-code:bg-white/10 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs
+          prose-pre:bg-white/5 prose-pre:border prose-pre:border-white/10
+          prose-table:text-sm prose-th:text-zinc-300 prose-th:font-semibold prose-th:border-b prose-th:border-white/20 prose-td:border-b prose-td:border-white/10 prose-td:text-zinc-300
+          prose-ul:text-zinc-300 prose-li:text-zinc-300
+          prose-a:text-cyan-400 prose-a:no-underline hover:prose-a:underline
+          [&_table]:border-collapse [&_table]:w-full [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_td]:px-3 [&_td]:py-2
+        ">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function UserMessage({ msg }: { msg: Message }) {
+  return (
+    <div className="flex gap-3 justify-end max-w-4xl ml-auto">
+      <div className="max-w-lg">
+        {msg.imageUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={msg.imageUrl} alt="Attached" className="rounded-xl mb-1.5 max-h-48 object-cover border border-white/10" />
+        )}
+        <div className="bg-white/10 backdrop-blur-sm border border-white/10 rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm text-white">
+          {msg.content}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ThinkingIndicator({ activeTool }: { activeTool: string | null }) {
+  return (
+    <div className="flex gap-3 max-w-4xl">
+      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shrink-0 shadow-lg shadow-cyan-500/20">
+        <Zap size={13} className="text-white animate-pulse" />
+      </div>
+      <div className="flex items-center gap-2 text-sm text-zinc-400">
+        {activeTool ? (
+          <>
+            <Loader2 size={13} className="animate-spin text-cyan-400" />
+            <span className="text-cyan-400/80">{TOOL_LABELS[activeTool] ?? `Running ${activeTool}…`}</span>
+          </>
+        ) : (
+          <div className="flex gap-1 pt-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-zinc-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+            <span className="w-1.5 h-1.5 rounded-full bg-zinc-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+            <span className="w-1.5 h-1.5 rounded-full bg-zinc-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 export default function AgentPage() {
-  const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [pendingImage, setPendingImage] = useState<string | null>(null) // base64 data URL
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [tasksLoading, setTasksLoading] = useState(true)
+  const [messages, setMessages]     = useState<Message[]>([])
+  const [input, setInput]           = useState('')
+  const [loading, setLoading]       = useState(false)
+  const [activeTool, setActiveTool] = useState<string | null>(null)
+  const [pendingImage, setPendingImage] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const fileRef   = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
-  const loadTasks = useCallback(async () => {
-    setTasksLoading(true)
-    const res = await fetch('/api/tasks')
-    if (res.ok) {
-      const data = await res.json()
-      setTasks(data.filter((t: Task) => t.status === 'pending'))
-    }
-    setTasksLoading(false)
-  }, [])
-
-  useEffect(() => { loadTasks() }, [loadTasks])
-
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleImageAttach(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = (ev) => {
-      setPendingImage(ev.target?.result as string)
-    }
+    reader.onload = ev => setPendingImage(ev.target?.result as string)
     reader.readAsDataURL(file)
-    // reset input so same file can be re-selected
-    e.target.value = ''
   }
 
-  async function handleSend() {
-    const text = input.trim()
-    if ((!text && !pendingImage) || loading) return
+  const sendMessage = useCallback(async (text?: string) => {
+    const userText = (text ?? input).trim()
+    if (!userText && !pendingImage) return
+    if (loading) return
 
-    // Build user message content
-    let userContent: MessageContent
-    if (pendingImage) {
-      const parts: MessageContent = []
-      if (text) (parts as Array<unknown>).push({ type: 'text', text })
-      ;(parts as Array<unknown>).push({ type: 'image_url', image_url: { url: pendingImage } })
-      userContent = parts as MessageContent
-    } else {
-      userContent = text
+    const userMsg: Message = {
+      id:       crypto.randomUUID(),
+      role:     'user',
+      content:  userText,
+      imageUrl: pendingImage ?? undefined,
     }
 
-    const newMessages: Message[] = [...messages, { role: 'user', content: userContent }]
+    const newMessages = [...messages, userMsg]
     setMessages(newMessages)
     setInput('')
     setPendingImage(null)
     setLoading(true)
+    setActiveTool(null)
+
+    // Build payload for API
+    const apiMessages = newMessages.map(m => ({
+      role:    m.role,
+      content: m.content,
+    }))
 
     try {
       const res = await fetch('/api/agent', {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newMessages }),
+        body:    JSON.stringify({ messages: apiMessages }),
       })
 
-      const reader = res.body?.getReader()
+      if (!res.body) throw new Error('No response body')
+
+      const reader  = res.body.getReader()
       const decoder = new TextDecoder()
-      let reply = ''
+      let buffer    = ''
+      const toolCalls: ToolCall[] = []
+      let finalText = ''
 
-      if (reader) {
-        setMessages([...newMessages, { role: 'assistant', content: '' }])
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          reply += decoder.decode(value, { stream: true })
-          setMessages([...newMessages, { role: 'assistant', content: reply }])
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+
+        // Parse out tool call events (delimited by \x00TOOL:...\x00)
+        let processed = ''
+        let i = 0
+        while (i < buffer.length) {
+          const toolStart = buffer.indexOf('\x00TOOL:', i)
+          if (toolStart === -1) {
+            processed += buffer.slice(i)
+            i = buffer.length
+          } else {
+            processed += buffer.slice(i, toolStart)
+            const toolEnd = buffer.indexOf('\x00', toolStart + 1)
+            if (toolEnd === -1) {
+              // Incomplete tool event — keep in buffer
+              buffer = buffer.slice(toolStart)
+              i = buffer.length
+              break
+            }
+            const toolJson = buffer.slice(toolStart + 6, toolEnd)
+            try {
+              const parsed = JSON.parse(toolJson)
+              toolCalls.push({ tool: parsed.tool, input: parsed.input })
+              setActiveTool(parsed.tool)
+            } catch { /* ignore parse errors */ }
+            i = toolEnd + 1
+          }
         }
+        if (i === buffer.length) buffer = ''
+
+        finalText += processed
       }
-    } catch {
-      setMessages([...newMessages, { role: 'assistant', content: 'Error: could not connect to agent.' }])
+
+      setActiveTool(null)
+      const assistantMsg: Message = {
+        id:       crypto.randomUUID(),
+        role:     'assistant',
+        content:  finalText,
+        toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      }
+      setMessages(prev => [...prev, assistantMsg])
+    } catch (err) {
+      setMessages(prev => [...prev, {
+        id:      crypto.randomUUID(),
+        role:    'assistant',
+        content: `**Error:** ${err instanceof Error ? err.message : 'Something went wrong'}`,
+      }])
+    } finally {
+      setLoading(false)
+      setActiveTool(null)
     }
+  }, [input, messages, loading, pendingImage])
 
-    setLoading(false)
-    // Refresh tasks after every message (agent may have created/updated tasks)
-    loadTasks()
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent) {
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      handleSend()
+      sendMessage()
     }
   }
 
-  async function completeTask(id: string) {
-    await fetch('/api/tasks', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, status: 'done' }),
-    })
-    loadTasks()
-  }
-
-  const SUGGESTIONS = [
-    'How many lawns were mowed last month?',
-    'What were my total expenses this month?',
-    'Generate invoices for last month',
-    'List all pending scheduled tasks',
-  ]
+  const isEmpty = messages.length === 0
 
   return (
-    <div className="flex h-full gap-0">
-      {/* ── Chat panel ──────────────────────────────────────────────────── */}
-      <div className="flex flex-col flex-1 min-w-0">
-        {/* Header */}
-        <div className="px-8 py-5 border-b border-zinc-200 bg-white">
-          <h1 className="text-xl font-bold text-zinc-900">AI Agent</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">Ask questions or give commands — I can read and write your business data</p>
-        </div>
+    <div className="flex flex-col h-full bg-zinc-950 text-white relative overflow-hidden">
+      {/* Background gradient */}
+      <div className="absolute inset-0 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 pointer-events-none" />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-8 py-6 space-y-4">
-          {messages.length === 0 && (
-            <div className="text-center mt-12">
-              <div className="text-4xl mb-3">🤖</div>
-              <h2 className="text-lg font-semibold text-zinc-700 mb-2">Gray Wolf Agent</h2>
-              <p className="text-sm text-zinc-500 mb-6">
-                Ask questions, create customers and properties, send texts, generate invoices, or upload a photo of an address list.
-              </p>
-              <div className="grid grid-cols-2 gap-2 max-w-xl mx-auto">
-                {SUGGESTIONS.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setInput(s)}
-                    className="text-left text-sm bg-white border border-zinc-200 rounded-lg px-3 py-2.5 hover:bg-zinc-50 hover:border-zinc-300 transition-colors text-zinc-600"
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {messages.map((msg, i) => (
-            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div
-                className={`max-w-2xl rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap ${
-                  msg.role === 'user'
-                    ? 'bg-zinc-900 text-white rounded-br-sm'
-                    : 'bg-white border border-zinc-200 text-zinc-800 rounded-bl-sm'
-                }`}
-              >
-                {/* Show embedded image previews */}
-                {Array.isArray(msg.content) && msg.content.map((part, pi) =>
-                  part.type === 'image_url' ? (
-                    <img
-                      key={pi}
-                      src={(part as { type: 'image_url'; image_url: { url: string } }).image_url.url}
-                      alt="uploaded"
-                      className="max-w-xs rounded mb-1"
-                    />
-                  ) : (
-                    <span key={pi}>{(part as { type: 'text'; text: string }).text}</span>
-                  )
-                )}
-                {typeof msg.content === 'string' && (
-                  msg.role === 'assistant' && !msg.content && loading && i === messages.length - 1 ? (
-                    <span className="inline-flex gap-1">
-                      <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                    </span>
-                  ) : msg.role === 'assistant' ? (
-                    <div className="prose prose-sm prose-zinc max-w-none
-                      [&>p]:mb-2 [&>p:last-child]:mb-0
-                      [&>ul]:my-2 [&>ul]:pl-4 [&>ul>li]:mb-0.5
-                      [&>ol]:my-2 [&>ol]:pl-4 [&>ol>li]:mb-0.5
-                      [&>h1]:text-base [&>h1]:font-semibold [&>h1]:mb-1
-                      [&>h2]:text-sm [&>h2]:font-semibold [&>h2]:mb-1
-                      [&>h3]:text-sm [&>h3]:font-semibold [&>h3]:mb-1
-                      [&>strong]:font-semibold
-                      [&>code]:bg-zinc-100 [&>code]:px-1 [&>code]:rounded [&>code]:text-xs
-                      [&>pre]:bg-zinc-100 [&>pre]:rounded [&>pre]:p-2 [&>pre]:text-xs [&>pre]:overflow-auto
-                      [&>table]:w-full [&>table]:text-xs [&>table]:border-collapse
-                      [&_th]:border [&_th]:border-zinc-200 [&_th]:px-2 [&_th]:py-1 [&_th]:bg-zinc-50 [&_th]:font-medium
-                      [&_td]:border [&_td]:border-zinc-200 [&_td]:px-2 [&_td]:py-1
-                      [&>hr]:border-zinc-200 [&>hr]:my-2">
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
-                    </div>
-                  ) : (
-                    msg.content
-                  )
-                )}
-              </div>
-            </div>
-          ))}
-
-          <div ref={bottomRef} />
-        </div>
-
-        {/* Input */}
-        <div className="px-8 py-4 border-t border-zinc-200 bg-white">
-          {/* Image preview */}
-          {pendingImage && (
-            <div className="mb-2 flex items-center gap-2">
-              <img src={pendingImage} alt="preview" className="h-16 w-16 object-cover rounded border border-zinc-200" />
-              <button
-                onClick={() => setPendingImage(null)}
-                className="text-xs text-zinc-400 hover:text-zinc-600"
-              >
-                Remove
-              </button>
-            </div>
-          )}
-          <div className="flex gap-2 items-end">
-            {/* Hidden file input */}
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleFileChange}
-            />
-            <button
-              onClick={() => fileRef.current?.click()}
-              className="flex-none h-[60px] w-10 flex items-center justify-center rounded-lg border border-zinc-200 hover:bg-zinc-50 text-zinc-400 hover:text-zinc-600 transition-colors text-lg"
-              title="Attach image"
-            >
-              📎
-            </button>
-            <Textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask or command… (Enter to send, Shift+Enter for new line)"
-              rows={2}
-              className="resize-none flex-1"
-              disabled={loading}
-            />
-            <Button
-              onClick={handleSend}
-              disabled={loading || (!input.trim() && !pendingImage)}
-              className="h-[60px] px-5"
-            >
-              Send
-            </Button>
+      {/* Header */}
+      <div className="relative z-10 flex items-center justify-between px-6 py-4 border-b border-white/5">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/30">
+            <Zap size={15} className="text-white" />
           </div>
-          <p className="text-xs text-zinc-400 mt-1.5">GPT-4o with Vision · live Supabase data · full write access</p>
+          <div>
+            <h1 className="text-sm font-semibold text-white">Wolf</h1>
+            <p className="text-xs text-zinc-500">AI Business Agent · Claude Sonnet</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+          <span className="text-xs text-zinc-500">Active</span>
+          {messages.length > 0 && (
+            <button
+              onClick={() => setMessages([])}
+              className="ml-2 text-zinc-600 hover:text-zinc-400 transition-colors"
+              title="Clear conversation"
+            >
+              <RefreshCw size={13} />
+            </button>
+          )}
         </div>
       </div>
 
-      {/* ── Tasks sidebar ──────────────────────────────────────────────── */}
-      <div className="w-72 border-l border-zinc-200 flex flex-col bg-zinc-50 shrink-0">
-        <div className="px-4 py-4 border-b border-zinc-200 bg-white flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-zinc-800">Scheduled Tasks</h2>
-          {tasks.length > 0 && (
-            <Badge variant="secondary">{tasks.length}</Badge>
-          )}
-        </div>
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
-          {tasksLoading ? (
-            <p className="text-xs text-zinc-400 text-center mt-4">Loading…</p>
-          ) : tasks.length === 0 ? (
-            <p className="text-xs text-zinc-400 text-center mt-4">No pending tasks</p>
-          ) : (
-            tasks.map((task) => (
-              <div key={task.id} className="bg-white rounded-lg border border-zinc-200 p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium text-zinc-800 truncate">{task.title}</p>
-                    {task.description && (
-                      <p className="text-xs text-zinc-500 mt-0.5 line-clamp-2">{task.description}</p>
-                    )}
-                    {task.trigger_date && (
-                      <p className="text-xs text-zinc-400 mt-1">{task.trigger_date}</p>
-                    )}
-                    <Badge variant="outline" className="text-xs mt-1">{task.trigger_type}</Badge>
-                  </div>
-                  <button
-                    onClick={() => completeTask(task.id)}
-                    className="flex-none text-xs text-zinc-400 hover:text-green-600 transition-colors mt-0.5"
-                    title="Mark done"
-                  >
-                    ✓
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-        <div className="p-3 border-t border-zinc-200">
+      {/* Messages */}
+      <div className="relative z-10 flex-1 overflow-y-auto px-6 py-6 space-y-6">
+        {isEmpty ? (
+          <div className="flex flex-col items-center justify-center h-full text-center py-12">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center mb-5 shadow-2xl shadow-cyan-500/30">
+              <Zap size={28} className="text-white" />
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-2">Wolf is ready</h2>
+            <p className="text-zinc-500 text-sm max-w-sm mb-8 leading-relaxed">
+              Your AI business agent. Ask anything about your customers, jobs, money, or tell Wolf to take action.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-xl w-full">
+              {QUICK_PROMPTS.map(prompt => (
+                <button
+                  key={prompt}
+                  onClick={() => sendMessage(prompt)}
+                  className="text-left px-4 py-3 rounded-xl border border-white/10 hover:border-white/20 hover:bg-white/5 text-sm text-zinc-400 hover:text-zinc-200 transition-all"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          messages.map(msg =>
+            msg.role === 'user'
+              ? <UserMessage key={msg.id} msg={msg} />
+              : <AssistantMessage key={msg.id} msg={msg} />
+          )
+        )}
+        {loading && <ThinkingIndicator activeTool={activeTool} />}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input area */}
+      <div className="relative z-10 px-6 py-4 border-t border-white/5">
+        {pendingImage && (
+          <div className="mb-2 relative inline-block">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={pendingImage} alt="Pending" className="h-16 rounded-lg border border-white/10 object-cover" />
+            <button
+              onClick={() => setPendingImage(null)}
+              className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-zinc-700 rounded-full flex items-center justify-center hover:bg-zinc-600"
+            >
+              <X size={10} />
+            </button>
+          </div>
+        )}
+        <div className="flex items-end gap-2 bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus-within:border-cyan-500/40 transition-colors">
           <button
-            onClick={() => setInput('Create a reminder: ')}
-            className="w-full text-xs text-zinc-500 hover:text-zinc-700 text-left px-2 py-1.5 rounded hover:bg-zinc-100 transition-colors"
+            onClick={() => fileRef.current?.click()}
+            className="text-zinc-500 hover:text-zinc-300 transition-colors shrink-0 mb-1.5"
+            title="Attach image"
           >
-            + Ask agent to create a task…
+            <Paperclip size={16} />
+          </button>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImageAttach} />
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask Wolf anything about your business…"
+            rows={1}
+            className="flex-1 bg-transparent resize-none text-sm text-white placeholder-zinc-600 focus:outline-none min-h-[24px] max-h-36 overflow-y-auto py-1.5 leading-relaxed"
+            style={{ height: 'auto' }}
+            onInput={e => {
+              const el = e.currentTarget
+              el.style.height = 'auto'
+              el.style.height = Math.min(el.scrollHeight, 144) + 'px'
+            }}
+          />
+          <button
+            onClick={() => sendMessage()}
+            disabled={loading || (!input.trim() && !pendingImage)}
+            className="shrink-0 mb-1 w-7 h-7 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center disabled:opacity-30 hover:shadow-lg hover:shadow-cyan-500/30 transition-all"
+          >
+            {loading
+              ? <Loader2 size={13} className="animate-spin text-white" />
+              : <Send size={13} className="text-white" />
+            }
           </button>
         </div>
+        <p className="text-center text-xs text-zinc-700 mt-2">Claude Sonnet · Real business data · Can take actions</p>
       </div>
     </div>
   )
