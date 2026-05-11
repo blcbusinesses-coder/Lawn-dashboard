@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -8,13 +8,9 @@ import {
   BarChart, Bar, LineChart, Line, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
-import {
-  Send, Paperclip, X, Loader2, ChevronDown, ChevronUp,
-  Zap, RefreshCw, Volume2, VolumeX, Search, ArrowUpDown, Calendar,
-} from 'lucide-react'
+import { Send, Loader2, History, Plus, X, Search, ArrowUpDown, Volume2, VolumeX } from 'lucide-react'
 import type { MapLocation } from '@/components/agent/AgentMapView'
 
-// Leaflet requires no-SSR
 const AgentMapView = dynamic(() => import('@/components/agent/AgentMapView'), { ssr: false })
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -30,13 +26,23 @@ interface Message {
   content:   string
   toolCalls?: ToolCall[]
   visuals?:  Visual[]
-  imageUrl?: string
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+interface StoredChat {
+  id:        string
+  title:     string
+  createdAt: string
+  messages:  Message[]
+}
+
+// ── Tiny helpers ──────────────────────────────────────────────────────────────
+const genId  = () => Math.random().toString(36).slice(2, 10)
+const delay  = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
+const COLORS = ['#06b6d4', '#3b82f6', '#a855f7', '#f97316', '#22c55e', '#ef4444']
+
 const TOOL_LABELS: Record<string, string> = {
-  query_customers: 'Looking up customers…', query_jobs: 'Fetching job data…',
-  query_expenses: 'Checking expenses…', query_revenue: 'Pulling revenue…',
+  query_customers: 'Checking customers…', query_jobs: 'Fetching jobs…',
+  query_expenses: 'Reviewing expenses…', query_revenue: 'Pulling revenue…',
   query_properties: 'Loading properties…', query_employee_hours: 'Checking hours…',
   create_customer: 'Creating customer…', update_customer: 'Updating customer…',
   create_property: 'Adding property…', bulk_create_properties: 'Creating properties…',
@@ -46,67 +52,76 @@ const TOOL_LABELS: Record<string, string> = {
   list_scheduled_tasks: 'Loading tasks…', update_scheduled_task: 'Updating task…',
   list_one_off_jobs: 'Loading jobs…', create_one_off_job: 'Creating job…',
   complete_one_off_job: 'Completing job…',
-  render_chart: 'Building chart…', render_table: 'Building table…', render_map: 'Building map…',
-  web_search: 'Searching the web…',
+  render_chart: 'Building chart…', render_table: 'Building table…',
+  render_map: 'Mapping locations…', web_search: 'Searching web…',
 }
 
-const DEFAULT_COLORS = ['#06b6d4', '#3b82f6', '#a855f7', '#f97316', '#22c55e', '#ef4444']
+// ── localStorage ──────────────────────────────────────────────────────────────
+function getStoredChats(): StoredChat[] {
+  if (typeof window === 'undefined') return []
+  try { return JSON.parse(localStorage.getItem('wolfChats') || '[]') } catch { return [] }
+}
+function saveStoredChat(chat: StoredChat) {
+  if (typeof window === 'undefined') return
+  const all = getStoredChats()
+  const idx = all.findIndex(c => c.id === chat.id)
+  if (idx >= 0) all[idx] = chat; else all.unshift(chat)
+  localStorage.setItem('wolfChats', JSON.stringify(all.slice(0, 50)))
+}
 
-const QUICK_PROMPTS = [
-  'Morning briefing — what needs my attention today?',
-  'Show revenue vs expenses as a chart for the last 3 months',
-  'Show all active properties on a map',
-  'Which customers haven\'t been mowed in 2+ weeks?',
-  'Search: average lawn mowing prices in my area',
-  'Generate invoices for last month',
-]
+// ── Stream parser ─────────────────────────────────────────────────────────────
+function parseStream(raw: string) {
+  const tools: ToolCall[] = []; const visuals: Visual[] = []
+  const re = /\x00(TOOL|VISUAL):([^\x00]*)\x00/g; let m
+  while ((m = re.exec(raw)) !== null) {
+    try { const d = JSON.parse(m[2]); m[1] === 'TOOL' ? tools.push(d) : visuals.push(d) } catch { /**/ }
+  }
+  return { text: raw.replace(/\x00(TOOL|VISUAL):[^\x00]*\x00/g, ''), tools, visuals }
+}
 
-// ── Voice (browser TTS) ───────────────────────────────────────────────────────
+// ── Voice ─────────────────────────────────────────────────────────────────────
 function speak(text: string) {
   if (!window.speechSynthesis) return
   window.speechSynthesis.cancel()
-  const clean = text
-    .replace(/\*\*/g, '').replace(/\*/g, '').replace(/#{1,6}\s/g, '')
-    .replace(/\|/g, ',').replace(/`/g, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+  const clean = text.replace(/\*\*/g,'').replace(/\*/g,'').replace(/#{1,6}\s/g,'').replace(/`/g,'').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1')
   const utt = new SpeechSynthesisUtterance(clean)
-  utt.rate = 1.0; utt.pitch = 1.0
   window.speechSynthesis.speak(utt)
 }
 function stopSpeak() { window.speechSynthesis?.cancel() }
 
-// ── Visual renderers ──────────────────────────────────────────────────────────
+// ── Visual sub-components ─────────────────────────────────────────────────────
 function AgentChart({ v }: { v: ChartData }) {
-  const colors = v.colors?.length ? v.colors : DEFAULT_COLORS
+  const cols = v.colors?.length ? v.colors : COLORS
   return (
-    <div className="mt-3 bg-white/5 border border-white/10 rounded-xl p-4">
-      <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-3">{v.title}</p>
-      <ResponsiveContainer width="100%" height={200}>
+    <div className="bg-white/5 border border-white/[0.07] rounded-2xl p-4">
+      <p className="text-[10px] font-semibold text-white/30 uppercase tracking-widest mb-3">{v.title}</p>
+      <ResponsiveContainer width="100%" height={170}>
         {v.chartType === 'line' ? (
-          <LineChart data={v.data as Record<string, unknown>[]}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
-            <XAxis dataKey={v.xKey} tick={{ fontSize: 11, fill: '#71717a' }} />
-            <YAxis tick={{ fontSize: 11, fill: '#71717a' }} width={48} />
-            <Tooltip contentStyle={{ background: '#18181b', border: '1px solid #ffffff20', borderRadius: 8, fontSize: 12 }} />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
-            {v.yKeys.map((k, i) => <Line key={k} type="monotone" dataKey={k} stroke={colors[i % colors.length]} strokeWidth={2} dot={{ r: 3 }} />)}
+          <LineChart data={v.data as Record<string,unknown>[]}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff0d" />
+            <XAxis dataKey={v.xKey} tick={{ fontSize:10, fill:'#52525b' }} />
+            <YAxis tick={{ fontSize:10, fill:'#52525b' }} width={38} />
+            <Tooltip contentStyle={{ background:'#09090b', border:'1px solid #ffffff15', borderRadius:8, fontSize:11 }} />
+            <Legend wrapperStyle={{ fontSize:10 }} />
+            {v.yKeys.map((k,i) => <Line key={k} type="monotone" dataKey={k} stroke={cols[i%cols.length]} strokeWidth={2} dot={{ r:2 }} />)}
           </LineChart>
         ) : v.chartType === 'area' ? (
-          <AreaChart data={v.data as Record<string, unknown>[]}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
-            <XAxis dataKey={v.xKey} tick={{ fontSize: 11, fill: '#71717a' }} />
-            <YAxis tick={{ fontSize: 11, fill: '#71717a' }} width={48} />
-            <Tooltip contentStyle={{ background: '#18181b', border: '1px solid #ffffff20', borderRadius: 8, fontSize: 12 }} />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
-            {v.yKeys.map((k, i) => <Area key={k} type="monotone" dataKey={k} stroke={colors[i % colors.length]} fill={colors[i % colors.length] + '30'} strokeWidth={2} />)}
+          <AreaChart data={v.data as Record<string,unknown>[]}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff0d" />
+            <XAxis dataKey={v.xKey} tick={{ fontSize:10, fill:'#52525b' }} />
+            <YAxis tick={{ fontSize:10, fill:'#52525b' }} width={38} />
+            <Tooltip contentStyle={{ background:'#09090b', border:'1px solid #ffffff15', borderRadius:8, fontSize:11 }} />
+            <Legend wrapperStyle={{ fontSize:10 }} />
+            {v.yKeys.map((k,i) => <Area key={k} type="monotone" dataKey={k} stroke={cols[i%cols.length]} fill={cols[i%cols.length]+'20'} strokeWidth={2} />)}
           </AreaChart>
         ) : (
-          <BarChart data={v.data as Record<string, unknown>[]}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
-            <XAxis dataKey={v.xKey} tick={{ fontSize: 11, fill: '#71717a' }} />
-            <YAxis tick={{ fontSize: 11, fill: '#71717a' }} width={48} />
-            <Tooltip contentStyle={{ background: '#18181b', border: '1px solid #ffffff20', borderRadius: 8, fontSize: 12 }} />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
-            {v.yKeys.map((k, i) => <Bar key={k} dataKey={k} fill={colors[i % colors.length]} radius={[3, 3, 0, 0]} />)}
+          <BarChart data={v.data as Record<string,unknown>[]}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff0d" />
+            <XAxis dataKey={v.xKey} tick={{ fontSize:10, fill:'#52525b' }} />
+            <YAxis tick={{ fontSize:10, fill:'#52525b' }} width={38} />
+            <Tooltip contentStyle={{ background:'#09090b', border:'1px solid #ffffff15', borderRadius:8, fontSize:11 }} />
+            <Legend wrapperStyle={{ fontSize:10 }} />
+            {v.yKeys.map((k,i) => <Bar key={k} dataKey={k} fill={cols[i%cols.length]} radius={[3,3,0,0]} />)}
           </BarChart>
         )}
       </ResponsiveContainer>
@@ -115,83 +130,62 @@ function AgentChart({ v }: { v: ChartData }) {
 }
 
 function AgentTable({ v }: { v: TableData }) {
-  const [sortCol, setSortCol]       = useState<number | null>(null)
-  const [sortDir, setSortDir]       = useState<'asc' | 'desc'>('asc')
-  const [filter, setFilter]         = useState('')
-  const [page, setPage]             = useState(0)
-  const PAGE_SIZE = 10
+  const [sortCol, setSortCol] = useState<number|null>(null)
+  const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc')
+  const [filter, setFilter]   = useState('')
+  const [page, setPage]       = useState(0)
+  const PG = 8
 
-  const filtered = v.rows.filter(row =>
-    !filter || row.some(cell => cell.toLowerCase().includes(filter.toLowerCase()))
-  )
-  const sorted = sortCol !== null
-    ? [...filtered].sort((a, b) => {
-        const av = a[sortCol] ?? ''; const bv = b[sortCol] ?? ''
-        const n = parseFloat(av) - parseFloat(bv)
-        const cmp = isNaN(n) ? av.localeCompare(bv) : n
-        return sortDir === 'asc' ? cmp : -cmp
+  const filtered = v.rows.filter(r => !filter || r.some(c => c.toLowerCase().includes(filter.toLowerCase())))
+  const sorted   = sortCol !== null
+    ? [...filtered].sort((a,b) => {
+        const av=a[sortCol]??''; const bv=b[sortCol]??''
+        const n=parseFloat(av)-parseFloat(bv)
+        return (sortDir==='asc'?1:-1)*(isNaN(n)?av.localeCompare(bv):n)
       })
     : filtered
+  const pages   = Math.ceil(sorted.length/PG)
+  const visible = sorted.slice(page*PG,(page+1)*PG)
 
-  const pages = Math.ceil(sorted.length / PAGE_SIZE)
-  const visible = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
-
-  function toggleSort(col: number) {
-    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortCol(col); setSortDir('asc') }
-    setPage(0)
-  }
+  function toggleSort(i:number){ if(sortCol===i)setSortDir(d=>d==='asc'?'desc':'asc'); else{setSortCol(i);setSortDir('asc')} ; setPage(0) }
 
   return (
-    <div className="mt-3 bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/10">
-        <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">{v.title}</p>
-        <div className="flex items-center gap-2">
-          <Search size={12} className="text-zinc-600" />
-          <input
-            value={filter}
-            onChange={e => { setFilter(e.target.value); setPage(0) }}
-            placeholder="Filter…"
-            className="bg-transparent text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none w-32"
-          />
+    <div className="bg-white/5 border border-white/[0.07] rounded-2xl overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.07]">
+        <p className="text-[10px] font-semibold text-white/30 uppercase tracking-widest">{v.title}</p>
+        <div className="flex items-center gap-1">
+          <Search size={10} className="text-white/20" />
+          <input value={filter} onChange={e=>{setFilter(e.target.value);setPage(0)}} placeholder="filter…"
+            className="bg-transparent text-xs text-white/60 placeholder-white/20 focus:outline-none w-28" />
         </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
-            <tr className="border-b border-white/10">
-              {v.columns.map((col, i) => (
-                <th key={i}
-                  onClick={() => toggleSort(i)}
-                  className="text-left px-3 py-2 text-zinc-500 font-medium cursor-pointer hover:text-zinc-300 select-none whitespace-nowrap"
-                >
-                  <span className="flex items-center gap-1">
-                    {col} <ArrowUpDown size={10} className={sortCol === i ? 'text-cyan-400' : 'opacity-30'} />
-                  </span>
+            <tr className="border-b border-white/[0.07]">
+              {v.columns.map((col,i) => (
+                <th key={i} onClick={()=>toggleSort(i)}
+                  className="text-left px-3 py-2 text-white/25 font-medium cursor-pointer hover:text-white/60 select-none whitespace-nowrap">
+                  <span className="flex items-center gap-1">{col}<ArrowUpDown size={9} className={sortCol===i?'text-cyan-400':'opacity-20'}/></span>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {visible.map((row, ri) => (
-              <tr key={ri} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                {row.map((cell, ci) => (
-                  <td key={ci} className="px-3 py-2 text-zinc-300 whitespace-nowrap">{cell}</td>
-                ))}
+            {visible.map((row,ri) => (
+              <tr key={ri} className="border-b border-white/[0.04] hover:bg-white/[0.03]">
+                {row.map((cell,ci) => <td key={ci} className="px-3 py-2 text-white/75 whitespace-nowrap">{cell}</td>)}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      {pages > 1 && (
-        <div className="flex items-center justify-between px-4 py-2 border-t border-white/10 text-xs text-zinc-500">
+      {pages>1 && (
+        <div className="flex items-center justify-between px-4 py-1.5 border-t border-white/[0.07] text-[10px] text-white/25">
           <span>{filtered.length} rows</span>
           <div className="flex gap-1">
-            {Array.from({ length: pages }, (_, i) => (
-              <button key={i} onClick={() => setPage(i)}
-                className={`w-5 h-5 rounded text-xs ${page === i ? 'bg-cyan-500 text-white' : 'hover:bg-white/10'}`}>
-                {i + 1}
-              </button>
+            {Array.from({length:pages},(_,i)=>(
+              <button key={i} onClick={()=>setPage(i)} className={`w-5 h-5 rounded ${page===i?'bg-white/15 text-white':'hover:bg-white/[0.07]'}`}>{i+1}</button>
             ))}
           </div>
         </div>
@@ -200,383 +194,517 @@ function AgentTable({ v }: { v: TableData }) {
   )
 }
 
-function VisualRenderer({ visual }: { visual: Visual }) {
-  if (visual.type === 'chart') return <AgentChart v={visual} />
-  if (visual.type === 'table') return <AgentTable v={visual} />
-  if (visual.type === 'map')   return (
-    <div className="mt-3">
-      <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-2">{visual.title}</p>
-      <AgentMapView locations={visual.locations} />
-    </div>
-  )
-  return null
-}
-
-// ── Tool call badge ───────────────────────────────────────────────────────────
-function ToolCallBadge({ toolCalls }: { toolCalls: ToolCall[] }) {
-  const [expanded, setExpanded] = useState(false)
+function Visuals({ visuals }: { visuals: Visual[] }) {
+  if (!visuals.length) return null
   return (
-    <div className="mb-2">
-      <button onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1.5 text-xs text-cyan-400/60 hover:text-cyan-400 transition-colors">
-        <Zap size={10} className="text-cyan-400" />
-        {toolCalls.length} tool{toolCalls.length !== 1 ? 's' : ''} used
-        {expanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
-      </button>
-      {expanded && (
-        <div className="mt-1 space-y-1">
-          {toolCalls.map((t, i) => (
-            <div key={i} className="flex items-start gap-2 bg-white/5 rounded-lg px-2.5 py-1.5 text-xs font-mono">
-              <span className="text-cyan-400 shrink-0">{t.tool}</span>
-              <span className="text-zinc-600 truncate">{JSON.stringify(t.input)}</span>
+    <div className="mt-8 w-full max-w-2xl mx-auto flex flex-col gap-4">
+      {visuals.map((v,i) => (
+        <div key={i}>
+          {v.type==='chart' && <AgentChart v={v} />}
+          {v.type==='table' && <AgentTable v={v} />}
+          {v.type==='map'   && (
+            <div className="bg-white/5 border border-white/[0.07] rounded-2xl overflow-hidden">
+              <p className="text-[10px] font-semibold text-white/30 uppercase tracking-widest px-4 pt-3 pb-2">{v.title}</p>
+              <AgentMapView locations={v.locations} />
             </div>
-          ))}
+          )}
         </div>
-      )}
+      ))}
     </div>
   )
 }
 
-// ── Message components ────────────────────────────────────────────────────────
-function AssistantMessage({ msg }: { msg: Message }) {
-  const [speaking, setSpeaking] = useState(false)
-  function toggleSpeak() {
-    if (speaking) { stopSpeak(); setSpeaking(false) }
-    else { speak(msg.content); setSpeaking(true) }
-  }
-
+// ── Wolf SVG (geometric pencil-style) ─────────────────────────────────────────
+function WolfSVG({ className }: { className?: string }) {
   return (
-    <div className="flex gap-3 max-w-4xl group">
-      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shrink-0 mt-0.5 shadow-lg shadow-cyan-500/20">
-        <Zap size={13} className="text-white" />
-      </div>
-      <div className="flex-1 min-w-0">
-        {msg.toolCalls && msg.toolCalls.length > 0 && <ToolCallBadge toolCalls={msg.toolCalls} />}
-
-        <div className="prose prose-invert prose-sm max-w-none
-          prose-p:text-zinc-200 prose-p:leading-relaxed prose-p:my-1
-          prose-strong:text-white prose-headings:text-white
-          prose-code:text-cyan-300 prose-code:bg-white/10 prose-code:px-1 prose-code:rounded prose-code:text-xs
-          prose-table:text-xs prose-th:text-zinc-300 prose-th:border-b prose-th:border-white/20 prose-td:border-b prose-td:border-white/10
-          prose-ul:text-zinc-300 prose-li:text-zinc-300 prose-li:my-0.5
-          [&_table]:border-collapse [&_table]:w-full [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_td]:px-3 [&_td]:py-2">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-        </div>
-
-        {msg.visuals?.map((v, i) => <VisualRenderer key={i} visual={v} />)}
-
-        <button onClick={toggleSpeak}
-          className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-xs text-zinc-600 hover:text-cyan-400">
-          {speaking ? <VolumeX size={11} /> : <Volume2 size={11} />}
-          {speaking ? 'Stop' : 'Read aloud'}
-        </button>
-      </div>
-    </div>
+    <svg viewBox="0 0 200 220" className={className} fill="none" stroke="currentColor"
+      strokeLinecap="round" strokeLinejoin="round">
+      {/* Head */}
+      <path d="M55 188 L28 122 L36 68 L62 44 L100 32 L138 44 L164 68 L172 122 L145 188Z" strokeWidth="1.4"/>
+      {/* Left ear */}
+      <path d="M36 68 L18 5 L72 50Z" strokeWidth="1.4"/>
+      {/* Right ear */}
+      <path d="M164 68 L182 5 L128 50Z" strokeWidth="1.4"/>
+      {/* Left inner ear */}
+      <path d="M40 65 L26 18 L66 52Z" strokeWidth="0.7" opacity="0.35"/>
+      {/* Right inner ear */}
+      <path d="M160 65 L174 18 L134 52Z" strokeWidth="0.7" opacity="0.35"/>
+      {/* Left eye — diamond */}
+      <path d="M59 85 L74 71 L89 85 L74 97Z" strokeWidth="1.2"/>
+      <circle cx="74" cy="85" r="3.5" fill="currentColor"/>
+      {/* Right eye — diamond */}
+      <path d="M111 85 L126 71 L141 85 L126 97Z" strokeWidth="1.2"/>
+      <circle cx="126" cy="85" r="3.5" fill="currentColor"/>
+      {/* Nose */}
+      <path d="M92 132 L100 121 L108 132 L100 138Z" strokeWidth="1.2"/>
+      {/* Muzzle centre line */}
+      <line x1="100" y1="138" x2="100" y2="150" strokeWidth="1" opacity="0.65"/>
+      {/* Mouth */}
+      <path d="M80 150 Q100 163 120 150" strokeWidth="1.2"/>
+      {/* Brows */}
+      <path d="M51 77 L69 65" strokeWidth="0.9" opacity="0.45"/>
+      <path d="M131 65 L149 77" strokeWidth="0.9" opacity="0.45"/>
+      {/* Forehead V */}
+      <path d="M87 52 L100 44 L113 52" strokeWidth="0.7" opacity="0.28"/>
+      {/* Cheek fur – left */}
+      <path d="M36 112 L52 106" strokeWidth="0.5" opacity="0.22"/>
+      <path d="M34 123 L50 118" strokeWidth="0.5" opacity="0.22"/>
+      {/* Cheek fur – right */}
+      <path d="M148 106 L164 112" strokeWidth="0.5" opacity="0.22"/>
+      <path d="M150 118 L166 123" strokeWidth="0.5" opacity="0.22"/>
+      {/* Snout outline */}
+      <path d="M78 118 L82 156 L100 163 L118 156 L122 118" strokeWidth="0.65" opacity="0.25"/>
+    </svg>
   )
 }
 
-function UserMessage({ msg }: { msg: Message }) {
+// ── Star field ────────────────────────────────────────────────────────────────
+function StarField() {
+  const stars = useMemo(() =>
+    Array.from({ length: 65 }, (_, i) => ({
+      id: i,
+      left: `${Math.random()*100}%`,
+      top:  `${Math.random()*100}%`,
+      size: `${Math.random()*1.8+0.4}px`,
+      op:   Math.random()*0.45+0.05,
+      dur:  `${Math.random()*5+3}s`,
+      del:  `${Math.random()*5}s`,
+    })), []
+  )
   return (
-    <div className="flex gap-3 justify-end max-w-4xl ml-auto">
-      <div className="max-w-lg">
-        {msg.imageUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={msg.imageUrl} alt="Attached" className="rounded-xl mb-1.5 max-h-48 object-cover border border-white/10" />
-        )}
-        <div className="bg-white/10 border border-white/10 rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm text-white">
-          {msg.content}
-        </div>
-      </div>
+    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      {stars.map(s => (
+        <div key={s.id} style={{
+          position:'absolute', left:s.left, top:s.top,
+          width:s.size, height:s.size, borderRadius:'50%',
+          background:'white', opacity:s.op,
+          animation:`wolf-twinkle ${s.dur} ${s.del} infinite alternate ease-in-out`,
+        }}/>
+      ))}
     </div>
   )
 }
 
-function ThinkingIndicator({ activeTool }: { activeTool: string | null }) {
-  return (
-    <div className="flex gap-3 max-w-4xl">
-      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shrink-0 shadow-lg shadow-cyan-500/20">
-        <Zap size={13} className="text-white animate-pulse" />
-      </div>
-      <div className="flex items-center gap-2 text-sm text-zinc-400 pt-1.5">
-        {activeTool ? (
-          <><Loader2 size={12} className="animate-spin text-cyan-400" />
-            <span className="text-xs text-cyan-400/80">{TOOL_LABELS[activeTool] ?? `${activeTool}…`}</span></>
-        ) : (
-          <div className="flex gap-1">
-            {[0, 150, 300].map(d => (
-              <span key={d} className="w-1.5 h-1.5 rounded-full bg-zinc-600 animate-bounce" style={{ animationDelay: `${d}ms` }} />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ── Stream parser ─────────────────────────────────────────────────────────────
-function parseStream(chunk: string, onTool: (t: ToolCall) => void, onVisual: (v: Visual) => void): string {
-  let text = ''
-  let remaining = chunk
-  while (true) {
-    const start = remaining.indexOf('\x00')
-    if (start === -1) { text += remaining; break }
-    text += remaining.slice(0, start)
-    const end = remaining.indexOf('\x00', start + 1)
-    if (end === -1) { text += remaining.slice(start); break }
-    const event = remaining.slice(start + 1, end)
-    if (event.startsWith('TOOL:')) {
-      try { onTool(JSON.parse(event.slice(5))) } catch { /* ignore */ }
-    } else if (event.startsWith('VISUAL:')) {
-      try { onVisual(JSON.parse(event.slice(7))) } catch { /* ignore */ }
-    }
-    remaining = remaining.slice(end + 1)
-  }
-  return text
+// ── Markdown renderer ─────────────────────────────────────────────────────────
+const MD_COMPONENTS = {
+  h1: ({children}: {children?: React.ReactNode}) => <h1 className="text-white text-xl font-semibold mb-3 mt-1">{children}</h1>,
+  h2: ({children}: {children?: React.ReactNode}) => <h2 className="text-white text-lg font-semibold mb-2 mt-4">{children}</h2>,
+  h3: ({children}: {children?: React.ReactNode}) => <h3 className="text-white/90 font-semibold mb-2 mt-3">{children}</h3>,
+  p:  ({children}: {children?: React.ReactNode}) => <p className="text-white/82 mb-3 leading-7">{children}</p>,
+  strong: ({children}: {children?: React.ReactNode}) => <strong className="text-white font-semibold">{children}</strong>,
+  em: ({children}: {children?: React.ReactNode}) => <em className="text-white/65">{children}</em>,
+  ul: ({children}: {children?: React.ReactNode}) => <ul className="mb-3 space-y-1.5">{children}</ul>,
+  ol: ({children}: {children?: React.ReactNode}) => <ol className="mb-3 space-y-1.5 list-decimal list-inside">{children}</ol>,
+  li: ({children}: {children?: React.ReactNode}) => <li className="text-white/82 flex items-start gap-2"><span className="text-white/25 mt-1 shrink-0">·</span><span>{children}</span></li>,
+  code: ({children, className}: {children?: React.ReactNode; className?: string}) => {
+    const block = className?.includes('language-')
+    return block
+      ? <pre className="bg-white/[0.06] rounded-xl p-4 overflow-x-auto mb-3 text-sm font-mono text-cyan-300">{children}</pre>
+      : <code className="text-cyan-400 bg-white/[0.08] px-1.5 py-0.5 rounded text-sm font-mono">{children}</code>
+  },
+  blockquote: ({children}: {children?: React.ReactNode}) => <blockquote className="border-l-2 border-white/20 pl-4 italic text-white/55 mb-3">{children}</blockquote>,
+  a: ({href, children}: {href?: string; children?: React.ReactNode}) => <a href={href} className="text-cyan-400 underline underline-offset-2 hover:text-cyan-300" target="_blank" rel="noopener">{children}</a>,
+  hr: () => <hr className="border-white/10 my-4" />,
+  table: ({children}: {children?: React.ReactNode}) => <table className="w-full text-sm mb-3 border-collapse">{children}</table>,
+  th: ({children}: {children?: React.ReactNode}) => <th className="text-left text-white/50 font-medium py-1.5 pr-4 border-b border-white/10">{children}</th>,
+  td: ({children}: {children?: React.ReactNode}) => <td className="text-white/75 py-1.5 pr-4 border-b border-white/[0.05]">{children}</td>,
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function AgentPage() {
+  const [phase, setPhase]               = useState<'idle'|'active'>('idle')
   const [messages, setMessages]         = useState<Message[]>([])
   const [input, setInput]               = useState('')
   const [loading, setLoading]           = useState(false)
-  const [activeTool, setActiveTool]     = useState<string | null>(null)
-  const [pendingImage, setPendingImage] = useState<string | null>(null)
+
+  // Cinematic text display
+  const [displayText, setDisplayText]   = useState('')
+  const [displayType, setDisplayType]   = useState<'question'|'answer'>('question')
+  const [displayVisible, setDisplayVisible] = useState(false)
+  const [toolStatus, setToolStatus]     = useState('')
+
+  // Visuals
+  const [currentVisuals, setCurrentVisuals] = useState<Visual[]>([])
+
+  // Voice
+  const [speaking, setSpeaking]         = useState(false)
+
+  // History
+  const [showHistory, setShowHistory]   = useState(false)
+  const [storedChats, setStoredChats]   = useState<StoredChat[]>([])
+
+  // Briefing
   const [briefing, setBriefing]         = useState<{ text: string; date: string } | null>(null)
-  const [briefingOpen, setBriefingOpen] = useState(false)
-  const [runningBriefing, setRunningBriefing] = useState(false)
 
-  const bottomRef   = useRef<HTMLDivElement>(null)
-  const fileRef     = useRef<HTMLInputElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const sessionIdRef = useRef<string>(genId())
+  const inputRef     = useRef<HTMLTextAreaElement>(null)
+  const scrollRef    = useRef<HTMLDivElement>(null)
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading])
-
-  // Load last proactive briefing
+  // Load morning briefing
   useEffect(() => {
     fetch('/api/site-settings')
       .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.wolf_last_briefing) {
-          setBriefing({ text: data.wolf_last_briefing, date: data.wolf_briefing_date ?? '' })
-        }
-      })
-      .catch(() => { /* ok */ })
+      .then(d => { if (d?.wolf_last_briefing) setBriefing({ text: d.wolf_last_briefing, date: d.wolf_briefing_date||'' }) })
+      .catch(() => {})
   }, [])
 
-  async function runManualBriefing() {
-    setRunningBriefing(true)
+  // Escape key → new chat
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape' && phase === 'active') handleNewChat() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
+  function activate() {
+    setPhase('active')
+    setTimeout(() => inputRef.current?.focus(), 80)
+  }
+
+  function handleNewChat() {
+    stopSpeak(); setSpeaking(false)
+    sessionIdRef.current = genId()
+    setMessages([]); setDisplayText(''); setDisplayVisible(false)
+    setCurrentVisuals([]); setToolStatus('')
+    setPhase('idle')
+  }
+
+  function openHistory() {
+    setStoredChats(getStoredChats()); setShowHistory(true)
+  }
+
+  function loadChat(chat: StoredChat) {
+    sessionIdRef.current = chat.id
+    setMessages(chat.messages)
+    setPhase('active')
+    setShowHistory(false)
+    const last = [...chat.messages].reverse().find(m => m.role === 'assistant')
+    if (last) {
+      setDisplayType('answer'); setDisplayText(last.content)
+      setCurrentVisuals(last.visuals || []); setDisplayVisible(true)
+    }
+  }
+
+  async function handleSend() {
+    if (!input.trim() || loading) return
+    const userMsg = input.trim()
+    setInput('')
+    if (phase === 'idle') { setPhase('active') }
+    setTimeout(() => inputRef.current?.focus(), 80)
+
+    const userMessage: Message = { id: genId(), role: 'user', content: userMsg }
+    const allMessages = [...messages, userMessage]
+    setMessages(allMessages)
+
+    // Show question fade-in
+    setDisplayType('question')
+    setDisplayText(userMsg)
+    setDisplayVisible(true)
+    setLoading(true)
+    setCurrentVisuals([])
+    setToolStatus('')
+
     try {
       const res = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          isProactive: true,
-          messages: [{ role: 'user', content: 'Run the daily business health check and give me the morning briefing.' }],
-        }),
+        body: JSON.stringify({ messages: allMessages }),
       })
-      if (!res.body) return
-      const reader  = res.body.getReader()
-      const decoder = new TextDecoder()
-      let text = ''
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        text += decoder.decode(value, { stream: true }).replace(/\x00[^\x00]*\x00/g, '')
-      }
-      setBriefing({ text: text.trim(), date: new Date().toISOString() })
-      setBriefingOpen(true)
-    } finally {
-      setRunningBriefing(false)
-    }
-  }
-
-  const sendMessage = useCallback(async (text?: string) => {
-    const userText = (text ?? input).trim()
-    if (!userText && !pendingImage) return
-    if (loading) return
-
-    const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content: userText, imageUrl: pendingImage ?? undefined }
-    const newMessages = [...messages, userMsg]
-    setMessages(newMessages)
-    setInput('')
-    setPendingImage(null)
-    setLoading(true)
-    setActiveTool(null)
-
-    const apiMessages = newMessages.map(m => ({ role: m.role, content: m.content }))
-    const toolCalls: ToolCall[] = []
-    const visuals:   Visual[]   = []
-
-    try {
-      const res = await fetch('/api/agent', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: apiMessages }),
-      })
-      if (!res.body) throw new Error('No response body')
+      if (!res.body) throw new Error('No stream')
 
       const reader  = res.body.getReader()
       const decoder = new TextDecoder()
-      let buffer    = ''
-      let finalText = ''
+      let fullText       = ''
+      let pendingVisuals: Visual[]   = []
+      let pendingTools:   ToolCall[] = []
+      let questionFaded  = false
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        buffer += decoder.decode(value, { stream: true })
+        const { text, tools, visuals } = parseStream(decoder.decode(value, { stream: true }))
 
-        const text = parseStream(
-          buffer,
-          (t) => {
-            toolCalls.push({ tool: t.tool, input: t.input })
-            setActiveTool(t.tool)
-          },
-          (v) => { visuals.push(v) }
-        )
-        buffer    = ''
-        finalText += text
+        if (tools.length)   { pendingTools   = [...pendingTools,   ...tools];   setToolStatus(TOOL_LABELS[tools[0].tool]   || 'Working…') }
+        if (visuals.length) { pendingVisuals = [...pendingVisuals, ...visuals]; setCurrentVisuals([...pendingVisuals]) }
+
+        if (text) {
+          if (!questionFaded) {
+            questionFaded = true
+            fullText += text
+            // Fade out question → fade in answer
+            setDisplayVisible(false)
+            await delay(380)
+            setDisplayType('answer')
+            setDisplayText(fullText)
+            setToolStatus('')
+            if (scrollRef.current) scrollRef.current.scrollTop = 0
+            setDisplayVisible(true)
+          } else {
+            fullText += text
+            setDisplayText(fullText)
+          }
+        }
       }
 
-      setActiveTool(null)
-      setMessages(prev => [...prev, {
-        id: crypto.randomUUID(), role: 'assistant',
-        content:   finalText,
-        toolCalls: toolCalls.length ? toolCalls : undefined,
-        visuals:   visuals.length   ? visuals   : undefined,
-      }])
+      setLoading(false); setToolStatus('')
+
+      const assistantMsg: Message = {
+        id: genId(), role: 'assistant', content: fullText,
+        toolCalls: pendingTools.length  ? pendingTools  : undefined,
+        visuals:   pendingVisuals.length ? pendingVisuals : undefined,
+      }
+      const finalMessages = [...allMessages, assistantMsg]
+      setMessages(finalMessages)
+
+      saveStoredChat({
+        id: sessionIdRef.current,
+        title: userMsg.slice(0, 65),
+        createdAt: new Date().toISOString(),
+        messages: finalMessages,
+      })
+
     } catch (err) {
-      setMessages(prev => [...prev, {
-        id: crypto.randomUUID(), role: 'assistant',
-        content: `**Error:** ${err instanceof Error ? err.message : 'Something went wrong'}`,
-      }])
-    } finally {
-      setLoading(false); setActiveTool(null)
+      setLoading(false); setToolStatus('')
+      setDisplayVisible(false)
+      await delay(200)
+      setDisplayType('answer')
+      setDisplayText(`Error: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      setDisplayVisible(true)
     }
-  }, [input, messages, loading, pendingImage])
-
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
   }
 
-  const isEmpty = messages.length === 0
+  function autoResize(el: HTMLTextAreaElement) {
+    el.style.height = 'auto'
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+  }
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full bg-zinc-950 text-white relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-zinc-950 via-zinc-900/50 to-zinc-950 pointer-events-none" />
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-64 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
+    <>
+      {/* Keyframe for star twinkle — injected once */}
+      <style>{`
+        @keyframes wolf-twinkle {
+          from { opacity: var(--op-from, 0.05); }
+          to   { opacity: var(--op-to,   0.55); }
+        }
+        .wolf-scrollbar-none::-webkit-scrollbar { display: none; }
+        .wolf-scrollbar-none { scrollbar-width: none; }
+      `}</style>
 
-      {/* Header */}
-      <div className="relative z-10 flex items-center justify-between px-6 py-3.5 border-b border-white/5">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/30">
-            <Zap size={15} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-sm font-bold text-white">Wolf</h1>
-            <p className="text-xs text-zinc-600">AI Agent · Claude Sonnet · Real data</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          {briefing && (
-            <button onClick={() => setBriefingOpen(!briefingOpen)}
-              className="flex items-center gap-1.5 text-xs bg-cyan-500/10 border border-cyan-500/20 hover:border-cyan-500/40 text-cyan-400 px-3 py-1.5 rounded-full transition-colors">
-              <Calendar size={11} /> Morning Briefing
+      {/* Full-panel takeover — sits inside the <main> and expands to fill it */}
+      <div className="relative flex flex-col bg-black overflow-hidden" style={{ height: '100%', minHeight: '100vh' }}>
+
+        <StarField />
+
+        {/* ── IDLE: Wolf symbol ─────────────────────────────────────────── */}
+        {phase === 'idle' && (
+          <div className="flex-1 flex flex-col items-center justify-center gap-8 z-10 px-6">
+            <button
+              onClick={activate}
+              className="group flex flex-col items-center gap-7 cursor-pointer"
+              aria-label="Start talking to Wolf"
+            >
+              <div className="relative">
+                {/* Soft glow */}
+                <div className="absolute inset-0 scale-150 blur-3xl rounded-full bg-white/[0.04] animate-pulse" />
+                <WolfSVG className="w-44 h-44 text-white/85 relative z-10 transition-all duration-700 group-hover:scale-[1.04] group-hover:text-white" />
+              </div>
+              <div className="text-center space-y-1.5">
+                <p className="text-white/35 text-[11px] tracking-[0.45em] uppercase">Wolf</p>
+                <p className="text-white/18 text-xs tracking-wide">tap to begin</p>
+              </div>
             </button>
-          )}
-          <button onClick={runManualBriefing} disabled={runningBriefing}
-            className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors disabled:opacity-50">
-            {runningBriefing ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
-            {runningBriefing ? 'Running…' : 'Run Briefing'}
-          </button>
-          <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-          {messages.length > 0 && (
-            <button onClick={() => setMessages([])} className="text-zinc-700 hover:text-zinc-400 transition-colors">
-              <RefreshCw size={13} />
-            </button>
-          )}
-        </div>
-      </div>
 
-      {/* Briefing panel */}
-      {briefingOpen && briefing && (
-        <div className="relative z-10 mx-6 mt-3 bg-white/5 border border-cyan-500/20 rounded-xl p-4">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-semibold text-cyan-400">Morning Briefing</p>
-            <button onClick={() => setBriefingOpen(false)} className="text-zinc-600 hover:text-zinc-400"><X size={13} /></button>
+            {briefing && (
+              <button
+                onClick={activate}
+                className="flex items-center gap-2.5 px-4 py-2 rounded-full border border-white/[0.08] hover:bg-white/[0.04] transition-colors"
+              >
+                <span>☀️</span>
+                <span className="text-white/35 text-xs">Morning briefing ready</span>
+              </button>
+            )}
           </div>
-          <div className="prose prose-invert prose-xs max-w-none prose-p:text-zinc-300 prose-p:text-xs prose-strong:text-white prose-ul:text-zinc-300 prose-li:text-xs">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{briefing.text}</ReactMarkdown>
-          </div>
-        </div>
-      )}
+        )}
 
-      {/* Messages */}
-      <div className="relative z-10 flex-1 overflow-y-auto px-6 py-6 space-y-6">
-        {isEmpty ? (
-          <div className="flex flex-col items-center justify-center h-full text-center py-8">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center mb-4 shadow-2xl shadow-cyan-500/30">
-              <Zap size={28} className="text-white" />
+        {/* ── ACTIVE: cinematic chat ────────────────────────────────────── */}
+        {phase === 'active' && (
+          <>
+            {/* Top-right controls */}
+            <div className="absolute top-4 right-5 z-20 flex items-center gap-2">
+              {/* Voice */}
+              <button
+                onClick={() => {
+                  if (speaking) { stopSpeak(); setSpeaking(false) }
+                  else if (displayText && displayType === 'answer') { speak(displayText); setSpeaking(true) }
+                }}
+                title={speaking ? 'Stop' : 'Read aloud'}
+                className="w-8 h-8 rounded-full border border-white/[0.09] flex items-center justify-center hover:bg-white/[0.06] transition-colors"
+              >
+                {speaking
+                  ? <VolumeX size={12} className="text-white/50" />
+                  : <Volume2  size={12} className="text-white/25" />}
+              </button>
+
+              {/* History */}
+              <button
+                onClick={openHistory}
+                title="Chat history"
+                className="w-8 h-8 rounded-full border border-white/[0.09] flex items-center justify-center hover:bg-white/[0.06] transition-colors"
+              >
+                <History size={12} className="text-white/25" />
+              </button>
+
+              {/* New chat */}
+              <button
+                onClick={handleNewChat}
+                title="New chat (Esc)"
+                className="w-8 h-8 rounded-full border border-white/[0.09] flex items-center justify-center hover:bg-white/[0.06] transition-colors"
+              >
+                <Plus size={12} className="text-white/25" />
+              </button>
             </div>
-            <h2 className="text-xl font-bold text-white mb-1.5">Wolf is ready</h2>
-            <p className="text-zinc-600 text-sm max-w-xs mb-7 leading-relaxed">
-              Ask anything, take action, or get a visual. Wolf sees all your data.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-xl w-full">
-              {QUICK_PROMPTS.map(p => (
-                <button key={p} onClick={() => sendMessage(p)}
-                  className="text-left px-4 py-3 rounded-xl border border-white/8 hover:border-white/20 hover:bg-white/5 text-xs text-zinc-500 hover:text-zinc-200 transition-all leading-snug">
-                  {p}
+
+            {/* Scrollable content */}
+            <div ref={scrollRef} className="flex-1 overflow-y-auto wolf-scrollbar-none z-10">
+              <div className="min-h-full flex flex-col items-center justify-center px-6 pt-16 pb-36">
+
+                {/* Loading dots (before first answer chunk) */}
+                {loading && displayType === 'answer' && !displayText && (
+                  <div className="flex gap-2 justify-center">
+                    {[0, 150, 300].map(d => (
+                      <span key={d} className="w-1.5 h-1.5 rounded-full bg-white/25 animate-bounce"
+                        style={{ animationDelay: `${d}ms` }} />
+                    ))}
+                  </div>
+                )}
+
+                {/* Fading text display */}
+                {displayText && (
+                  <div
+                    className="w-full max-w-2xl"
+                    style={{ opacity: displayVisible ? 1 : 0, transition: 'opacity 420ms ease' }}
+                  >
+                    {displayType === 'question' ? (
+                      /* Question: centered italic */
+                      <p className="text-white/40 text-lg italic text-center leading-relaxed tracking-wide">
+                        &ldquo;{displayText}&rdquo;
+                      </p>
+                    ) : (
+                      /* Answer: markdown, left-aligned */
+                      <div className="text-white/85 text-[15px] leading-7">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={MD_COMPONENTS as Record<string, React.ElementType>}
+                        >
+                          {displayText}
+                        </ReactMarkdown>
+                        {loading && (
+                          <span className="inline-block w-0.5 h-[1em] bg-white/40 animate-pulse ml-0.5 align-middle rounded-full" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Visuals */}
+                {currentVisuals.length > 0 && (
+                  <div
+                    className="w-full"
+                    style={{ opacity: displayVisible ? 1 : 0, transition: 'opacity 420ms ease 100ms' }}
+                  >
+                    <Visuals visuals={currentVisuals} />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Input bar — pinned to bottom */}
+            <div className="absolute bottom-0 left-0 right-0 z-20">
+              {/* Gradient fade */}
+              <div className="h-12 bg-gradient-to-t from-black/95 to-transparent pointer-events-none" />
+              <div className="bg-black/95 px-4 pb-5 pt-1">
+                <div className="max-w-2xl mx-auto">
+                  <div className="flex items-end gap-3 rounded-2xl border border-white/[0.09] bg-white/[0.04] px-4 py-3">
+                    <textarea
+                      ref={inputRef}
+                      value={input}
+                      onChange={e => { setInput(e.target.value); autoResize(e.target) }}
+                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
+                      placeholder="Ask Wolf anything…"
+                      rows={1}
+                      className="flex-1 bg-transparent text-white text-sm placeholder-white/20 resize-none focus:outline-none leading-relaxed"
+                      style={{ maxHeight: 120, overflowY: 'auto' }}
+                    />
+                    <button
+                      onClick={handleSend}
+                      disabled={loading || !input.trim()}
+                      className="w-8 h-8 rounded-xl bg-white/[0.08] hover:bg-white/15 flex items-center justify-center transition-colors disabled:opacity-25 shrink-0"
+                    >
+                      {loading
+                        ? <Loader2 size={13} className="text-white animate-spin" />
+                        : <Send    size={13} className="text-white" />}
+                    </button>
+                  </div>
+
+                  {/* Tool status */}
+                  {toolStatus && (
+                    <p className="text-center text-white/22 text-[11px] mt-2 tracking-wide">{toolStatus}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ── History overlay ─────────────────────────────────────────────── */}
+        {showHistory && (
+          <div
+            className="absolute inset-0 z-50 flex items-start justify-center pt-12 px-4"
+            style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }}
+            onClick={e => { if (e.target === e.currentTarget) setShowHistory(false) }}
+          >
+            <div className="w-full max-w-sm bg-black/90 border border-white/[0.09] rounded-2xl overflow-hidden shadow-2xl">
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/[0.07]">
+                <p className="text-white/70 text-sm font-medium tracking-wide">History</p>
+                <button onClick={() => setShowHistory(false)}>
+                  <X size={14} className="text-white/30 hover:text-white/70 transition-colors" />
                 </button>
-              ))}
+              </div>
+
+              <div className="overflow-y-auto wolf-scrollbar-none max-h-[60vh]">
+                {storedChats.length === 0 ? (
+                  <p className="text-white/25 text-sm text-center py-10">No saved chats yet</p>
+                ) : (
+                  storedChats.map(chat => (
+                    <button
+                      key={chat.id}
+                      onClick={() => loadChat(chat)}
+                      className="w-full text-left px-5 py-3 border-b border-white/[0.05] hover:bg-white/[0.04] transition-colors"
+                    >
+                      <p className="text-white/75 text-sm truncate">{chat.title}</p>
+                      <p className="text-white/25 text-xs mt-0.5">
+                        {new Date(chat.createdAt).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })}
+                        {' · '}{chat.messages.length} messages
+                      </p>
+                    </button>
+                  ))
+                )}
+              </div>
+
+              <div className="px-5 py-3 border-t border-white/[0.07]">
+                <button
+                  onClick={() => { setShowHistory(false); handleNewChat() }}
+                  className="w-full flex items-center justify-center gap-2 py-2 rounded-xl border border-white/[0.09] hover:bg-white/[0.04] transition-colors"
+                >
+                  <Plus size={13} className="text-white/30" />
+                  <span className="text-white/40 text-sm">New chat</span>
+                </button>
+              </div>
             </div>
           </div>
-        ) : (
-          messages.map(msg =>
-            msg.role === 'user'
-              ? <UserMessage key={msg.id} msg={msg} />
-              : <AssistantMessage key={msg.id} msg={msg} />
-          )
         )}
-        {loading && <ThinkingIndicator activeTool={activeTool} />}
-        <div ref={bottomRef} />
-      </div>
 
-      {/* Input */}
-      <div className="relative z-10 px-6 py-4 border-t border-white/5">
-        {pendingImage && (
-          <div className="mb-2 relative inline-block">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={pendingImage} alt="Pending" className="h-16 rounded-lg border border-white/10 object-cover" />
-            <button onClick={() => setPendingImage(null)}
-              className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-zinc-800 rounded-full flex items-center justify-center hover:bg-zinc-700">
-              <X size={10} />
-            </button>
-          </div>
-        )}
-        <div className="flex items-end gap-2 bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus-within:border-cyan-500/30 transition-colors">
-          <button onClick={() => fileRef.current?.click()} title="Attach image"
-            className="text-zinc-600 hover:text-zinc-400 transition-colors shrink-0 mb-1.5">
-            <Paperclip size={15} />
-          </button>
-          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={e => {
-            const file = e.target.files?.[0]; if (!file) return
-            const reader = new FileReader()
-            reader.onload = ev => setPendingImage(ev.target?.result as string)
-            reader.readAsDataURL(file)
-          }} />
-          <textarea ref={textareaRef} value={input} onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask Wolf anything — or tell it to take action…"
-            rows={1}
-            className="flex-1 bg-transparent resize-none text-sm text-white placeholder-zinc-700 focus:outline-none min-h-[24px] max-h-36 overflow-y-auto py-1.5 leading-relaxed"
-            onInput={e => { const el = e.currentTarget; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 144) + 'px' }}
-          />
-          <button onClick={() => sendMessage()} disabled={loading || (!input.trim() && !pendingImage)}
-            className="shrink-0 mb-1 w-7 h-7 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center disabled:opacity-30 hover:shadow-lg hover:shadow-cyan-500/30 transition-all">
-            {loading ? <Loader2 size={13} className="animate-spin text-white" /> : <Send size={13} className="text-white" />}
-          </button>
-        </div>
-        <p className="text-center text-xs text-zinc-800 mt-1.5">Claude Sonnet · Charts · Maps · Tables · Voice · Web search</p>
       </div>
-    </div>
+    </>
   )
 }
