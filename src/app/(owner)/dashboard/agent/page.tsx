@@ -326,6 +326,10 @@ export default function AgentPage() {
   // Visuals
   const [currentVisuals, setCurrentVisuals] = useState<Visual[]>([])
 
+  // Line-by-line reveal
+  const [revealLines, setRevealLines]   = useState<string[]>([])
+  const [isRevealing, setIsRevealing]   = useState(false)
+
   // Voice
   const [speaking, setSpeaking]         = useState(false)
 
@@ -365,6 +369,7 @@ export default function AgentPage() {
     sessionIdRef.current = genId()
     setMessages([]); setDisplayText(''); setDisplayVisible(false)
     setCurrentVisuals([]); setToolStatus('')
+    setRevealLines([]); setIsRevealing(false)
     setPhase('idle')
   }
 
@@ -379,8 +384,14 @@ export default function AgentPage() {
     setShowHistory(false)
     const last = [...chat.messages].reverse().find(m => m.role === 'assistant')
     if (last) {
-      setDisplayType('answer'); setDisplayText(last.content)
-      setCurrentVisuals(last.visuals || []); setDisplayVisible(true)
+      setDisplayType('answer')
+      setDisplayText(last.content)
+      setCurrentVisuals(last.visuals || [])
+      // Populate all lines at once — no stagger when loading history
+      const lines = last.content.split('\n').map(l => l.trim()).filter(Boolean)
+      setRevealLines(lines)
+      setIsRevealing(false)
+      setDisplayVisible(true)
     }
   }
 
@@ -395,7 +406,9 @@ export default function AgentPage() {
     const allMessages = [...messages, userMessage]
     setMessages(allMessages)
 
-    // Show question fade-in
+    // Clear previous answer and show question
+    setRevealLines([])
+    setIsRevealing(false)
     setDisplayType('question')
     setDisplayText(userMsg)
     setDisplayVisible(true)
@@ -418,43 +431,41 @@ export default function AgentPage() {
       let pendingTools:   ToolCall[] = []
       let questionFaded  = false
 
+      // Collect the full response silently — we'll reveal it line-by-line at the end
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
         const { text, tools, visuals } = parseStream(decoder.decode(value, { stream: true }))
 
-        if (tools.length)   { pendingTools   = [...pendingTools,   ...tools];   setToolStatus(TOOL_LABELS[tools[0].tool]   || 'Working…') }
+        if (tools.length)   { pendingTools   = [...pendingTools,   ...tools];   setToolStatus(TOOL_LABELS[tools[0].tool] || 'Working…') }
         if (visuals.length) { pendingVisuals = [...pendingVisuals, ...visuals]; setCurrentVisuals([...pendingVisuals]) }
 
         if (text) {
+          fullText += text
+          // On first text: fade out the question and switch to answer/dots mode
           if (!questionFaded) {
             questionFaded = true
-            fullText += text
-            // Fade out question → fade in answer
             setDisplayVisible(false)
             await delay(380)
             setDisplayType('answer')
-            setDisplayText(fullText)
             setToolStatus('')
             if (scrollRef.current) scrollRef.current.scrollTop = 0
-            setDisplayVisible(true)
-          } else {
-            fullText += text
-            setDisplayText(fullText)
           }
         }
       }
 
-      setLoading(false); setToolStatus('')
+      // Streaming done — store full text and reveal line by line
+      setDisplayText(fullText)
+      setLoading(false)
+      setToolStatus('')
 
       const assistantMsg: Message = {
         id: genId(), role: 'assistant', content: fullText,
-        toolCalls: pendingTools.length  ? pendingTools  : undefined,
+        toolCalls: pendingTools.length   ? pendingTools   : undefined,
         visuals:   pendingVisuals.length ? pendingVisuals : undefined,
       }
       const finalMessages = [...allMessages, assistantMsg]
       setMessages(finalMessages)
-
       saveStoredChat({
         id: sessionIdRef.current,
         title: userMsg.slice(0, 65),
@@ -462,13 +473,28 @@ export default function AgentPage() {
         messages: finalMessages,
       })
 
+      // Line-by-line reveal
+      if (fullText) {
+        const lines = fullText.split('\n').map(l => l.trim()).filter(Boolean)
+        // Stagger: faster for longer responses so it doesn't drag on
+        const stagger = lines.length <= 6 ? 130 : lines.length <= 14 ? 95 : 65
+        setIsRevealing(true)
+        for (let i = 0; i < lines.length; i++) {
+          await delay(i === 0 ? 80 : stagger)
+          setRevealLines(prev => [...prev, lines[i]])
+        }
+        setIsRevealing(false)
+      }
+
     } catch (err) {
       setLoading(false); setToolStatus('')
+      // Show error as a single fading line
+      const errText = `Error: ${err instanceof Error ? err.message : 'Unknown error'}`
       setDisplayVisible(false)
       await delay(200)
       setDisplayType('answer')
-      setDisplayText(`Error: ${err instanceof Error ? err.message : 'Unknown error'}`)
-      setDisplayVisible(true)
+      setDisplayText(errText)
+      setRevealLines([errText])
     }
   }
 
@@ -486,6 +512,11 @@ export default function AgentPage() {
           from { opacity: var(--op-from, 0.05); }
           to   { opacity: var(--op-to,   0.55); }
         }
+        @keyframes wolf-line-in {
+          from { opacity: 0; transform: translateY(7px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .wolf-line-enter { animation: wolf-line-in 0.52s ease both; }
         .wolf-scrollbar-none::-webkit-scrollbar { display: none; }
         .wolf-scrollbar-none { scrollbar-width: none; }
       `}</style>
@@ -568,8 +599,20 @@ export default function AgentPage() {
             <div ref={scrollRef} className="flex-1 overflow-y-auto wolf-scrollbar-none z-10">
               <div className="min-h-full flex flex-col items-center justify-center px-6 pt-16 pb-36">
 
-                {/* Loading dots (before first answer chunk) */}
-                {loading && displayType === 'answer' && !displayText && (
+                {/* Question — fades in, then fades out */}
+                {displayType === 'question' && displayText && (
+                  <div
+                    className="w-full max-w-2xl"
+                    style={{ opacity: displayVisible ? 1 : 0, transition: 'opacity 420ms ease' }}
+                  >
+                    <p className="text-white/40 text-lg italic text-center leading-relaxed tracking-wide">
+                      &ldquo;{displayText}&rdquo;
+                    </p>
+                  </div>
+                )}
+
+                {/* Loading dots — shown while streaming (answer mode, no lines yet) */}
+                {displayType === 'answer' && (loading || isRevealing) && revealLines.length === 0 && (
                   <div className="flex gap-2 justify-center">
                     {[0, 150, 300].map(d => (
                       <span key={d} className="w-1.5 h-1.5 rounded-full bg-white/25 animate-bounce"
@@ -578,42 +621,25 @@ export default function AgentPage() {
                   </div>
                 )}
 
-                {/* Fading text display */}
-                {displayText && (
-                  <div
-                    className="w-full max-w-2xl"
-                    style={{ opacity: displayVisible ? 1 : 0, transition: 'opacity 420ms ease' }}
-                  >
-                    {displayType === 'question' ? (
-                      /* Question: centered italic */
-                      <p className="text-white/40 text-lg italic text-center leading-relaxed tracking-wide">
-                        &ldquo;{displayText}&rdquo;
-                      </p>
-                    ) : (
-                      /* Answer: markdown, left-aligned */
-                      <div className="text-white/85 text-[15px] leading-7">
+                {/* Answer — lines fade in one by one */}
+                {displayType === 'answer' && revealLines.length > 0 && (
+                  <div className="w-full max-w-2xl">
+                    {revealLines.map((line, i) => (
+                      <div key={i} className="wolf-line-enter">
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
                           components={MD_COMPONENTS as Record<string, React.ElementType>}
                         >
-                          {displayText}
+                          {line}
                         </ReactMarkdown>
-                        {loading && (
-                          <span className="inline-block w-0.5 h-[1em] bg-white/40 animate-pulse ml-0.5 align-middle rounded-full" />
-                        )}
                       </div>
-                    )}
+                    ))}
                   </div>
                 )}
 
-                {/* Visuals */}
-                {currentVisuals.length > 0 && (
-                  <div
-                    className="w-full"
-                    style={{ opacity: displayVisible ? 1 : 0, transition: 'opacity 420ms ease 100ms' }}
-                  >
-                    <Visuals visuals={currentVisuals} />
-                  </div>
+                {/* Visuals — appear after text */}
+                {displayType === 'answer' && currentVisuals.length > 0 && revealLines.length > 0 && (
+                  <Visuals visuals={currentVisuals} />
                 )}
               </div>
             </div>
