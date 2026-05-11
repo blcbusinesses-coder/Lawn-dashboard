@@ -194,7 +194,7 @@ export default function ExpensesPage() {
       const url  = URL.createObjectURL(blob)
       const a    = document.createElement('a')
       a.href     = url
-      a.download = `gray-wolf-expenses-${selectedMonth}.csv`
+      a.download = `gray-wolf-expenses-${selectedMonth}.xlsx`
       a.click()
       URL.revokeObjectURL(url)
       toast.success('Exported!')
