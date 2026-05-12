@@ -2,8 +2,6 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react'
 import dynamic from 'next/dynamic'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import {
   BarChart, Bar, LineChart, Line, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -77,6 +75,19 @@ function parseStream(raw: string) {
     try { const d = JSON.parse(m[2]); m[1] === 'TOOL' ? tools.push(d) : visuals.push(d) } catch { /**/ }
   }
   return { text: raw.replace(/\x00(TOOL|VISUAL):[^\x00]*\x00/g, ''), tools, visuals }
+}
+
+// ── Strip markdown for ambient display ───────────────────────────────────────
+function stripMarkdown(line: string): string {
+  return line
+    .replace(/#{1,6}\s*/g, '')           // headers
+    .replace(/\*\*([^*]+)\*\*/g, '$1')  // bold
+    .replace(/\*([^*]+)\*/g, '$1')       // italic markers
+    .replace(/`([^`]+)`/g, '$1')         // inline code
+    .replace(/^[-*+]\s+/, '')            // bullet points
+    .replace(/^\d+\.\s+/, '')            // numbered lists
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // links → text only
+    .trim()
 }
 
 // ── Voice ─────────────────────────────────────────────────────────────────────
@@ -285,31 +296,6 @@ function StarField() {
   )
 }
 
-// ── Markdown renderer ─────────────────────────────────────────────────────────
-const MD_COMPONENTS = {
-  h1: ({children}: {children?: React.ReactNode}) => <h1 className="text-white text-xl font-semibold mb-3 mt-1">{children}</h1>,
-  h2: ({children}: {children?: React.ReactNode}) => <h2 className="text-white text-lg font-semibold mb-2 mt-4">{children}</h2>,
-  h3: ({children}: {children?: React.ReactNode}) => <h3 className="text-white/90 font-semibold mb-2 mt-3">{children}</h3>,
-  p:  ({children}: {children?: React.ReactNode}) => <p className="text-white/82 mb-3 leading-7">{children}</p>,
-  strong: ({children}: {children?: React.ReactNode}) => <strong className="text-white font-semibold">{children}</strong>,
-  em: ({children}: {children?: React.ReactNode}) => <em className="text-white/65">{children}</em>,
-  ul: ({children}: {children?: React.ReactNode}) => <ul className="mb-3 space-y-1.5">{children}</ul>,
-  ol: ({children}: {children?: React.ReactNode}) => <ol className="mb-3 space-y-1.5 list-decimal list-inside">{children}</ol>,
-  li: ({children}: {children?: React.ReactNode}) => <li className="text-white/82 flex items-start gap-2"><span className="text-white/25 mt-1 shrink-0">·</span><span>{children}</span></li>,
-  code: ({children, className}: {children?: React.ReactNode; className?: string}) => {
-    const block = className?.includes('language-')
-    return block
-      ? <pre className="bg-white/[0.06] rounded-xl p-4 overflow-x-auto mb-3 text-sm font-mono text-cyan-300">{children}</pre>
-      : <code className="text-cyan-400 bg-white/[0.08] px-1.5 py-0.5 rounded text-sm font-mono">{children}</code>
-  },
-  blockquote: ({children}: {children?: React.ReactNode}) => <blockquote className="border-l-2 border-white/20 pl-4 italic text-white/55 mb-3">{children}</blockquote>,
-  a: ({href, children}: {href?: string; children?: React.ReactNode}) => <a href={href} className="text-cyan-400 underline underline-offset-2 hover:text-cyan-300" target="_blank" rel="noopener">{children}</a>,
-  hr: () => <hr className="border-white/10 my-4" />,
-  table: ({children}: {children?: React.ReactNode}) => <table className="w-full text-sm mb-3 border-collapse">{children}</table>,
-  th: ({children}: {children?: React.ReactNode}) => <th className="text-left text-white/50 font-medium py-1.5 pr-4 border-b border-white/10">{children}</th>,
-  td: ({children}: {children?: React.ReactNode}) => <td className="text-white/75 py-1.5 pr-4 border-b border-white/[0.05]">{children}</td>,
-}
-
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function AgentPage() {
   const [phase, setPhase]               = useState<'idle'|'active'>('idle')
@@ -477,7 +463,7 @@ export default function AgentPage() {
       if (fullText) {
         const lines = fullText.split('\n').map(l => l.trim()).filter(Boolean)
         // Stagger: faster for longer responses so it doesn't drag on
-        const stagger = lines.length <= 6 ? 130 : lines.length <= 14 ? 95 : 65
+        const stagger = lines.length <= 6 ? 210 : lines.length <= 14 ? 155 : 100
         setIsRevealing(true)
         for (let i = 0; i < lines.length; i++) {
           await delay(i === 0 ? 80 : stagger)
@@ -516,7 +502,7 @@ export default function AgentPage() {
           from { opacity: 0; transform: translateY(7px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-        .wolf-line-enter { animation: wolf-line-in 0.52s ease both; }
+        .wolf-line-enter { animation: wolf-line-in 0.9s ease both; }
         .wolf-scrollbar-none::-webkit-scrollbar { display: none; }
         .wolf-scrollbar-none { scrollbar-width: none; }
       `}</style>
@@ -621,17 +607,14 @@ export default function AgentPage() {
                   </div>
                 )}
 
-                {/* Answer — lines fade in one by one */}
+                {/* Answer — lines fade in one by one, styled like the question */}
                 {displayType === 'answer' && revealLines.length > 0 && (
-                  <div className="w-full max-w-2xl">
+                  <div className="w-full max-w-2xl text-center space-y-1">
                     {revealLines.map((line, i) => (
                       <div key={i} className="wolf-line-enter">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          components={MD_COMPONENTS as Record<string, React.ElementType>}
-                        >
-                          {line}
-                        </ReactMarkdown>
+                        <p className="text-white/62 text-lg italic font-serif leading-loose tracking-wide">
+                          {stripMarkdown(line)}
+                        </p>
                       </div>
                     ))}
                   </div>

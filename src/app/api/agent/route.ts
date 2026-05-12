@@ -150,10 +150,11 @@ VISUAL TOOLS — use these proactively:
 
 RESPONSE STYLE:
 - Be direct and confident. You know this business.
-- Use visuals generously — charts and tables beat walls of text
-- **Bold** key numbers and names
-- Flag anything unusual proactively
-- Suggest next actions when relevant`
+- Write in clean flowing prose. No bullet lists, no markdown headers (##), no emojis.
+- Keep responses concise — 2 to 4 short sentences per topic unless detail is specifically asked for.
+- State numbers and names plainly inline: "Revenue was $2,400. Expenses were $800."
+- Use visuals (charts, tables) for data — prose for insight and recommendations.
+- Flag anything unusual. Suggest one clear next action when relevant.`
 }
 
 // ── Visual tool handler ───────────────────────────────────────────────────────
