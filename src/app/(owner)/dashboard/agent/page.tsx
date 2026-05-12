@@ -633,7 +633,22 @@ export default function AgentPage() {
               <div className="h-12 bg-gradient-to-t from-black/95 to-transparent pointer-events-none" />
               <div className="bg-black/95 px-4 pb-5 pt-1">
                 <div className="max-w-2xl mx-auto">
-                  <div className="flex items-end gap-3 rounded-2xl border border-white/[0.09] bg-white/[0.04] px-4 py-3">
+                  <div className="flex items-end gap-2 rounded-2xl border border-white/[0.09] bg-white/[0.04] px-4 py-3">
+                    {/* Read aloud — always visible on mobile */}
+                    <button
+                      onClick={() => {
+                        if (speaking) { stopSpeak(); setSpeaking(false) }
+                        else if (displayText && displayType === 'answer') { speak(displayText); setSpeaking(true) }
+                      }}
+                      disabled={displayType !== 'answer' || !displayText || loading}
+                      title={speaking ? 'Stop reading' : 'Read aloud'}
+                      className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors shrink-0 disabled:opacity-20"
+                    >
+                      {speaking
+                        ? <VolumeX size={14} className="text-white/70" />
+                        : <Volume2  size={14} className="text-white/40" />}
+                    </button>
+
                     <textarea
                       ref={inputRef}
                       value={input}
