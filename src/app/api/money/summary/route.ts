@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient as createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { format, subMonths, startOfMonth, endOfMonth, eachWeekOfInterval, nextSunday } from 'date-fns'
 

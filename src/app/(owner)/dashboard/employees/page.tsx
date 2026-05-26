@@ -444,7 +444,12 @@ export default function EmployeesPage() {
             monthlySummary.map(({ employee, rows }) => {
               const totalHours   = rows.reduce((s, r) => s + r.totalHours, 0)
               const totalPay     = rows.reduce((s, r) => s + r.pay, 0)
-              const totalStillOwes = rows.reduce((s, r) => s + r.stillOwes, 0)
+              // Global balance: sum ALL earned minus ALL payments (any month).
+              // Per-month isolation breaks when a payment lands in a different month
+              // than the work (e.g. "pay in full" always records today's date).
+              const globalEarned = rows.reduce((s, r) => s + r.pay + r.bonusOwed, 0)
+              const globalPaid   = rows.reduce((s, r) => s + r.amountPaid + r.paymentsMade, 0)
+              const totalStillOwes = Math.max(0, globalEarned - globalPaid)
               const hasData      = rows.some((r) => r.totalHours > 0)
               return (
                 <div key={employee.id} className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
