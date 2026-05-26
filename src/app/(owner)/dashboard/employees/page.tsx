@@ -451,6 +451,24 @@ export default function EmployeesPage() {
               const globalPaid   = rows.reduce((s, r) => s + r.amountPaid + r.paymentsMade, 0)
               const totalStillOwes = Math.max(0, globalEarned - globalPaid)
               const hasData      = rows.some((r) => r.totalHours > 0)
+
+              // Cascade surplus payments newest→oldest so overpayments in one month
+              // correctly mark older months as covered.
+              // rows[0] = current month, rows[last] = oldest — iterate in order.
+              let carryover = 0
+              const displayRows = rows.map(row => {
+                const available = row.totalPaid + carryover
+                let effectiveStillOwes: number
+                if (available >= row.totalOwed) {
+                  effectiveStillOwes = 0
+                  carryover = available - row.totalOwed
+                } else {
+                  effectiveStillOwes = row.totalOwed - available
+                  carryover = 0
+                }
+                return { ...row, effectiveStillOwes }
+              })
+
               return (
                 <div key={employee.id} className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
                   <div className="px-5 py-3 border-b border-zinc-100 bg-zinc-50 flex items-center justify-between gap-4 flex-wrap">
@@ -495,7 +513,7 @@ export default function EmployeesPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {rows.filter((r) => r.totalHours > 0 || r.monthBonuses.length > 0 || r.month === format(now, 'yyyy-MM')).map((row) => (
+                      {displayRows.filter((r) => r.totalHours > 0 || r.monthBonuses.length > 0 || r.month === format(now, 'yyyy-MM')).map((row) => (
                         <>
                           <tr key={row.month} className="border-b border-zinc-50 hover:bg-zinc-50">
                             <td className="px-4 py-2.5 text-zinc-700 font-medium">{row.label}</td>
@@ -513,9 +531,9 @@ export default function EmployeesPage() {
                             <td className="px-4 py-2.5 text-right text-green-600 font-medium">{row.totalPaid > 0 ? formatCurrency(row.totalPaid) : '—'}</td>
                             <td className="px-4 py-2.5 text-right font-semibold">
                               {row.totalOwed > 0 ? (
-                                row.stillOwes === 0
+                                row.effectiveStillOwes === 0
                                   ? <span className="text-green-600">Paid ✓</span>
-                                  : <span className="text-red-500">{formatCurrency(row.stillOwes)}</span>
+                                  : <span className="text-red-500">{formatCurrency(row.effectiveStillOwes)}</span>
                               ) : '—'}
                             </td>
                             <td className="px-4 py-2.5 text-right">
@@ -561,7 +579,7 @@ export default function EmployeesPage() {
                               </td>
                               <td colSpan={2} className="px-4 py-1.5 text-xs text-zinc-400">{b.entry_date}</td>
                               <td className="px-4 py-1.5 text-right">
-                                <button onClick={() => deleteBonus(b.id)} className="text-xs text-zinc-300 hover:text-red-400 transition-colors">✕</button>
+                                <button onClick={() => deleteBonus(b.id)} className="text-xs text-zinc-400 hover:text-red-500 transition-colors font-bold px-1">✕</button>
                               </td>
                             </tr>
                           ))}
