@@ -318,18 +318,26 @@ export default function MoneyPage() {
           )}
         </div>
 
-        {/* Expenses — always raw totals in the card */}
+        {/* Expenses card */}
         <div className="bg-white rounded-xl border border-zinc-200 p-5">
           <p className="text-xs text-zinc-500 uppercase tracking-wide">{taxMode ? 'Total Expenses' : 'Op. Expenses'}</p>
           {loading ? <Skeleton className="h-7 w-32 mt-2" /> : (
-            <>
+            // 1-month normal view: show "contributing / total spent" format
+            !taxMode && range === 1 ? (
+              <>
+                <p className="text-2xl font-bold mt-1 text-red-500">
+                  {formatCurrency(totals.expenses + totals.capital_expenses)}
+                </p>
+                <p className="text-xs text-zinc-400 mt-1">
+                  / {formatCurrency(totals.raw_expenses)} total spent
+                </p>
+              </>
+            ) : (
+              // All other views: raw total
               <p className="text-2xl font-bold mt-1 text-red-500">
                 {formatCurrency(taxMode ? totals.raw_expenses : totals.raw_expenses)}
               </p>
-              {!taxMode && totals.capital_expenses > 0 && (
-                <p className="text-xs text-zinc-400 mt-1">+ {formatCurrency(totals.capital_expenses)} capital (taxes only)</p>
-              )}
-            </>
+            )
           )}
         </div>
 
