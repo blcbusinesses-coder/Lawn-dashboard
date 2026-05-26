@@ -1,11 +1,28 @@
 import { createAdminClient as createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { format, subMonths, startOfMonth, endOfMonth, eachWeekOfInterval, nextSunday } from 'date-fns'
+import { format, subMonths, startOfMonth, endOfMonth, eachWeekOfInterval, parseISO } from 'date-fns'
+
+// Months between two startOfMonth dates (b - a), e.g. May→Jul = 2
+function monthDiff(a: Date, b: Date): number {
+  return (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth())
+}
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
   const { searchParams } = new URL(request.url)
   const months = parseInt(searchParams.get('months') ?? '12')
+
+  // ── Fetch all CC/loan obligations once (outside the month loop) ─────────────
+  // These are spread across months rather than counted in full on purchase date.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: obligationRows } = await (supabase as any)
+    .from('expenses')
+    .select('amount, payment_method, expense_date, due_date, settled_at')
+    .in('payment_method', ['credit_card', 'loan'])
+    .not('due_date', 'is', null)
+
+  type ObRow = { amount: number; payment_method: string; expense_date: string; due_date: string; settled_at: string | null }
+  const obligations: ObRow[] = (obligationRows ?? []) as ObRow[]
 
   const result = []
 
@@ -17,11 +34,10 @@ export async function GET(request: NextRequest) {
     const end   = format(monthEnd,   'yyyy-MM-dd')
     const label = format(d, 'MMM yyyy')
 
-    // ── Revenue from job_logs × price_per_mow ─────────────────────────────────
-    // Get all week_starts that fall within this month
+    // ── Revenue from job_logs × price_per_mow ──────────────────────────────────
     const weeksInMonth = eachWeekOfInterval(
       { start: monthStart, end: monthEnd },
-      { weekStartsOn: 1 } // Monday
+      { weekStartsOn: 1 }
     ).map((w) => format(w, 'yyyy-MM-dd'))
 
     const { data: jobData } = await supabase
@@ -35,7 +51,7 @@ export async function GET(request: NextRequest) {
       return sum + (prop?.price_per_mow ?? 0)
     }, 0)
 
-    // ── One-off jobs completed this month ──────────────────────────────────────
+    // ── One-off jobs ────────────────────────────────────────────────────────────
     const { data: oneOffData } = await supabase
       .from('one_off_jobs')
       .select('amount')
@@ -44,13 +60,9 @@ export async function GET(request: NextRequest) {
       .lte('completed_date', end)
 
     const oneOffRevenue = (oneOffData ?? []).reduce((sum, j) => sum + (j.amount ?? 0), 0)
-
     const revenue = mowRevenue + oneOffRevenue
 
-    // ── Expenses ───────────────────────────────────────────────────────────────
-    // Fetch ALL expenses for the display total.
-    // Capital expenses are logged for taxes but don't reduce operating profit,
-    // so we track them separately and subtract only non-capital from profit.
+    // ── Expenses ────────────────────────────────────────────────────────────────
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: expData } = await (supabase as any)
       .from('expenses')
@@ -58,13 +70,43 @@ export async function GET(request: NextRequest) {
       .gte('expense_date', start)
       .lte('expense_date', end)
 
-    const expRows = (expData ?? []) as Array<{ amount: number | null; payment_method: string | null }>
-    const expenses         = expRows.reduce((sum, e) => sum + (e.amount ?? 0), 0)
-    const operatingExpenses = expRows
-      .filter(e => e.payment_method !== 'capital')
+    type ExpRow = { amount: number | null; payment_method: string | null }
+    const expRows: ExpRow[] = (expData ?? []) as ExpRow[]
+
+    // Display total — every dollar spent this month, regardless of type
+    const expenses = expRows.reduce((sum, e) => sum + (e.amount ?? 0), 0)
+
+    // ── Operating expenses for profit calculation ────────────────────────────────
+    // Rule 1: Old/regular expenses (no payment_method tag) → count in full by purchase date
+    // Rule 2: Capital expenses                             → never reduce profit (tax-only)
+    // Rule 3: CC/Loan expenses                            → spread evenly from purchase month
+    //          through due_date month (or settled_at month if paid early)
+
+    // Rule 1: null payment_method rows from this month
+    const regularExpenses = expRows
+      .filter(e => !e.payment_method)
       .reduce((sum, e) => sum + (e.amount ?? 0), 0)
 
-    // ── Payroll: clock-in/out logs ────────────────────────────────────────────
+    // Rule 3: prorated share of every CC/loan obligation that covers this month
+    let proratedObligations = 0
+    for (const ob of obligations) {
+      const obStart = startOfMonth(parseISO(ob.expense_date))
+      // Spread through settled_at month if paid early, otherwise through due_date month
+      const obEnd = ob.settled_at
+        ? startOfMonth(parseISO(ob.settled_at))
+        : startOfMonth(parseISO(ob.due_date))
+
+      const totalMonths = Math.max(1, monthDiff(obStart, obEnd) + 1)
+      const monthlyShare = ob.amount / totalMonths
+
+      if (monthStart >= obStart && monthStart <= obEnd) {
+        proratedObligations += monthlyShare
+      }
+    }
+
+    const operatingExpenses = regularExpenses + proratedObligations
+
+    // ── Payroll: clock-in/out logs ──────────────────────────────────────────────
     const { data: timeData } = await supabase
       .from('time_logs')
       .select('duration_minutes, profiles(hourly_rate)')
@@ -79,7 +121,7 @@ export async function GET(request: NextRequest) {
       return sum + hours * rate
     }, 0)
 
-    // ── Payroll: manual monthly hours ─────────────────────────────────────────
+    // ── Payroll: manual monthly hours ───────────────────────────────────────────
     const monthKey = format(d, 'yyyy-MM')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: manualData } = await (supabase as any)
@@ -93,8 +135,7 @@ export async function GET(request: NextRequest) {
       return sum + (m.hours ?? 0) * rate
     }, 0)
 
-    // ── Payroll: flat pay entries ('bonus' type = additional pay owed to employee)
-    // 'payment' type is just recording money already physically paid — not a new cost
+    // ── Payroll: bonuses ────────────────────────────────────────────────────────
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: bonusData } = await (supabase as any)
       .from('employee_bonuses')
