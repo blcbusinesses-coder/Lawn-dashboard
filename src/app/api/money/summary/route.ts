@@ -149,20 +149,25 @@ export async function GET(request: NextRequest) {
 
     const payroll = clockPayroll + manualPayroll + bonusPayroll
 
-    // Capital expenses purchased this month (tax-tracked, never hit profit)
+    // Capital expenses purchased this month (tax-tracked, never hit operating profit)
     const capitalExpenses = expRows
       .filter(e => e.payment_method === 'capital')
       .reduce((sum, e) => sum + (e.amount ?? 0), 0)
+
+    // raw_expenses = everything by purchase date (for display cards + tax view)
+    const rawExpenses = expRows.reduce((sum, e) => sum + (e.amount ?? 0), 0)
 
     result.push({
       month:            label,
       revenue:          Math.round(revenue * 100) / 100,
       mow_revenue:      Math.round(mowRevenue * 100) / 100,
       one_off_revenue:  Math.round(oneOffRevenue * 100) / 100,
-      expenses:         Math.round(operatingExpenses * 100) / 100,
+      raw_expenses:     Math.round(rawExpenses * 100) / 100,        // all expenses by purchase date
+      expenses:         Math.round(operatingExpenses * 100) / 100,  // prorated CC/loan + regular (for profit)
       capital_expenses: Math.round(capitalExpenses * 100) / 100,
       payroll:          Math.round(payroll * 100) / 100,
       profit:           Math.round((revenue - operatingExpenses - payroll) * 100) / 100,
+      tax_profit:       Math.round((revenue - rawExpenses - payroll) * 100) / 100, // simple cash basis
     })
   }
 
