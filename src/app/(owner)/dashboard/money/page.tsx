@@ -33,6 +33,7 @@ interface MonthData {
   month: string
   revenue: number
   expenses: number
+  capital_expenses: number
   payroll: number
   profit: number
 }
@@ -217,12 +218,13 @@ export default function MoneyPage() {
 
   const totals = data.reduce(
     (acc, m) => ({
-      revenue: acc.revenue + m.revenue,
-      expenses: acc.expenses + m.expenses,
-      payroll: acc.payroll + m.payroll,
-      profit: acc.profit + m.profit,
+      revenue:          acc.revenue + m.revenue,
+      expenses:         acc.expenses + m.expenses,
+      capital_expenses: acc.capital_expenses + (m.capital_expenses ?? 0),
+      payroll:          acc.payroll + m.payroll,
+      profit:           acc.profit + m.profit,
     }),
-    { revenue: 0, expenses: 0, payroll: 0, profit: 0 }
+    { revenue: 0, expenses: 0, capital_expenses: 0, payroll: 0, profit: 0 }
   )
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -257,21 +259,46 @@ export default function MoneyPage() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        {[
-          { label: 'Total Revenue', value: totals.revenue, color: 'text-green-600' },
-          { label: 'Total Expenses', value: totals.expenses, color: 'text-red-500' },
-          { label: 'Payroll', value: totals.payroll, color: 'text-orange-500' },
-          { label: 'Net Profit', value: totals.profit, color: totals.profit >= 0 ? 'text-green-600' : 'text-red-500' },
-        ].map((card) => (
-          <div key={card.label} className="bg-white rounded-xl border border-zinc-200 p-5">
-            <p className="text-xs text-zinc-500 uppercase tracking-wide">{card.label}</p>
-            {loading ? (
-              <Skeleton className="h-7 w-32 mt-2" />
-            ) : (
-              <p className={`text-2xl font-bold mt-1 ${card.color}`}>{formatCurrency(card.value)}</p>
-            )}
-          </div>
-        ))}
+        {/* Revenue */}
+        <div className="bg-white rounded-xl border border-zinc-200 p-5">
+          <p className="text-xs text-zinc-500 uppercase tracking-wide">Total Revenue</p>
+          {loading ? <Skeleton className="h-7 w-32 mt-2" /> : (
+            <p className="text-2xl font-bold mt-1 text-green-600">{formatCurrency(totals.revenue)}</p>
+          )}
+        </div>
+
+        {/* Operating Expenses — what actually hits profit */}
+        <div className="bg-white rounded-xl border border-zinc-200 p-5">
+          <p className="text-xs text-zinc-500 uppercase tracking-wide">Op. Expenses</p>
+          {loading ? <Skeleton className="h-7 w-32 mt-2" /> : (
+            <>
+              <p className="text-2xl font-bold mt-1 text-red-500">{formatCurrency(totals.expenses)}</p>
+              {totals.capital_expenses > 0 && (
+                <p className="text-xs text-zinc-400 mt-1">
+                  + {formatCurrency(totals.capital_expenses)} capital (taxes only)
+                </p>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Payroll */}
+        <div className="bg-white rounded-xl border border-zinc-200 p-5">
+          <p className="text-xs text-zinc-500 uppercase tracking-wide">Payroll</p>
+          {loading ? <Skeleton className="h-7 w-32 mt-2" /> : (
+            <p className="text-2xl font-bold mt-1 text-orange-500">{formatCurrency(totals.payroll)}</p>
+          )}
+        </div>
+
+        {/* Net Profit */}
+        <div className="bg-white rounded-xl border border-zinc-200 p-5">
+          <p className="text-xs text-zinc-500 uppercase tracking-wide">Net Profit</p>
+          {loading ? <Skeleton className="h-7 w-32 mt-2" /> : (
+            <p className={`text-2xl font-bold mt-1 ${totals.profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+              {formatCurrency(totals.profit)}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* ── Reserve Plan ───────────────────────────────────────────────────── */}
@@ -460,7 +487,8 @@ export default function MoneyPage() {
                   <tr className="border-b border-zinc-100 bg-zinc-50">
                     <th className="text-left px-4 py-3 font-medium text-zinc-600">Month</th>
                     <th className="text-right px-4 py-3 font-medium text-zinc-600">Revenue</th>
-                    <th className="text-right px-4 py-3 font-medium text-zinc-600">Expenses</th>
+                    <th className="text-right px-4 py-3 font-medium text-zinc-600">Op. Expenses</th>
+                    <th className="text-right px-4 py-3 font-medium text-zinc-600">Capital</th>
                     <th className="text-right px-4 py-3 font-medium text-zinc-600">Payroll</th>
                     <th className="text-right px-4 py-3 font-medium text-zinc-600">Profit</th>
                   </tr>
@@ -471,6 +499,7 @@ export default function MoneyPage() {
                       <td className="px-4 py-2.5 font-medium text-zinc-700">{row.month}</td>
                       <td className="px-4 py-2.5 text-right text-green-600">{formatCurrency(row.revenue)}</td>
                       <td className="px-4 py-2.5 text-right text-red-500">{formatCurrency(row.expenses)}</td>
+                      <td className="px-4 py-2.5 text-right text-zinc-400 text-xs">{row.capital_expenses > 0 ? formatCurrency(row.capital_expenses) : '—'}</td>
                       <td className="px-4 py-2.5 text-right text-orange-500">{formatCurrency(row.payroll)}</td>
                       <td className={`px-4 py-2.5 text-right font-semibold ${row.profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                         {formatCurrency(row.profit)}
@@ -483,6 +512,7 @@ export default function MoneyPage() {
                     <td className="px-4 py-3 font-bold text-zinc-800">Total</td>
                     <td className="px-4 py-3 text-right font-bold text-green-600">{formatCurrency(totals.revenue)}</td>
                     <td className="px-4 py-3 text-right font-bold text-red-500">{formatCurrency(totals.expenses)}</td>
+                    <td className="px-4 py-3 text-right font-bold text-zinc-400">{formatCurrency(totals.capital_expenses)}</td>
                     <td className="px-4 py-3 text-right font-bold text-orange-500">{formatCurrency(totals.payroll)}</td>
                     <td className={`px-4 py-3 text-right font-bold ${totals.profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(totals.profit)}</td>
                   </tr>

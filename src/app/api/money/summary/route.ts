@@ -149,14 +149,20 @@ export async function GET(request: NextRequest) {
 
     const payroll = clockPayroll + manualPayroll + bonusPayroll
 
+    // Capital expenses purchased this month (tax-tracked, never hit profit)
+    const capitalExpenses = expRows
+      .filter(e => e.payment_method === 'capital')
+      .reduce((sum, e) => sum + (e.amount ?? 0), 0)
+
     result.push({
-      month:           label,
-      revenue:         Math.round(revenue * 100) / 100,
-      mow_revenue:     Math.round(mowRevenue * 100) / 100,
-      one_off_revenue: Math.round(oneOffRevenue * 100) / 100,
-      expenses:        Math.round(expenses * 100) / 100,
-      payroll:         Math.round(payroll * 100) / 100,
-      profit:          Math.round((revenue - operatingExpenses - payroll) * 100) / 100,
+      month:            label,
+      revenue:          Math.round(revenue * 100) / 100,
+      mow_revenue:      Math.round(mowRevenue * 100) / 100,
+      one_off_revenue:  Math.round(oneOffRevenue * 100) / 100,
+      expenses:         Math.round(operatingExpenses * 100) / 100,
+      capital_expenses: Math.round(capitalExpenses * 100) / 100,
+      payroll:          Math.round(payroll * 100) / 100,
+      profit:           Math.round((revenue - operatingExpenses - payroll) * 100) / 100,
     })
   }
 
