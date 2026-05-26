@@ -15,8 +15,8 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
 import { formatCurrency } from '@/lib/utils/currency'
-import { format } from 'date-fns'
-import { Download } from 'lucide-react'
+import { format, parseISO, isAfter, isBefore, startOfDay } from 'date-fns'
+import { Download, AlertTriangle, Clock, Calendar, ChevronRight } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
@@ -29,6 +29,9 @@ interface Expense {
   expense_date: string
   notes: string | null
   receipt_url: string | null
+  payment_method: 'capital' | 'credit_card' | 'loan'
+  due_date: string | null
+  settled_at: string | null
 }
 
 interface MonthSummary {
@@ -56,6 +59,16 @@ const CHART_COLORS: Record<string, string> = {
   labor:     '#f97316',
   other:     '#71717a',
 }
+const PAYMENT_LABELS: Record<string, string> = {
+  capital:     'Capital',
+  credit_card: 'Credit Card',
+  loan:        'Loan',
+}
+const PAYMENT_COLORS: Record<string, string> = {
+  capital:     'bg-emerald-100 text-emerald-700',
+  credit_card: 'bg-sky-100 text-sky-700',
+  loan:        'bg-violet-100 text-violet-700',
+}
 
 const EMPTY_FORM = {
   merchant: '',
@@ -64,7 +77,30 @@ const EMPTY_FORM = {
   expense_date: new Date().toISOString().split('T')[0],
   notes: '',
   receipt_url: '',
+  payment_method: 'capital',
+  due_date: '',
 }
+
+// ── Obligations helpers ──────────────────────────────────────────────────────
+function getObligationBucket(due: string): 'overdue' | 'this_month' | 'next_month' | 'future' {
+  const today = startOfDay(new Date())
+  const dueDate = startOfDay(parseISO(due))
+  const thisMonthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+  const nextMonthEnd = new Date(today.getFullYear(), today.getMonth() + 2, 0)
+
+  if (isBefore(dueDate, today)) return 'overdue'
+  if (!isAfter(dueDate, thisMonthEnd)) return 'this_month'
+  if (!isAfter(dueDate, nextMonthEnd)) return 'next_month'
+  return 'future'
+}
+
+const BUCKET_META = {
+  overdue:    { label: 'Overdue', color: 'border-red-200 bg-red-50', badgeColor: 'bg-red-100 text-red-700', icon: AlertTriangle },
+  this_month: { label: 'Due This Month', color: 'border-amber-200 bg-amber-50', badgeColor: 'bg-amber-100 text-amber-700', icon: Clock },
+  next_month: { label: 'Due Next Month', color: 'border-yellow-200 bg-yellow-50', badgeColor: 'bg-yellow-100 text-yellow-700', icon: Calendar },
+  future:     { label: 'Future', color: 'border-zinc-200 bg-zinc-50', badgeColor: 'bg-zinc-100 text-zinc-600', icon: ChevronRight },
+}
+// ────────────────────────────────────────────────────────────────────────────
 
 export default function ExpensesPage() {
   const [expenses, setExpenses]         = useState<Expense[]>([])
@@ -74,6 +110,10 @@ export default function ExpensesPage() {
 
   const [chartData, setChartData]       = useState<MonthSummary[]>([])
   const [chartLoading, setChartLoading] = useState(true)
+
+  const [obligations, setObligations]   = useState<Expense[]>([])
+  const [obLoading, setObLoading]       = useState(true)
+  const [settlingId, setSettlingId]     = useState<string | null>(null)
 
   const [formOpen, setFormOpen]         = useState(false)
   const [editing, setEditing]           = useState<Expense | null>(null)
@@ -99,7 +139,21 @@ export default function ExpensesPage() {
     }
   }, [selectedMonth])
 
+  const loadObligations = useCallback(async () => {
+    setObLoading(true)
+    try {
+      const res  = await fetch('/api/expenses/obligations')
+      const data = await res.json()
+      setObligations(Array.isArray(data) ? data : [])
+    } catch {
+      // silently ignore
+    } finally {
+      setObLoading(false)
+    }
+  }, [])
+
   useEffect(() => { setLoading(true); load() }, [load])
+  useEffect(() => { loadObligations() }, [loadObligations])
 
   useEffect(() => {
     setChartLoading(true)
@@ -107,7 +161,30 @@ export default function ExpensesPage() {
       .then(r => r.json())
       .then(d => { setChartData(d); setChartLoading(false) })
       .catch(() => setChartLoading(false))
-  }, [expenses]) // refresh chart when expenses change
+  }, [expenses])
+
+  async function handleMarkPaid(ob: Expense) {
+    setSettlingId(ob.id)
+    try {
+      const res = await fetch('/api/expenses/obligations', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: ob.id }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        toast.error(body?.error ?? 'Could not settle obligation')
+      } else {
+        toast.success(`${ob.merchant} marked as paid`)
+        loadObligations()
+        load()
+      }
+    } catch {
+      toast.error('Network error')
+    } finally {
+      setSettlingId(null)
+    }
+  }
 
   async function handleReceiptUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -121,12 +198,14 @@ export default function ExpensesPage() {
     if (!res.ok) { toast.error('Could not parse receipt'); setParsing(false); return }
     const parsed = await res.json()
     setForm({
-      merchant:     parsed.merchant ?? '',
-      amount:       String(parsed.amount ?? ''),
-      category:     parsed.category ?? 'other',
-      expense_date: parsed.date ?? new Date().toISOString().split('T')[0],
-      notes:        parsed.notes ?? '',
-      receipt_url:  parsed.receipt_url ?? '',
+      merchant:       parsed.merchant ?? '',
+      amount:         String(parsed.amount ?? ''),
+      category:       parsed.category ?? 'other',
+      expense_date:   parsed.date ?? new Date().toISOString().split('T')[0],
+      notes:          parsed.notes ?? '',
+      receipt_url:    parsed.receipt_url ?? '',
+      payment_method: 'capital',
+      due_date:       '',
     })
     toast.success('Receipt parsed! Review and confirm.')
     setParsing(false)
@@ -140,18 +219,23 @@ export default function ExpensesPage() {
   function openEdit(e: Expense) {
     setEditing(e)
     setForm({
-      merchant:     e.merchant,
-      amount:       String(e.amount),
-      category:     e.category,
-      expense_date: e.expense_date,
-      notes:        e.notes ?? '',
-      receipt_url:  e.receipt_url ?? '',
+      merchant:       e.merchant,
+      amount:         String(e.amount),
+      category:       e.category,
+      expense_date:   e.expense_date,
+      notes:          e.notes ?? '',
+      receipt_url:    e.receipt_url ?? '',
+      payment_method: e.payment_method ?? 'capital',
+      due_date:       e.due_date ?? '',
     })
     setFormOpen(true)
   }
 
   async function handleSave() {
     if (!form.merchant.trim() || !form.amount) return toast.error('Merchant and amount are required')
+    if ((form.payment_method === 'credit_card' || form.payment_method === 'loan') && !form.due_date) {
+      return toast.error('Due date is required for Credit Card and Loan expenses')
+    }
     setSaving(true)
     try {
       const url    = editing ? `/api/expenses/${editing.id}` : '/api/expenses'
@@ -159,7 +243,11 @@ export default function ExpensesPage() {
       const res    = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, amount: parseFloat(form.amount) }),
+        body: JSON.stringify({
+          ...form,
+          amount: parseFloat(form.amount),
+          due_date: form.due_date || null,
+        }),
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
@@ -169,6 +257,7 @@ export default function ExpensesPage() {
         setFormOpen(false)
         const expenseMonth = form.expense_date.slice(0, 7)
         setSelectedMonth(expenseMonth)
+        loadObligations()
       }
     } catch (err) {
       toast.error('Network error — could not save expense')
@@ -181,7 +270,7 @@ export default function ExpensesPage() {
   async function handleDelete() {
     if (!deleteId) return
     const res = await fetch(`/api/expenses/${deleteId}`, { method: 'DELETE' })
-    if (res.ok) { toast.success('Expense deleted'); setDeleteId(null); load() }
+    if (res.ok) { toast.success('Expense deleted'); setDeleteId(null); load(); loadObligations() }
     else toast.error('Could not delete')
   }
 
@@ -212,8 +301,19 @@ export default function ExpensesPage() {
 
   const grandTotal = expenses.reduce((s, e) => s + e.amount, 0)
 
+  // Group obligations by bucket
+  const bucketedObs = (['overdue', 'this_month', 'next_month', 'future'] as const).reduce((acc, key) => {
+    acc[key] = obligations.filter(o => o.due_date && getObligationBucket(o.due_date) === key)
+    return acc
+  }, {} as Record<string, Expense[]>)
+
+  const totalObligations = obligations.reduce((s, o) => s + o.amount, 0)
+  const hasObligations   = obligations.length > 0
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tooltipFormatter = (value: any) => value != null ? formatCurrency(Number(value)) : ''
+
+  const needsDueDate = form.payment_method === 'credit_card' || form.payment_method === 'loan'
 
   return (
     <div className="p-4 md:p-8 space-y-6">
@@ -243,6 +343,91 @@ export default function ExpensesPage() {
           <Button onClick={openAdd}>+ Add Manually</Button>
         </div>
       </div>
+
+      {/* ── Obligations Panel ─────────────────────────────────────────────── */}
+      {(obLoading || hasObligations) && (
+        <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-zinc-100 flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-zinc-700 flex items-center gap-1.5">
+                <AlertTriangle size={14} className="text-amber-500" />
+                Upcoming Payment Obligations
+              </h2>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Credit card and loan expenses that still need to come out of your revenue
+              </p>
+            </div>
+            {!obLoading && hasObligations && (
+              <div className="text-right">
+                <p className="text-xs text-zinc-400">Total outstanding</p>
+                <p className="text-base font-bold text-zinc-900">{formatCurrency(totalObligations)}</p>
+              </div>
+            )}
+          </div>
+
+          {obLoading ? (
+            <div className="p-5 space-y-2">
+              {[1,2,3].map(i => <Skeleton key={i} className="h-12 w-full" />)}
+            </div>
+          ) : (
+            <div className="divide-y divide-zinc-100">
+              {(['overdue', 'this_month', 'next_month', 'future'] as const).map(bucket => {
+                const items = bucketedObs[bucket]
+                if (!items || items.length === 0) return null
+                const meta = BUCKET_META[bucket]
+                const BucketIcon = meta.icon
+                const bucketTotal = items.reduce((s, o) => s + o.amount, 0)
+                return (
+                  <div key={bucket} className={`${meta.color} border-l-4`} style={{ borderLeftColor: bucket === 'overdue' ? '#ef4444' : bucket === 'this_month' ? '#f59e0b' : bucket === 'next_month' ? '#eab308' : '#a1a1aa' }}>
+                    <div className="px-5 py-2.5 flex items-center justify-between">
+                      <span className="text-xs font-semibold text-zinc-600 flex items-center gap-1.5">
+                        <BucketIcon size={12} />
+                        {meta.label}
+                      </span>
+                      <span className="text-xs font-bold text-zinc-700">{formatCurrency(bucketTotal)}</span>
+                    </div>
+                    {items.map(ob => (
+                      <div key={ob.id} className="px-5 py-3 flex items-center gap-3 bg-white/60">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-sm text-zinc-900">{ob.merchant}</span>
+                            <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${PAYMENT_COLORS[ob.payment_method]}`}>
+                              {PAYMENT_LABELS[ob.payment_method]}
+                            </span>
+                            {ob.category && (
+                              <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${CATEGORY_COLORS[ob.category] ?? CATEGORY_COLORS.other}`}>
+                                {ob.category}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3 mt-0.5">
+                            <span className="text-xs text-zinc-500">
+                              Due {ob.due_date ? format(parseISO(ob.due_date), 'MMM d, yyyy') : '—'}
+                            </span>
+                            {ob.notes && <span className="text-xs text-zinc-400 truncate max-w-xs">{ob.notes}</span>}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-bold text-zinc-900">{formatCurrency(ob.amount)}</p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="shrink-0 text-xs"
+                          disabled={settlingId === ob.id}
+                          onClick={() => handleMarkPaid(ob)}
+                        >
+                          {settlingId === ob.id ? 'Saving…' : '✓ Mark Paid'}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 6-month chart */}
       <div className="bg-white rounded-xl border border-zinc-200 p-5">
@@ -308,6 +493,8 @@ export default function ExpensesPage() {
                 <th className="text-left px-4 py-3 font-medium text-zinc-600">Date</th>
                 <th className="text-left px-4 py-3 font-medium text-zinc-600">Merchant</th>
                 <th className="text-left px-4 py-3 font-medium text-zinc-600">Category</th>
+                <th className="text-left px-4 py-3 font-medium text-zinc-600">Payment</th>
+                <th className="text-left px-4 py-3 font-medium text-zinc-600">Due Date</th>
                 <th className="text-left px-4 py-3 font-medium text-zinc-600">Amount</th>
                 <th className="text-left px-4 py-3 font-medium text-zinc-600">Notes</th>
                 <th className="px-4 py-3" />
@@ -317,7 +504,7 @@ export default function ExpensesPage() {
               {loading ? (
                 Array.from({ length: 4 }).map((_, i) => (
                   <tr key={i} className="border-b border-zinc-50">
-                    {Array.from({ length: 5 }).map((_, j) => (
+                    {Array.from({ length: 7 }).map((_, j) => (
                       <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
                     ))}
                     <td />
@@ -325,7 +512,7 @@ export default function ExpensesPage() {
                 ))
               ) : expenses.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-zinc-400">
+                  <td colSpan={8} className="px-4 py-10 text-center text-zinc-400">
                     No expenses for {selectedMonth}. Scan a receipt or add manually.
                   </td>
                 </tr>
@@ -340,6 +527,19 @@ export default function ExpensesPage() {
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CATEGORY_COLORS[e.category] ?? CATEGORY_COLORS.other}`}>
                         {e.category}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${PAYMENT_COLORS[e.payment_method ?? 'capital']}`}>
+                        {PAYMENT_LABELS[e.payment_method ?? 'capital']}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-zinc-500 text-xs">
+                      {e.due_date
+                        ? e.settled_at
+                          ? <span className="text-emerald-600 font-medium">✓ Paid {format(parseISO(e.settled_at), 'MMM d')}</span>
+                          : format(parseISO(e.due_date), 'MMM d, yyyy')
+                        : '—'
+                      }
                     </td>
                     <td className="px-4 py-3 font-medium text-zinc-900">{formatCurrency(e.amount)}</td>
                     <td className="px-4 py-3 text-zinc-500 max-w-xs truncate">{e.notes ?? '—'}</td>
@@ -356,7 +556,7 @@ export default function ExpensesPage() {
             {!loading && expenses.length > 0 && (
               <tfoot>
                 <tr className="border-t border-zinc-200 bg-zinc-50">
-                  <td colSpan={3} className="px-4 py-3 font-medium text-zinc-600">Total</td>
+                  <td colSpan={5} className="px-4 py-3 font-medium text-zinc-600">Total</td>
                   <td className="px-4 py-3 font-bold text-zinc-900">{formatCurrency(grandTotal)}</td>
                   <td colSpan={2} />
                 </tr>
@@ -399,6 +599,54 @@ export default function ExpensesPage() {
                 {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
+
+            {/* Payment Method */}
+            <div className="space-y-1">
+              <Label>How was this paid?</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {(['capital', 'credit_card', 'loan'] as const).map(pm => (
+                  <button
+                    key={pm}
+                    type="button"
+                    onClick={() => setForm({ ...form, payment_method: pm, due_date: pm === 'capital' ? '' : form.due_date })}
+                    className={`px-3 py-2 rounded-md text-xs font-medium border transition-all ${
+                      form.payment_method === pm
+                        ? pm === 'capital'    ? 'bg-emerald-600 text-white border-emerald-600'
+                        : pm === 'credit_card'? 'bg-sky-600 text-white border-sky-600'
+                        :                      'bg-violet-600 text-white border-violet-600'
+                        : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400'
+                    }`}
+                  >
+                    {PAYMENT_LABELS[pm]}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-zinc-400 mt-1">
+                {form.payment_method === 'capital'
+                  ? 'Money already in the bank — no future obligation.'
+                  : form.payment_method === 'credit_card'
+                  ? 'Charged to card — you\'ll need to move money to cover this by the due date.'
+                  : 'Financed — track when the payment hits so it lines up against that month\'s revenue.'}
+              </p>
+            </div>
+
+            {/* Due Date — only shown for CC / Loan */}
+            {needsDueDate && (
+              <div className="space-y-1">
+                <Label>Due Date *</Label>
+                <Input
+                  type="date"
+                  value={form.due_date}
+                  onChange={e => setForm({ ...form, due_date: e.target.value })}
+                />
+                <p className="text-xs text-zinc-400">
+                  {form.payment_method === 'credit_card'
+                    ? 'When does your card statement close / payment post?'
+                    : 'When is the loan payment due?'}
+                </p>
+              </div>
+            )}
+
             <div className="space-y-1">
               <Label>Notes</Label>
               <Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2} />
