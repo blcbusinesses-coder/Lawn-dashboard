@@ -47,14 +47,18 @@ export async function GET(request: NextRequest) {
 
     const revenue = mowRevenue + oneOffRevenue
 
-    // ── Expenses ───────────────────────────────────────────────────────────────
-    const { data: expData } = await supabase
+    // ── Expenses (exclude capital — those don't hit operating profit) ──────────
+    // Capital = bought with money already set aside (tracked for taxes only).
+    // NULL payment_method = old rows pre-feature, treat as operating expenses.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: expData } = await (supabase as any)
       .from('expenses')
-      .select('amount')
+      .select('amount, payment_method')
       .gte('expense_date', start)
       .lte('expense_date', end)
+      .or('payment_method.is.null,payment_method.in.(credit_card,loan)')
 
-    const expenses = (expData ?? []).reduce((sum, e) => sum + (e.amount ?? 0), 0)
+    const expenses = ((expData ?? []) as Array<{ amount: number | null }>).reduce((sum, e) => sum + (e.amount ?? 0), 0)
 
     // ── Payroll: clock-in/out logs ────────────────────────────────────────────
     const { data: timeData } = await supabase

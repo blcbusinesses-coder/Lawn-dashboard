@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 
   // Rows for each sheet
   const incomeRows:   (string | number)[][] = [['Month', 'Date', 'Type', 'Customer', 'Description / Address', 'Amount']]
-  const expenseRows:  (string | number)[][] = [['Month', 'Date', 'Merchant', 'Category', 'Notes', 'Amount']]
+  const expenseRows:  (string | number)[][] = [['Month', 'Date', 'Merchant', 'Category', 'Payment Method', 'Notes', 'Amount', 'Counts Toward Profit']]
   const payrollRows:  (string | number)[][] = [['Month', 'Employee', 'Clock Hours', 'Manual Hours', 'Total Hours', 'Hourly Rate', 'Base Pay', 'Bonuses', 'Total Pay']]
   const bonusRows:    (string | number)[][] = [['Month', 'Date', 'Employee', 'Description', 'Amount']]
   const summaryRows:  (string | number)[][] = [['Month', 'Mow Revenue', 'One-Off Revenue', 'Total Revenue', 'Expenses', 'Payroll', 'Net Profit']]
@@ -94,10 +94,11 @@ export async function GET(request: NextRequest) {
       ])
     }
 
-    // Expenses
-    const { data: expData } = await supabase
+    // Expenses — all shown in sheet for tax records; only non-capital count toward profit
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: expData } = await (supabase as any)
       .from('expenses')
-      .select('expense_date, merchant, category, notes, amount')
+      .select('expense_date, merchant, category, payment_method, notes, amount')
       .gte('expense_date', start)
       .lte('expense_date', end)
       .order('expense_date')
@@ -105,8 +106,13 @@ export async function GET(request: NextRequest) {
     let totalExpenses = 0
     for (const e of expData ?? []) {
       const amt = Number(e.amount ?? 0)
-      totalExpenses += amt
-      expenseRows.push([label, e.expense_date, e.merchant, e.category, e.notes ?? '', amt])
+      const isCapital = e.payment_method === 'capital'
+      // Capital expenses don't count against operating profit (tracked for taxes only)
+      if (!isCapital) totalExpenses += amt
+      const pmLabel = e.payment_method === 'credit_card' ? 'Credit Card'
+                    : e.payment_method === 'loan'        ? 'Loan'
+                    :                                      'Capital'
+      expenseRows.push([label, e.expense_date, e.merchant, e.category, pmLabel, e.notes ?? '', amt, isCapital ? 'No (Capital)' : 'Yes'])
     }
 
     // Payroll: clock hours
@@ -196,7 +202,7 @@ export async function GET(request: NextRequest) {
 
   XLSX.utils.book_append_sheet(wb, mkSheet(summaryRows,  [12, 16, 16, 16, 14, 12, 14]), 'Summary')
   XLSX.utils.book_append_sheet(wb, mkSheet(incomeRows,   [12, 12, 14, 22, 35, 12]),     'Income')
-  XLSX.utils.book_append_sheet(wb, mkSheet(expenseRows,  [12, 12, 22, 14, 30, 12]),     'Expenses')
+  XLSX.utils.book_append_sheet(wb, mkSheet(expenseRows,  [12, 12, 22, 14, 14, 30, 12, 20]), 'Expenses')
   XLSX.utils.book_append_sheet(wb, mkSheet(payrollRows,  [12, 20, 13, 14, 13, 13, 12, 12, 12]), 'Payroll')
   XLSX.utils.book_append_sheet(wb, mkSheet(bonusRows,    [12, 12, 20, 30, 12]),         'Bonuses')
 
