@@ -533,7 +533,11 @@ export default function EmployeesPage() {
                               {row.totalOwed > 0 ? (
                                 row.effectiveStillOwes === 0
                                   ? <span className="text-green-600">Paid ✓</span>
-                                  : <span className="text-red-500">{formatCurrency(row.effectiveStillOwes)}</span>
+                                  : row.effectiveStillOwes < row.stillOwes
+                                    // Partially covered by surplus from a newer month — show as amber "balance"
+                                    ? <span className="text-amber-500 text-xs font-medium">{formatCurrency(row.effectiveStillOwes)}<br/><span className="text-zinc-400 font-normal">running balance</span></span>
+                                    // Full month debt, nothing covering it
+                                    : <span className="text-red-500">{formatCurrency(row.effectiveStillOwes)}</span>
                               ) : '—'}
                             </td>
                             <td className="px-4 py-2.5 text-right">
