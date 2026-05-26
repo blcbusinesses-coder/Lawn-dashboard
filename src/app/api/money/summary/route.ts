@@ -47,18 +47,22 @@ export async function GET(request: NextRequest) {
 
     const revenue = mowRevenue + oneOffRevenue
 
-    // ── Expenses (exclude capital — those don't hit operating profit) ──────────
-    // Capital = bought with money already set aside (tracked for taxes only).
-    // NULL payment_method = old rows pre-feature, treat as operating expenses.
+    // ── Expenses ───────────────────────────────────────────────────────────────
+    // Fetch ALL expenses for the display total.
+    // Capital expenses are logged for taxes but don't reduce operating profit,
+    // so we track them separately and subtract only non-capital from profit.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: expData } = await (supabase as any)
       .from('expenses')
       .select('amount, payment_method')
       .gte('expense_date', start)
       .lte('expense_date', end)
-      .or('payment_method.is.null,payment_method.in.(credit_card,loan)')
 
-    const expenses = ((expData ?? []) as Array<{ amount: number | null }>).reduce((sum, e) => sum + (e.amount ?? 0), 0)
+    const expRows = (expData ?? []) as Array<{ amount: number | null; payment_method: string | null }>
+    const expenses         = expRows.reduce((sum, e) => sum + (e.amount ?? 0), 0)
+    const operatingExpenses = expRows
+      .filter(e => e.payment_method !== 'capital')
+      .reduce((sum, e) => sum + (e.amount ?? 0), 0)
 
     // ── Payroll: clock-in/out logs ────────────────────────────────────────────
     const { data: timeData } = await supabase
@@ -111,7 +115,7 @@ export async function GET(request: NextRequest) {
       one_off_revenue: Math.round(oneOffRevenue * 100) / 100,
       expenses:        Math.round(expenses * 100) / 100,
       payroll:         Math.round(payroll * 100) / 100,
-      profit:          Math.round((revenue - expenses - payroll) * 100) / 100,
+      profit:          Math.round((revenue - operatingExpenses - payroll) * 100) / 100,
     })
   }
 
