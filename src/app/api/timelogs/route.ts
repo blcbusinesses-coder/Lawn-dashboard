@@ -8,7 +8,7 @@ export async function GET() {
     .from('time_logs')
     .select('*, profiles(full_name, hourly_rate)')
     .order('clock_in', { ascending: false })
-    .limit(100)
+    .limit(2000)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)

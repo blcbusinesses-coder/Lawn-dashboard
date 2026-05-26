@@ -84,6 +84,15 @@ export default function MoneyPage() {
   const [obligations, setObligations]   = useState<Obligation[]>([])
   const [obLoading, setObLoading]       = useState(true)
 
+  interface PayrollSummary {
+    employees: { id: string; name: string; earned: number; paid: number; owed: number }[]
+    total_earned: number
+    total_paid: number
+    total_owed: number
+  }
+  const [payrollSummary, setPayrollSummary] = useState<PayrollSummary | null>(null)
+  const [payrollLoading, setPayrollLoading] = useState(true)
+
   const [prepayments, setPrepayments] = useState<Prepayment[]>([])
   const [prepLoading, setPrepLoading] = useState(true)
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -117,6 +126,14 @@ export default function MoneyPage() {
       .then(r => r.json())
       .then(d => { setObligations(Array.isArray(d) ? d : []); setObLoading(false) })
       .catch(() => setObLoading(false))
+  }, [])
+
+  useEffect(() => {
+    setPayrollLoading(true)
+    fetch('/api/employees/payroll-summary')
+      .then(r => r.json())
+      .then(d => { setPayrollSummary(d); setPayrollLoading(false) })
+      .catch(() => setPayrollLoading(false))
   }, [])
 
   function toggleExportMonth(m: string) {
@@ -299,6 +316,70 @@ export default function MoneyPage() {
             </p>
           )}
         </div>
+      </div>
+
+      {/* ── Payroll Breakdown ──────────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-zinc-200 mb-6 overflow-hidden">
+        <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-zinc-800">Employee Payroll</h2>
+            <p className="text-xs text-zinc-500 mt-0.5">Lifetime earned vs paid — what you still owe each employee</p>
+          </div>
+          {!payrollLoading && payrollSummary && (
+            <div className="flex gap-6 text-right">
+              <div>
+                <p className="text-xs text-zinc-400">Total Earned</p>
+                <p className="text-sm font-bold text-zinc-700">{formatCurrency(payrollSummary.total_earned)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-zinc-400">Total Paid</p>
+                <p className="text-sm font-bold text-green-600">{formatCurrency(payrollSummary.total_paid)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-zinc-400">Still Owed</p>
+                <p className="text-sm font-bold text-red-500">{formatCurrency(payrollSummary.total_owed)}</p>
+              </div>
+            </div>
+          )}
+        </div>
+        {payrollLoading ? (
+          <div className="p-5 space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-8 w-full" />)}</div>
+        ) : !payrollSummary || payrollSummary.employees.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-zinc-400 text-center">No employee payroll data</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-zinc-100 bg-zinc-50">
+                <th className="text-left px-4 py-2.5 font-medium text-zinc-600">Employee</th>
+                <th className="text-right px-4 py-2.5 font-medium text-zinc-600">Total Earned</th>
+                <th className="text-right px-4 py-2.5 font-medium text-zinc-600">Paid Out</th>
+                <th className="text-right px-4 py-2.5 font-medium text-zinc-600">Still Owed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {payrollSummary.employees.map(emp => (
+                <tr key={emp.id} className="border-b border-zinc-50 hover:bg-zinc-50">
+                  <td className="px-4 py-2.5 font-medium text-zinc-800">{emp.name}</td>
+                  <td className="px-4 py-2.5 text-right text-zinc-600">{formatCurrency(emp.earned)}</td>
+                  <td className="px-4 py-2.5 text-right text-green-600">{formatCurrency(emp.paid)}</td>
+                  <td className={`px-4 py-2.5 text-right font-semibold ${emp.owed > 0 ? 'text-red-500' : 'text-zinc-400'}`}>
+                    {emp.owed > 0 ? formatCurrency(emp.owed) : '✓ Paid'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t border-zinc-200 bg-zinc-50">
+                <td className="px-4 py-2.5 font-bold text-zinc-800">Total</td>
+                <td className="px-4 py-2.5 text-right font-bold text-zinc-700">{formatCurrency(payrollSummary.total_earned)}</td>
+                <td className="px-4 py-2.5 text-right font-bold text-green-600">{formatCurrency(payrollSummary.total_paid)}</td>
+                <td className={`px-4 py-2.5 text-right font-bold ${payrollSummary.total_owed > 0 ? 'text-red-500' : 'text-green-600'}`}>
+                  {formatCurrency(payrollSummary.total_owed)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        )}
       </div>
 
       {/* ── Reserve Plan ───────────────────────────────────────────────────── */}
