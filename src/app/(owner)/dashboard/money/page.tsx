@@ -347,11 +347,8 @@ export default function MoneyPage() {
           {loading || payrollLoading ? <Skeleton className="h-7 w-32 mt-2" /> : (
             range === 1 && payrollSummary ? (
               <>
-                <p className="text-2xl font-bold mt-1 text-orange-500">{formatCurrency(totals.payroll)}</p>
-                <p className="text-xs mt-1">
-                  <span className="text-red-500 font-medium">{formatCurrency(payrollSummary.total_owed)} owed</span>
-                  <span className="text-zinc-400"> globally</span>
-                </p>
+                <p className="text-2xl font-bold mt-1 text-orange-500">{formatCurrency(payrollSummary.total_owed)}</p>
+                <p className="text-xs text-zinc-400 mt-1">/ {formatCurrency(totals.payroll)} this month</p>
               </>
             ) : (
               <p className="text-2xl font-bold mt-1 text-orange-500">{formatCurrency(totals.payroll)}</p>
