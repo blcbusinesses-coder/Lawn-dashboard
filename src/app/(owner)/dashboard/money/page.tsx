@@ -26,8 +26,8 @@ import {
 } from '@/components/ui/dialog'
 import { formatCurrency } from '@/lib/utils/currency'
 import { toast } from 'sonner'
-import { Download, Plus, Trash2, FileSpreadsheet, Check } from 'lucide-react'
-import { format, subMonths } from 'date-fns'
+import { Download, Plus, Trash2, FileSpreadsheet, Check, PiggyBank } from 'lucide-react'
+import { format, subMonths, parseISO, differenceInCalendarMonths, startOfMonth } from 'date-fns'
 
 interface MonthData {
   month: string
@@ -35,6 +35,16 @@ interface MonthData {
   expenses: number
   payroll: number
   profit: number
+}
+
+interface Obligation {
+  id: string
+  merchant: string
+  amount: number
+  payment_method: 'credit_card' | 'loan'
+  due_date: string
+  category: string
+  notes: string | null
 }
 
 interface Customer {
@@ -70,6 +80,9 @@ export default function MoneyPage() {
     return { value: format(d, 'yyyy-MM'), label: format(d, 'MMMM yyyy') }
   })
 
+  const [obligations, setObligations]   = useState<Obligation[]>([])
+  const [obLoading, setObLoading]       = useState(true)
+
   const [prepayments, setPrepayments] = useState<Prepayment[]>([])
   const [prepLoading, setPrepLoading] = useState(true)
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -96,6 +109,14 @@ export default function MoneyPage() {
   }, [])
 
   useEffect(() => { loadPrepayments() }, [loadPrepayments])
+
+  useEffect(() => {
+    setObLoading(true)
+    fetch('/api/expenses/obligations')
+      .then(r => r.json())
+      .then(d => { setObligations(Array.isArray(d) ? d : []); setObLoading(false) })
+      .catch(() => setObLoading(false))
+  }, [])
 
   function toggleExportMonth(m: string) {
     setSelectedExportMonths(prev => {
@@ -176,6 +197,24 @@ export default function MoneyPage() {
     else toast.error('Failed to remove')
   }
 
+  // ── Reserve calculations ──────────────────────────────────────────────────
+  // For each obligation spread the cost evenly across months until due (min 1).
+  // e.g. $1,200 due in 2 months → $600 to set aside THIS month.
+  const today = new Date()
+  const reserveItems = obligations.map(ob => {
+    const due = parseISO(ob.due_date)
+    // months remaining: from start of this month to start of due month
+    const monthsLeft = Math.max(1, differenceInCalendarMonths(startOfMonth(due), startOfMonth(today)) + 1)
+    return { ...ob, monthsLeft, monthlyReserve: Math.ceil((ob.amount / monthsLeft) * 100) / 100 }
+  })
+  const totalReserve = reserveItems.reduce((s, r) => s + r.monthlyReserve, 0)
+
+  // Current month's operating profit from the data array
+  const currentMonthLabel = format(today, 'MMM yyyy')
+  const currentMonthData  = data.find(d => d.month === currentMonthLabel)
+  const currentProfit     = currentMonthData?.profit ?? null
+  const availableCash     = currentProfit !== null ? currentProfit - totalReserve : null
+
   const totals = data.reduce(
     (acc, m) => ({
       revenue: acc.revenue + m.revenue,
@@ -234,6 +273,87 @@ export default function MoneyPage() {
           </div>
         ))}
       </div>
+
+      {/* ── Reserve Plan ───────────────────────────────────────────────────── */}
+      {(obLoading || reserveItems.length > 0) && (
+        <div className="bg-white rounded-xl border border-zinc-200 mb-6 overflow-hidden">
+          <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <PiggyBank size={16} className="text-violet-500" />
+              <div>
+                <h2 className="text-base font-semibold text-zinc-800">Monthly Reserve Plan</h2>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  How much to set aside from <strong>{currentMonthLabel}</strong> for upcoming obligations
+                </p>
+              </div>
+            </div>
+            {!obLoading && reserveItems.length > 0 && (
+              <div className="text-right">
+                <p className="text-xs text-zinc-400">Set aside this month</p>
+                <p className="text-xl font-bold text-violet-600">{formatCurrency(totalReserve)}</p>
+              </div>
+            )}
+          </div>
+
+          {obLoading ? (
+            <div className="p-5 space-y-2">
+              {[1, 2].map(i => <Skeleton key={i} className="h-10 w-full" />)}
+            </div>
+          ) : reserveItems.length === 0 ? (
+            <p className="px-5 py-5 text-sm text-zinc-400 text-center">
+              No upcoming credit card or loan obligations — nothing to reserve.
+            </p>
+          ) : (
+            <>
+              {/* Obligation rows */}
+              <div className="divide-y divide-zinc-50">
+                {reserveItems.map(ob => (
+                  <div key={ob.id} className="px-5 py-3 flex items-center gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm text-zinc-900">{ob.merchant}</span>
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
+                          ob.payment_method === 'credit_card' ? 'bg-sky-100 text-sky-700' : 'bg-violet-100 text-violet-700'
+                        }`}>
+                          {ob.payment_method === 'credit_card' ? 'Credit Card' : 'Loan'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-zinc-400 mt-0.5">
+                        {formatCurrency(ob.amount)} total · due {format(parseISO(ob.due_date), 'MMM d, yyyy')} · {ob.monthsLeft} month{ob.monthsLeft !== 1 ? 's' : ''} away
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-bold text-zinc-800">{formatCurrency(ob.monthlyReserve)}<span className="text-xs font-normal text-zinc-400">/mo</span></p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Two-line profit summary */}
+              <div className="border-t border-zinc-100 bg-zinc-50 px-5 py-4">
+                <div className="max-w-xs ml-auto space-y-1.5">
+                  <div className="flex justify-between text-sm text-zinc-600">
+                    <span>Operating Profit ({currentMonthLabel})</span>
+                    <span className="font-semibold text-zinc-800">
+                      {currentProfit !== null ? formatCurrency(currentProfit) : '—'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm text-zinc-500">
+                    <span>− Set Aside This Month</span>
+                    <span className="font-semibold text-red-500">− {formatCurrency(totalReserve)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-bold border-t border-zinc-200 pt-1.5">
+                    <span className="text-zinc-800">Available Cash</span>
+                    <span className={availableCash !== null && availableCash >= 0 ? 'text-green-600' : 'text-red-500'}>
+                      {availableCash !== null ? formatCurrency(availableCash) : '—'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Prepaid Revenue */}
       <div className="bg-white rounded-xl border border-zinc-200 mb-6">
