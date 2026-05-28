@@ -4,6 +4,7 @@ import {
   buildFrontHtml,
   buildBackHtml,
   formatQuote,
+  SAMPLE_HOUSE_PHOTO,
 } from '@/lib/postcards/templates'
 
 interface RecipientPayload {
@@ -18,6 +19,26 @@ interface RecipientPayload {
   nearby_count: number
   lot_size?: string
   sq_footage?: string
+}
+
+/**
+ * Fetch an image URL and return a base64 data URI.
+ * Lob's renderer cannot load external images from Unsplash/Google due to
+ * hotlink protection and API-key referrer restrictions. Embedding as a
+ * data URI means Lob never makes any external image requests.
+ */
+async function toDataUri(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LawnControl/1.0)' },
+    })
+    if (!res.ok) return null
+    const buffer = await res.arrayBuffer()
+    const contentType = res.headers.get('content-type') || 'image/jpeg'
+    return `data:${contentType};base64,${Buffer.from(buffer).toString('base64')}`
+  } catch {
+    return null
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -57,9 +78,17 @@ export async function POST(request: NextRequest) {
     try {
       const fullAddress = `${recipient.address}, ${recipient.city}, ${recipient.state} ${recipient.zip}`
 
-      const streetViewUrl = gmapsKey
-        ? `https://maps.googleapis.com/maps/api/streetview?size=900x500&location=${encodeURIComponent(fullAddress)}&key=${gmapsKey}`
-        : null
+      // Build the image URL — Street View if we have the key, otherwise sample lawn photo
+      const imageUrl = gmapsKey
+        ? `https://maps.googleapis.com/maps/api/streetview?size=1350x900&location=${encodeURIComponent(fullAddress)}&key=${gmapsKey}`
+        : SAMPLE_HOUSE_PHOTO
+
+      // Pre-fetch and embed as base64 so Lob never hits an external image host
+      const bgDataUri = await toDataUri(imageUrl)
+
+      // If house photo failed, try falling back to the sample lawn photo
+      const finalBgDataUri =
+        bgDataUri ?? (gmapsKey ? await toDataUri(SAMPLE_HOUSE_PHOTO) : null)
 
       const frontHtml = buildFrontHtml({
         name: recipient.name || 'Neighbor',
@@ -67,7 +96,7 @@ export async function POST(request: NextRequest) {
           recipient.ai_copy ||
           'We provide professional lawn care in your area. A personalized quote is included on this card.',
         quote: formatQuote(recipient.quote_amount || 35),
-        streetViewUrl,
+        streetViewUrl: finalBgDataUri,
         streetAddress: recipient.address,
         totalLawns: totalLawnsCount,
         nearbyCount: recipient.nearby_count || 0,
