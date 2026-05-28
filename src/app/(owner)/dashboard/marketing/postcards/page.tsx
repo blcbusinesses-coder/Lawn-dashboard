@@ -62,34 +62,52 @@ const PRICE_PER_PIECE = 0.872
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+/**
+ * Splits "IN 46755" or "IN, 46755" into [state, zip].
+ * Returns ['IN', ''] if no zip found.
+ */
+function splitStateZip(s: string): [string, string] {
+  const t = s.trim()
+  // Already split by space: "IN 46755"
+  const spaceIdx = t.indexOf(' ')
+  if (spaceIdx !== -1) return [t.slice(0, spaceIdx).trim(), t.slice(spaceIdx + 1).trim()]
+  // Just a state abbreviation, no zip
+  return [t, '']
+}
+
 function parseAddressLines(raw: string): RecipientRow[] {
   const rows: RecipientRow[] = []
   const lines = raw.split('\n').map(l => l.trim()).filter(Boolean)
   for (const line of lines) {
     const parts = line.split(',').map(p => p.trim())
-    if (parts.length >= 2) {
-      // Name, Address, City, State, ZIP  or  Name, Full address line
-      const [name, address, city = '', state = 'IN', zip = ''] = parts
-      rows.push({
-        id: crypto.randomUUID(),
-        name: name || 'Homeowner',
-        address,
-        city,
-        state: state || 'IN',
-        zip,
-        status: 'pending',
-      })
+
+    if (parts.length >= 5) {
+      // Name, Address, City, State, ZIP
+      const [name, address, city, state, zip] = parts
+      rows.push({ id: crypto.randomUUID(), name: name || 'Homeowner', address, city, state: state || 'IN', zip, status: 'pending' })
+
+    } else if (parts.length === 4) {
+      // Name, Address, City, "State ZIP"  — state+zip smashed together
+      const [name, address, city, stateZip] = parts
+      const [state, zip] = splitStateZip(stateZip)
+      rows.push({ id: crypto.randomUUID(), name: name || 'Homeowner', address, city, state: state || 'IN', zip, status: 'pending' })
+
+    } else if (parts.length === 3) {
+      // Name, Address, "City State ZIP"
+      const [name, address, cityStateZip] = parts
+      const citySpaceIdx = cityStateZip.lastIndexOf(' ')
+      const cityState = citySpaceIdx !== -1 ? cityStateZip.slice(0, citySpaceIdx) : cityStateZip
+      const zipPart  = citySpaceIdx !== -1 ? cityStateZip.slice(citySpaceIdx + 1) : ''
+      const [city, state] = splitStateZip(cityState)
+      rows.push({ id: crypto.randomUUID(), name: name || 'Homeowner', address, city, state: state || 'IN', zip: zipPart, status: 'pending' })
+
+    } else if (parts.length === 2) {
+      // Name, Address  (no location info)
+      const [name, address] = parts
+      rows.push({ id: crypto.randomUUID(), name: name || 'Homeowner', address, city: '', state: 'IN', zip: '', status: 'pending' })
+
     } else if (parts.length === 1 && parts[0].length > 5) {
-      // Just an address
-      rows.push({
-        id: crypto.randomUUID(),
-        name: 'Homeowner',
-        address: parts[0],
-        city: '',
-        state: 'IN',
-        zip: '',
-        status: 'pending',
-      })
+      rows.push({ id: crypto.randomUUID(), name: 'Homeowner', address: parts[0], city: '', state: 'IN', zip: '', status: 'pending' })
     }
   }
   return rows
@@ -163,7 +181,8 @@ export default function PostcardsPage() {
   const overBudget = totalCost > campaign.budget_cap && campaign.budget_cap > 0
   const readyCount = addresses.filter(r => r.status === 'ready').length
   const pendingCount = addresses.filter(r => r.status === 'pending').length
-  const canLaunch = !analyzing && !launching && !overBudget && addresses.length > 0 && pendingCount === 0 && readyCount > 0
+  const missingZipCount = addresses.filter(r => !r.zip?.trim()).length
+  const canLaunch = !analyzing && !launching && !overBudget && addresses.length > 0 && pendingCount === 0 && readyCount > 0 && missingZipCount === 0
 
   // ── Load history ──────────────────────────────────────────────────────────
   const loadHistory = useCallback(async () => {
@@ -817,6 +836,9 @@ export default function PostcardsPage() {
               {pendingCount > 0 && !analyzing && (
                 <p className="text-xs text-amber-600">{pendingCount} address{pendingCount !== 1 ? 'es' : ''} still need analysis</p>
               )}
+              {missingZipCount > 0 && (
+                <p className="text-xs text-red-600">{missingZipCount} address{missingZipCount !== 1 ? 'es are' : ' is'} missing a ZIP code — Lob requires it</p>
+              )}
               {overBudget && (
                 <p className="text-xs text-red-600">Over budget — cannot launch</p>
               )}
@@ -1035,8 +1057,11 @@ function RecipientTableRow({
     <>
       <tr className="hover:bg-zinc-50">
         <td className="px-4 py-3 font-medium text-zinc-800 whitespace-nowrap">{row.name}</td>
-        <td className="px-4 py-3 text-zinc-500 text-xs max-w-[200px] truncate">
-          {[row.address, row.city, row.state, row.zip].filter(Boolean).join(', ')}
+        <td className="px-4 py-3 text-zinc-500 text-xs max-w-[200px]">
+          <span className="truncate block">{[row.address, row.city, row.state, row.zip].filter(Boolean).join(', ')}</span>
+          {!row.zip?.trim() && (
+            <span className="text-red-500 font-medium">⚠ Missing ZIP</span>
+          )}
         </td>
         <td className="px-4 py-3 max-w-xs">
           <StatusBadge status={row.status} />

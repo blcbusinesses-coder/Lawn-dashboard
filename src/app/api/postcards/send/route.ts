@@ -103,6 +103,12 @@ export async function POST(request: NextRequest) {
 
   for (const recipient of recipients) {
     try {
+      // Guard: Lob requires a ZIP code
+      if (!recipient.zip?.trim()) {
+        results.push({ id: recipient.id, success: false, error: 'Missing ZIP code — Lob requires address_zip' })
+        continue
+      }
+
       const fullAddress = `${recipient.address}, ${recipient.city}, ${recipient.state} ${recipient.zip}`
 
       // Build the source image URL
