@@ -10,7 +10,7 @@ import {
   Users, Home, ClipboardCheck, Receipt, FileText, Bot,
   TrendingUp, HardHat, MessageSquare, Inbox, Star, Settings2,
   CheckSquare, BarChart2, Wrench, Gauge, Globe, CloudSun, PenTool, Filter,
-  Megaphone, DollarSign, ChevronDown, LogOut, Zap,
+  Megaphone, DollarSign, ChevronDown, LogOut, Zap, Mail,
 } from 'lucide-react'
 
 const NAV_GROUPS = [
@@ -21,9 +21,10 @@ const NAV_GROUPS = [
     accent: 'text-purple-400',
     dot: 'bg-purple-400',
     items: [
-      { href: '/dashboard/ads',     label: 'Ad Intelligence', Icon: BarChart2 },
-      { href: '/dashboard/content', label: 'Content',         Icon: PenTool },
-      { href: '/dashboard/site',    label: 'Website',         Icon: Globe },
+      { href: '/dashboard/ads',                    label: 'Ad Intelligence', Icon: BarChart2 },
+      { href: '/dashboard/content',              label: 'Content',         Icon: PenTool },
+      { href: '/dashboard/site',                 label: 'Website',         Icon: Globe },
+      { href: '/dashboard/marketing/postcards',  label: 'Postcards',       Icon: Mail },
     ],
   },
   {
