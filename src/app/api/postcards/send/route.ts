@@ -17,8 +17,8 @@ interface RecipientPayload {
 
 // ─── HTML Templates ───────────────────────────────────────────────────────────
 // Lob renders at 150 DPI. 6x9 landscape = 9in wide × 6in tall.
-// Colors: #1a4a2e (dark green) + white only. Clean, readable.
-// Back: left 50% branded content, right 50% clean white for USPS address block.
+// Colors: #1a4a2e (dark green) + white only.
+// Back: left 50% branded, right 50% clean white for USPS address block.
 
 // Swap this URL to a real crew/truck/yard photo when ready
 const COMPANY_PHOTO_URL =
@@ -28,13 +28,31 @@ function buildFrontHtml(params: {
   name: string
   aiCopy: string
   quote: string
-  streetViewUrl: string
+  streetViewUrl: string | null   // null = no Maps key, render styled fallback
   streetAddress: string
   totalLawns: number
   nearbyCount: number
   phone: string
 }): string {
   const { name, aiCopy, quote, streetViewUrl, streetAddress, totalLawns, nearbyCount, phone } = params
+
+  // Right panel: photo if URL available, styled address panel if not
+  const rightPanel = streetViewUrl
+    ? `<div style="width:45%;position:relative;overflow:hidden;background:#1a4a2e;flex-shrink:0;">
+        <img src="${streetViewUrl}" alt="" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;" />
+        <div style="position:absolute;bottom:0;left:0;right:0;padding:28px 16px 12px;background:linear-gradient(transparent,rgba(0,0,0,0.78));">
+          <div style="color:rgba(255,255,255,0.6);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:3px;">Your Property</div>
+          <div style="color:#ffffff;font-size:12px;font-weight:bold;">${escapeHtml(streetAddress)}</div>
+        </div>
+      </div>`
+    : `<div style="width:45%;background:#1a4a2e;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 20px;">
+        <div style="width:60px;height:60px;border-radius:50%;border:3px solid rgba(255,255,255,0.3);display:flex;align-items:center;justify-content:center;margin-bottom:18px;">
+          <div style="color:rgba(255,255,255,0.7);font-size:28px;">&#127968;</div>
+        </div>
+        <div style="color:rgba(255,255,255,0.5);font-size:9px;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">Your Property</div>
+        <div style="color:#ffffff;font-size:13px;font-weight:bold;text-align:center;line-height:1.5;">${escapeHtml(streetAddress)}</div>
+      </div>`
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -63,7 +81,7 @@ function buildFrontHtml(params: {
   <!-- Body -->
   <div style="display:flex;flex:1;overflow:hidden;">
 
-    <!-- Left: white copy panel -->
+    <!-- Left: white copy panel (55%) -->
     <div style="width:55%;padding:28px 32px;display:flex;flex-direction:column;justify-content:center;background:#ffffff;">
 
       <div style="font-size:10px;font-weight:bold;letter-spacing:2px;color:#1a4a2e;text-transform:uppercase;margin-bottom:10px;">A personal note for you</div>
@@ -96,14 +114,8 @@ function buildFrontHtml(params: {
 
     </div>
 
-    <!-- Right: street view photo -->
-    <div style="width:45%;position:relative;overflow:hidden;background:#1a4a2e;flex-shrink:0;">
-      <img src="${streetViewUrl}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;" />
-      <div style="position:absolute;bottom:0;left:0;right:0;padding:28px 16px 12px;background:linear-gradient(transparent,rgba(0,0,0,0.78));">
-        <div style="color:rgba(255,255,255,0.6);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:3px;">Your Property</div>
-        <div style="color:#ffffff;font-size:12px;font-weight:bold;">${escapeHtml(streetAddress)}</div>
-      </div>
-    </div>
+    <!-- Right: photo or styled fallback (45%) -->
+    ${rightPanel}
 
   </div>
 
@@ -139,7 +151,7 @@ function buildBackHtml(phone: string): string {
   <div style="width:50%;background:#1a4a2e;display:flex;flex-direction:column;overflow:hidden;">
 
     <!-- Company name -->
-    <div style="padding:20px 26px 14px;">
+    <div style="padding:20px 26px 14px;flex-shrink:0;">
       <div style="color:#ffffff;font-weight:900;font-size:22px;letter-spacing:3px;line-height:1.15;">GRAY WOLF</div>
       <div style="color:#ffffff;font-weight:900;font-size:22px;letter-spacing:3px;line-height:1.15;">WORKERS</div>
       <div style="color:rgba(255,255,255,0.45);font-size:10px;letter-spacing:1px;margin-top:5px;">LAWN CARE &bull; KENDALLVILLE, IN</div>
@@ -147,17 +159,14 @@ function buildBackHtml(phone: string): string {
 
     <!-- Company photo -->
     <div style="flex:1;overflow:hidden;position:relative;">
-      <img src="${COMPANY_PHOTO_URL}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;" />
-      <div style="position:absolute;inset:0;background:rgba(26,74,46,0.2);"></div>
+      <img src="${COMPANY_PHOTO_URL}" alt="" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;" />
+      <div style="position:absolute;inset:0;background:rgba(26,74,46,0.15);"></div>
     </div>
 
-    <!-- Phone + CTA -->
-    <div style="padding:16px 26px;border-top:2px solid rgba(255,255,255,0.12);">
+    <!-- Phone only — no extra CTA, quote is on the front -->
+    <div style="padding:16px 26px;border-top:2px solid rgba(255,255,255,0.12);flex-shrink:0;">
       <div style="color:rgba(255,255,255,0.5);font-size:9px;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">Call or text anytime</div>
-      <div style="color:#ffffff;font-size:26px;font-weight:900;letter-spacing:0.5px;margin-bottom:10px;">${escapeHtml(phone)}</div>
-      <div style="background:#ffffff;color:#1a4a2e;padding:9px 18px;border-radius:4px;font-size:12px;font-weight:900;display:inline-block;letter-spacing:0.5px;">
-        GET YOUR FREE QUOTE TODAY
-      </div>
+      <div style="color:#ffffff;font-size:30px;font-weight:900;letter-spacing:0.5px;">${escapeHtml(phone)}</div>
     </div>
 
   </div>
@@ -237,9 +246,10 @@ export async function POST(request: NextRequest) {
     try {
       const fullAddress = `${recipient.address}, ${recipient.city}, ${recipient.state} ${recipient.zip}`
 
+      // Only generate street view URL if we have a key — otherwise pass null for styled fallback
       const streetViewUrl = gmapsKey
         ? `https://maps.googleapis.com/maps/api/streetview?size=800x600&location=${encodeURIComponent(fullAddress)}&key=${gmapsKey}`
-        : `https://via.placeholder.com/800x600/1a4a2e/ffffff?text=Your+Home`
+        : null
 
       const frontHtml = buildFrontHtml({
         name: recipient.name || 'Neighbor',
