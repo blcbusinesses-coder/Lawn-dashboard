@@ -150,6 +150,7 @@ export default function PostcardsPage() {
 
   // Editable response rate for history
   const [rateEdits, setRateEdits]     = useState<Record<string, string>>({})
+  const [launchError, setLaunchError] = useState<string | null>(null)
 
   const totalCost = addresses.length * PRICE_PER_PIECE
   const overBudget = totalCost > campaign.budget_cap && campaign.budget_cap > 0
@@ -308,6 +309,7 @@ export default function PostcardsPage() {
   async function launchCampaign() {
     if (!campaign.name.trim()) { toast.error('Enter a campaign name first'); return }
 
+    setLaunchError(null)
     setLaunching(true)
     try {
       // Create campaign record
@@ -375,7 +377,9 @@ export default function PostcardsPage() {
       toast.success(`Campaign launched! ${sendData.sent} sent, ${sendData.failed} failed.`)
       loadHistory()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Launch failed')
+      const msg = err instanceof Error ? err.message : 'Launch failed'
+      setLaunchError(msg)
+      toast.error('Launch failed — see error below')
     }
     setLaunching(false)
   }
@@ -694,25 +698,50 @@ export default function PostcardsPage() {
           </div>
 
           {/* Launch button */}
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              size="lg"
-              onClick={launchCampaign}
-              disabled={!canLaunch}
-              className="gap-2"
-            >
-              {launching
-                ? <><Loader2 size={16} className="animate-spin" /> Launching…</>
-                : <><Send size={16} /> Launch Campaign</>}
-            </Button>
-            {!campaign.name.trim() && (
-              <p className="text-xs text-amber-600">Enter a campaign name to launch</p>
-            )}
-            {pendingCount > 0 && !analyzing && (
-              <p className="text-xs text-amber-600">{pendingCount} address{pendingCount !== 1 ? 'es' : ''} still need analysis</p>
-            )}
-            {overBudget && (
-              <p className="text-xs text-red-600">Over budget — cannot launch</p>
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                size="lg"
+                onClick={launchCampaign}
+                disabled={!canLaunch}
+                className="gap-2"
+              >
+                {launching
+                  ? <><Loader2 size={16} className="animate-spin" /> Launching…</>
+                  : <><Send size={16} /> Launch Campaign</>}
+              </Button>
+              {!campaign.name.trim() && (
+                <p className="text-xs text-amber-600">Enter a campaign name to launch</p>
+              )}
+              {pendingCount > 0 && !analyzing && (
+                <p className="text-xs text-amber-600">{pendingCount} address{pendingCount !== 1 ? 'es' : ''} still need analysis</p>
+              )}
+              {overBudget && (
+                <p className="text-xs text-red-600">Over budget — cannot launch</p>
+              )}
+            </div>
+
+            {/* Full error display */}
+            {launchError && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2 min-w-0">
+                    <XCircle size={16} className="text-red-500 mt-0.5 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-red-700 mb-1">Launch Error</p>
+                      <pre className="text-xs text-red-600 whitespace-pre-wrap break-all font-mono bg-red-100 rounded p-3 select-all">
+                        {launchError}
+                      </pre>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setLaunchError(null)}
+                    className="text-red-400 hover:text-red-600 flex-shrink-0 text-lg leading-none"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -916,10 +945,12 @@ function RecipientTableRow({
         <td className="px-4 py-3 text-zinc-500 text-xs max-w-[200px] truncate">
           {[row.address, row.city, row.state, row.zip].filter(Boolean).join(', ')}
         </td>
-        <td className="px-4 py-3">
+        <td className="px-4 py-3 max-w-xs">
           <StatusBadge status={row.status} />
           {row.error && (
-            <p className="text-xs text-red-500 mt-0.5 max-w-[160px] truncate" title={row.error}>{row.error}</p>
+            <pre className="mt-2 text-xs text-red-600 whitespace-pre-wrap break-all font-mono bg-red-50 border border-red-200 rounded p-2 select-all max-h-40 overflow-y-auto">
+              {row.error}
+            </pre>
           )}
         </td>
         <td className="px-4 py-3 max-w-[200px]">
