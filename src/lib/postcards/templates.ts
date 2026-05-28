@@ -48,8 +48,8 @@ export function buildFrontHtml(p: FrontParams): string {
 <html>
 <head>
 <meta charset="utf-8">
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Roboto:wght@300;400;500&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     width: 9in;
@@ -64,17 +64,17 @@ export function buildFrontHtml(p: FrontParams): string {
 </head>
 <body>
 
-  <!-- ══ Full-bleed background photo ══ -->
-  <div style="position:absolute;inset:0;">
+  <!-- Full-bleed background photo -->
+  <div style="position:absolute;top:0;left:0;right:0;bottom:0;">
     <img src="${bgPhoto}" style="width:100%;height:100%;object-fit:cover;display:block;" />
-    <!-- Gradient: dark on left for text legibility, fades out quickly so photo dominates -->
-    <div style="position:absolute;inset:0;background:linear-gradient(to right,rgba(8,28,14,0.95) 0%,rgba(8,28,14,0.88) 30%,rgba(8,28,14,0.45) 55%,rgba(8,28,14,0.05) 100%);"></div>
+    <!-- Gradient: dark left for text, fades out so photo dominates right side -->
+    <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(to right,rgba(8,28,14,0.95) 0%,rgba(8,28,14,0.88) 30%,rgba(8,28,14,0.45) 55%,rgba(8,28,14,0.05) 100%);"></div>
   </div>
 
-  <!-- ══ Content layer ══ -->
-  <div style="position:absolute;inset:0;display:flex;flex-direction:column;padding:28px 34px;">
+  <!-- Content layer -->
+  <div style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;padding:28px 34px;">
 
-    <!-- Top: wolf + company name -->
+    <!-- Top: wolf + company name + phone -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:auto;">
       <div style="display:flex;align-items:center;gap:12px;">
         <span style="font-size:34px;line-height:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.6));">&#128058;</span>
@@ -83,14 +83,14 @@ export function buildFrontHtml(p: FrontParams): string {
           <div style="color:rgba(255,255,255,0.8);font-size:9px;letter-spacing:2.5px;text-transform:uppercase;margin-top:3px;text-shadow:0 1px 3px rgba(0,0,0,0.6);">Professional Lawn Care &bull; Kendallville, IN</div>
         </div>
       </div>
-      <!-- Phone top-right — subtle, always visible -->
+      <!-- Phone top-right -->
       <div style="text-align:right;">
         <div style="color:rgba(255,255,255,0.65);font-size:9px;letter-spacing:2px;text-transform:uppercase;margin-bottom:3px;">Call or Text</div>
         <div class="oswald" style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:1px;text-shadow:0 1px 4px rgba(0,0,0,0.5);">${escapeHtml(p.phone)}</div>
       </div>
     </div>
 
-    <!-- Center: name + estimate — the hero -->
+    <!-- Center: name + estimate -->
     <div style="margin-bottom:0;">
 
       <div style="color:rgba(255,255,255,0.85);font-size:11px;letter-spacing:2.5px;text-transform:uppercase;margin-bottom:10px;text-shadow:0 1px 3px rgba(0,0,0,0.5);">
@@ -101,7 +101,7 @@ export function buildFrontHtml(p: FrontParams): string {
         Hey,<br/>${escapeHtml(p.name)}.
       </div>
 
-      <!-- Quote -->
+      <!-- Quote box -->
       <div style="display:inline-block;border:2px solid rgba(255,255,255,0.45);border-radius:6px;padding:14px 22px;margin-bottom:22px;background:rgba(0,0,0,0.35);">
         <div style="color:rgba(255,255,255,0.85);font-size:9px;letter-spacing:2.5px;text-transform:uppercase;margin-bottom:6px;">Your Custom Estimate</div>
         <div class="oswald" style="color:#ffffff;font-size:54px;font-weight:700;line-height:1;letter-spacing:1px;">${escapeHtml(p.quote)}</div>
@@ -120,7 +120,7 @@ export function buildFrontHtml(p: FrontParams): string {
 
     </div>
 
-    <!-- Bottom: fine print -->
+    <!-- Bottom fine print -->
     <div style="margin-top:auto;padding-top:14px;">
       <div style="color:rgba(255,255,255,0.7);font-size:10px;letter-spacing:1px;text-shadow:0 1px 3px rgba(0,0,0,0.5);">
         Locally owned &bull; Fully insured &bull; Kendallville, IN
@@ -144,8 +144,8 @@ export function buildBackHtml(p: BackParams): string {
 <html>
 <head>
 <meta charset="utf-8">
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Roboto:wght@300;400;500&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     width: 9in; height: 6in; overflow: hidden;
@@ -157,15 +157,15 @@ export function buildBackHtml(p: BackParams): string {
 </head>
 <body>
 
-  <!-- ══ Left: branded letter panel (50%) ══ -->
+  <!-- Left: branded letter panel (50%) -->
   <div style="width:50%;background:#0d2e1a;display:flex;flex-direction:column;padding:36px 32px;overflow:hidden;">
 
-    <!-- Wolf + name -->
+    <!-- Wolf + company name -->
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
       <span style="font-size:30px;line-height:1;">&#128058;</span>
       <div>
         <div class="oswald" style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;line-height:1.1;">Gray Wolf Workers</div>
-        <div style="color:rgba(255,255,255,0.4);font-size:9px;letter-spacing:2px;text-transform:uppercase;margin-top:3px;">Lawn Care &bull; Kendallville, IN</div>
+        <div style="color:rgba(255,255,255,0.7);font-size:9px;letter-spacing:2px;text-transform:uppercase;margin-top:3px;">Lawn Care &bull; Kendallville, IN</div>
       </div>
     </div>
 
@@ -173,19 +173,19 @@ export function buildBackHtml(p: BackParams): string {
 
     <!-- Personalized letter -->
     <div style="flex:1;">
-      <div style="color:rgba(255,255,255,0.45);font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;">Hey, ${escapeHtml(p.name)} &mdash;</div>
+      <div style="color:rgba(255,255,255,0.7);font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;">Hey, ${escapeHtml(p.name)} &mdash;</div>
       <p style="color:rgba(255,255,255,0.9);font-size:15px;line-height:1.85;font-weight:300;">${escapeHtml(p.aiCopy)}</p>
     </div>
 
     <!-- Phone CTA -->
     <div style="margin-top:24px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.12);">
-      <div style="color:rgba(255,255,255,0.4);font-size:9px;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;">Ready to get started?</div>
+      <div style="color:rgba(255,255,255,0.65);font-size:9px;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;">Ready to get started?</div>
       <div class="oswald" style="color:#ffffff;font-size:28px;font-weight:700;letter-spacing:1px;">${escapeHtml(p.phone)}</div>
     </div>
 
   </div>
 
-  <!-- ══ Right: USPS address zone (50%) — keep clean ══ -->
+  <!-- Right: USPS address zone (50%) — keep clean -->
   <div style="width:50%;background:#ffffff;padding:20px 24px;display:flex;flex-direction:column;">
     <div>
       <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#111;font-weight:600;letter-spacing:1px;line-height:2;">GRAY WOLF WORKERS</div>
