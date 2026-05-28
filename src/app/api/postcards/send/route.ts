@@ -16,19 +16,20 @@ interface RecipientPayload {
 }
 
 // ─── HTML Templates ───────────────────────────────────────────────────────────
-// Lob renders at 150 DPI. 6x9 landscape = 9in wide × 6in tall.
-// Colors: #1a4a2e (dark green) + white only.
-// Back: left 50% branded, right 50% clean white for USPS address block.
-
-// Swap this URL to a real crew/truck/yard photo when ready
-const COMPANY_PHOTO_URL =
-  'https://images.unsplash.com/photo-1592417817098-8fd3d9eb14a5?w=700&h=280&fit=crop&q=80'
+// Layout inspired by reference postcard:
+//   TOP:    Dark green header — company name left, phone right
+//   MIDDLE: Full-width house photo with dark overlay + personalized text
+//   BOTTOM: Dark green strip — custom estimate left, call-to-action right
+//
+// BACK:
+//   LEFT 50%:  AI copy blurb + company name + phone  (dark green)
+//   RIGHT 50%: Clean white — Lob prints address here
 
 function buildFrontHtml(params: {
   name: string
   aiCopy: string
   quote: string
-  streetViewUrl: string | null   // null = no Maps key, render styled fallback
+  streetViewUrl: string | null
   streetAddress: string
   totalLawns: number
   nearbyCount: number
@@ -36,22 +37,9 @@ function buildFrontHtml(params: {
 }): string {
   const { name, aiCopy, quote, streetViewUrl, streetAddress, totalLawns, nearbyCount, phone } = params
 
-  // Right panel: photo if URL available, styled address panel if not
-  const rightPanel = streetViewUrl
-    ? `<div style="width:45%;position:relative;overflow:hidden;background:#1a4a2e;flex-shrink:0;">
-        <img src="${streetViewUrl}" alt="" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;" />
-        <div style="position:absolute;bottom:0;left:0;right:0;padding:28px 16px 12px;background:linear-gradient(transparent,rgba(0,0,0,0.78));">
-          <div style="color:rgba(255,255,255,0.6);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:3px;">Your Property</div>
-          <div style="color:#ffffff;font-size:12px;font-weight:bold;">${escapeHtml(streetAddress)}</div>
-        </div>
-      </div>`
-    : `<div style="width:45%;background:#1a4a2e;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 20px;">
-        <div style="width:60px;height:60px;border-radius:50%;border:3px solid rgba(255,255,255,0.3);display:flex;align-items:center;justify-content:center;margin-bottom:18px;">
-          <div style="color:rgba(255,255,255,0.7);font-size:28px;">&#127968;</div>
-        </div>
-        <div style="color:rgba(255,255,255,0.5);font-size:9px;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">Your Property</div>
-        <div style="color:#ffffff;font-size:13px;font-weight:bold;text-align:center;line-height:1.5;">${escapeHtml(streetAddress)}</div>
-      </div>`
+  const photoLayer = streetViewUrl
+    ? `<img src="${streetViewUrl}" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;" />`
+    : `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#0d2e1a 0%,#1a4a2e 50%,#0d2e1a 100%);"></div>`
 
   return `<!DOCTYPE html>
 <html>
@@ -62,76 +50,95 @@ function buildFrontHtml(params: {
   body {
     width: 9in; height: 6in; overflow: hidden;
     font-family: Arial, Helvetica, sans-serif;
-    background: #ffffff;
     display: flex; flex-direction: column;
+    background: #1a4a2e;
   }
 </style>
 </head>
 <body>
 
-  <!-- Header -->
-  <div style="background:#1a4a2e;padding:13px 28px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+  <!-- ══ TOP HEADER ══ -->
+  <div style="background:#1a4a2e;padding:16px 32px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;border-bottom:3px solid rgba(255,255,255,0.12);">
+
+    <!-- Left: company name -->
     <div>
-      <div style="color:#ffffff;font-weight:900;font-size:16px;letter-spacing:3px;">GRAY WOLF WORKERS</div>
-      <div style="color:rgba(255,255,255,0.55);font-size:10px;letter-spacing:1.5px;margin-top:2px;">PROFESSIONAL LAWN CARE &bull; KENDALLVILLE, IN</div>
-    </div>
-    <div style="color:#ffffff;font-size:15px;font-weight:bold;">${escapeHtml(phone)}</div>
-  </div>
-
-  <!-- Body -->
-  <div style="display:flex;flex:1;overflow:hidden;">
-
-    <!-- Left: white copy panel (55%) -->
-    <div style="width:55%;padding:28px 32px;display:flex;flex-direction:column;justify-content:center;background:#ffffff;">
-
-      <div style="font-size:10px;font-weight:bold;letter-spacing:2px;color:#1a4a2e;text-transform:uppercase;margin-bottom:10px;">A personal note for you</div>
-
-      <div style="font-size:40px;font-weight:900;color:#111111;line-height:1;margin-bottom:10px;">Hey, ${escapeHtml(name)}.</div>
-
-      <div style="width:36px;height:3px;background:#1a4a2e;margin-bottom:14px;"></div>
-
-      <p style="font-size:13px;line-height:1.75;color:#444444;margin-bottom:20px;">${escapeHtml(aiCopy)}</p>
-
-      <!-- Quote -->
-      <div style="display:inline-block;background:#1a4a2e;color:#ffffff;padding:12px 22px;border-radius:5px;margin-bottom:18px;align-self:flex-start;">
-        <div style="font-size:9px;letter-spacing:1.5px;opacity:0.65;text-transform:uppercase;margin-bottom:4px;">Your Personalized Quote</div>
-        <div style="font-size:28px;font-weight:900;line-height:1;">${escapeHtml(quote)}</div>
-        <div style="font-size:10px;opacity:0.6;margin-top:3px;">Per visit &bull; No contract required</div>
-      </div>
-
-      <!-- Stats -->
-      <div style="display:flex;border-top:1px solid #e5e7eb;padding-top:14px;">
-        <div style="text-align:center;flex:1;">
-          <div style="font-size:20px;font-weight:900;color:#1a4a2e;">${totalLawns}</div>
-          <div style="font-size:9px;color:#888;letter-spacing:0.5px;margin-top:2px;text-transform:uppercase;">Lawns This Season</div>
-        </div>
-        <div style="width:1px;background:#e5e7eb;"></div>
-        <div style="text-align:center;flex:1;">
-          <div style="font-size:20px;font-weight:900;color:#1a4a2e;">${nearbyCount}</div>
-          <div style="font-size:9px;color:#888;letter-spacing:0.5px;margin-top:2px;text-transform:uppercase;">Near Your Home</div>
-        </div>
-      </div>
-
+      <div style="color:rgba(255,255,255,0.55);font-size:10px;letter-spacing:3px;font-weight:bold;text-transform:uppercase;margin-bottom:4px;">Professional Lawn Care &bull; Kendallville, IN</div>
+      <div style="color:#ffffff;font-size:34px;font-weight:900;letter-spacing:2px;line-height:1;">GRAY WOLF WORKERS</div>
     </div>
 
-    <!-- Right: photo or styled fallback (45%) -->
-    ${rightPanel}
+    <!-- Right: phone -->
+    <div style="text-align:right;">
+      <div style="color:rgba(255,255,255,0.55);font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">Call or Text</div>
+      <div style="color:#ffffff;font-size:22px;font-weight:900;letter-spacing:1px;">${escapeHtml(phone)}</div>
+    </div>
 
   </div>
 
-  <!-- Footer CTA -->
-  <div style="background:#1a4a2e;padding:11px 28px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
-    <div style="color:rgba(255,255,255,0.55);font-size:11px;">No contracts &bull; Cancel anytime &bull; Locally owned &amp; insured</div>
-    <div style="background:#ffffff;color:#1a4a2e;padding:9px 26px;border-radius:4px;font-weight:900;font-size:13px;letter-spacing:0.5px;white-space:nowrap;">
-      CALL OR TEXT ${escapeHtml(phone)}
+  <!-- ══ MIDDLE: full-width house photo with overlay ══ -->
+  <div style="flex:1;position:relative;overflow:hidden;">
+
+    <!-- Photo (or dark gradient fallback) -->
+    ${photoLayer}
+
+    <!-- Dark scrim for text readability -->
+    <div style="position:absolute;inset:0;background:rgba(0,0,0,0.52);"></div>
+
+    <!-- Content overlay -->
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:28px 40px;">
+
+      <!-- Greeting -->
+      <div style="color:rgba(255,255,255,0.65);font-size:11px;letter-spacing:3px;text-transform:uppercase;margin-bottom:10px;">A personal note for you</div>
+      <div style="color:#ffffff;font-size:52px;font-weight:900;line-height:1;margin-bottom:14px;">Hey, ${escapeHtml(name)}.</div>
+
+      <!-- Address caption -->
+      <div style="color:rgba(255,255,255,0.55);font-size:12px;margin-bottom:22px;">${escapeHtml(streetAddress)}</div>
+
+      <!-- Divider -->
+      <div style="width:48px;height:3px;background:rgba(255,255,255,0.4);margin-bottom:22px;"></div>
+
+      <!-- Stats pills -->
+      <div style="display:flex;gap:14px;">
+        <div style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);border-radius:5px;padding:10px 18px;">
+          <div style="color:rgba(255,255,255,0.6);font-size:9px;letter-spacing:2px;text-transform:uppercase;margin-bottom:3px;">Neighbors on our route</div>
+          <div style="color:#ffffff;font-size:26px;font-weight:900;line-height:1;">${nearbyCount}</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);border-radius:5px;padding:10px 18px;">
+          <div style="color:rgba(255,255,255,0.6);font-size:9px;letter-spacing:2px;text-transform:uppercase;margin-bottom:3px;">Lawns this season</div>
+          <div style="color:#ffffff;font-size:26px;font-weight:900;line-height:1;">${totalLawns}</div>
+        </div>
+      </div>
+
     </div>
+
+  </div>
+
+  <!-- ══ BOTTOM STRIP: estimate + CTA ══ -->
+  <div style="background:#1a4a2e;padding:16px 32px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;border-top:3px solid rgba(255,255,255,0.12);">
+
+    <!-- Left: estimate -->
+    <div style="display:flex;align-items:center;gap:20px;">
+      <div>
+        <div style="color:rgba(255,255,255,0.55);font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:3px;">Your Custom Estimate</div>
+        <div style="color:#ffffff;font-size:36px;font-weight:900;line-height:1;">${escapeHtml(quote)}</div>
+      </div>
+      <div style="width:1px;height:44px;background:rgba(255,255,255,0.2);"></div>
+      <div style="color:rgba(255,255,255,0.5);font-size:11px;line-height:1.6;">Per visit &bull; No contract<br/>Cancel anytime</div>
+    </div>
+
+    <!-- Right: CTA button -->
+    <div style="background:#ffffff;color:#1a4a2e;padding:12px 28px;border-radius:5px;text-align:center;">
+      <div style="font-size:10px;letter-spacing:1.5px;font-weight:bold;text-transform:uppercase;opacity:0.6;margin-bottom:2px;">Call or Text Now</div>
+      <div style="font-size:22px;font-weight:900;letter-spacing:0.5px;">${escapeHtml(phone)}</div>
+    </div>
+
   </div>
 
 </body>
 </html>`
 }
 
-function buildBackHtml(phone: string): string {
+function buildBackHtml(params: { phone: string; aiCopy: string; name: string }): string {
+  const { phone, aiCopy, name } = params
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -147,31 +154,30 @@ function buildBackHtml(phone: string): string {
 </head>
 <body>
 
-  <!-- Left: branded panel (50%) -->
-  <div style="width:50%;background:#1a4a2e;display:flex;flex-direction:column;overflow:hidden;">
+  <!-- ══ LEFT: personalized blurb panel (50%) ══ -->
+  <div style="width:50%;background:#1a4a2e;padding:36px 32px;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;">
 
-    <!-- Company name -->
-    <div style="padding:20px 26px 14px;flex-shrink:0;">
-      <div style="color:#ffffff;font-weight:900;font-size:22px;letter-spacing:3px;line-height:1.15;">GRAY WOLF</div>
-      <div style="color:#ffffff;font-weight:900;font-size:22px;letter-spacing:3px;line-height:1.15;">WORKERS</div>
-      <div style="color:rgba(255,255,255,0.45);font-size:10px;letter-spacing:1px;margin-top:5px;">LAWN CARE &bull; KENDALLVILLE, IN</div>
+    <!-- Top: company name -->
+    <div>
+      <div style="color:#ffffff;font-weight:900;font-size:20px;letter-spacing:2.5px;line-height:1.1;">GRAY WOLF WORKERS</div>
+      <div style="color:rgba(255,255,255,0.45);font-size:10px;letter-spacing:1.5px;margin-top:5px;text-transform:uppercase;">Lawn Care &bull; Kendallville, IN</div>
+
+      <div style="width:36px;height:2px;background:rgba(255,255,255,0.25);margin:20px 0;"></div>
+
+      <!-- Personalized note -->
+      <div style="color:rgba(255,255,255,0.55);font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;">Hey, ${escapeHtml(name)} &mdash;</div>
+      <p style="color:#ffffff;font-size:15px;line-height:1.8;">${escapeHtml(aiCopy)}</p>
     </div>
 
-    <!-- Company photo -->
-    <div style="flex:1;overflow:hidden;position:relative;">
-      <img src="${COMPANY_PHOTO_URL}" alt="" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;" />
-      <div style="position:absolute;inset:0;background:rgba(26,74,46,0.15);"></div>
-    </div>
-
-    <!-- Phone only — no extra CTA, quote is on the front -->
-    <div style="padding:16px 26px;border-top:2px solid rgba(255,255,255,0.12);flex-shrink:0;">
-      <div style="color:rgba(255,255,255,0.5);font-size:9px;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">Call or text anytime</div>
-      <div style="color:#ffffff;font-size:30px;font-weight:900;letter-spacing:0.5px;">${escapeHtml(phone)}</div>
+    <!-- Bottom: phone -->
+    <div>
+      <div style="color:rgba(255,255,255,0.45);font-size:9px;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px;">Ready? Give us a call.</div>
+      <div style="color:#ffffff;font-size:26px;font-weight:900;letter-spacing:0.5px;">${escapeHtml(phone)}</div>
     </div>
 
   </div>
 
-  <!-- Right: USPS address zone (50%) — keep clean for Lob -->
+  <!-- ══ RIGHT: USPS address zone (50%) — keep clean ══ -->
   <div style="width:50%;background:#ffffff;padding:18px 22px;display:flex;flex-direction:column;">
     <div>
       <div style="font-size:9px;color:#222;font-weight:bold;line-height:1.8;">GRAY WOLF WORKERS</div>
@@ -226,13 +232,11 @@ export async function POST(request: NextRequest) {
 
   if (!lobKey) return NextResponse.json({ error: 'LOB_API_KEY not configured' }, { status: 500 })
 
-  // Total customer count for social proof
   const { count: totalLawns } = await adminClient
     .from('customers')
     .select('*', { count: 'exact', head: true })
   const totalLawnsCount = totalLawns ?? 0
 
-  // Campaign name for description
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: campaign } = await (adminClient.from('postcard_campaigns') as any)
     .select('name')
@@ -246,9 +250,8 @@ export async function POST(request: NextRequest) {
     try {
       const fullAddress = `${recipient.address}, ${recipient.city}, ${recipient.state} ${recipient.zip}`
 
-      // Only generate street view URL if we have a key — otherwise pass null for styled fallback
       const streetViewUrl = gmapsKey
-        ? `https://maps.googleapis.com/maps/api/streetview?size=800x600&location=${encodeURIComponent(fullAddress)}&key=${gmapsKey}`
+        ? `https://maps.googleapis.com/maps/api/streetview?size=900x500&location=${encodeURIComponent(fullAddress)}&key=${gmapsKey}`
         : null
 
       const frontHtml = buildFrontHtml({
@@ -264,7 +267,13 @@ export async function POST(request: NextRequest) {
         phone: campaignPhone,
       })
 
-      const backHtml = buildBackHtml(campaignPhone)
+      const backHtml = buildBackHtml({
+        phone: campaignPhone,
+        aiCopy:
+          recipient.ai_copy ||
+          'We provide professional lawn care in your area and would love to take care of yours. Your personalized quote is on the other side.',
+        name: recipient.name || 'Neighbor',
+      })
 
       const lobPayload = {
         description: `${campaignName} — ${recipient.name}`,
@@ -352,7 +361,6 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Update campaign totals
   const sentCount = results.filter((r) => r.success).length
   const totalCost = sentCount * 0.872
 
