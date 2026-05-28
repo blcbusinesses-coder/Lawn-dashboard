@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import {
   Mail, RefreshCw, ChevronDown, ChevronUp, CheckCircle2,
   XCircle, Clock, Loader2, Send, Eye, History, Settings2,
-  ArrowLeft, ArrowRight, Plus, Trash2, Zap, Database,
+  ArrowLeft, ArrowRight, Plus, Trash2, Zap, Database, RotateCcw,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -151,6 +151,7 @@ export default function PostcardsPage() {
   // Editable response rate for history
   const [rateEdits, setRateEdits]     = useState<Record<string, string>>({})
   const [launchError, setLaunchError] = useState<string | null>(null)
+  const [resending, setResending]     = useState<Record<string, boolean>>({})
 
   const totalCost = addresses.length * PRICE_PER_PIECE
   const overBudget = totalCost > campaign.budget_cap && campaign.budget_cap > 0
@@ -399,6 +400,73 @@ export default function PostcardsPage() {
     } else {
       toast.error('Failed to save')
     }
+  }
+
+  // ── Resend a past campaign ────────────────────────────────────────────────
+  async function resendCampaign(c: Campaign) {
+    setResending(prev => ({ ...prev, [c.id]: true }))
+    try {
+      // Fetch original recipients
+      const res = await fetch(`/api/postcards/campaigns/${c.id}`)
+      if (!res.ok) throw new Error('Failed to load campaign recipients')
+      const data = await res.json()
+      const recipients = (data.recipients ?? []) as Array<Record<string, unknown>>
+
+      if (!recipients.length) {
+        toast.error('No recipients found for this campaign')
+        return
+      }
+
+      // Create a new campaign record (copy of original)
+      const newCampaignRes = await fetch('/api/postcards/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `${c.name} (Resend)`,
+          description: c.description,
+          send_date: 'ASAP',
+          budget_cap: c.budget_cap,
+          phone: data.phone ?? '(260) 000-0000',
+        }),
+      })
+      if (!newCampaignRes.ok) throw new Error('Failed to create resend campaign')
+      const newCampaign = await newCampaignRes.json()
+
+      // Send to all original recipients
+      const sendRes = await fetch('/api/postcards/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          campaign_id: newCampaign.id,
+          phone: data.phone ?? '(260) 000-0000',
+          recipients: recipients.map((r) => ({
+            id: (r.id as string) ?? crypto.randomUUID(),
+            name: r.name ?? 'Homeowner',
+            address: r.address ?? '',
+            city: r.city ?? '',
+            state: r.state ?? 'IN',
+            zip: r.zip ?? '',
+            ai_copy: r.ai_copy ?? '',
+            quote_amount: r.quote_amount ?? 35,
+            nearby_count: r.nearby_count ?? 0,
+            lot_size: r.lot_size,
+            sq_footage: r.sq_footage,
+          })),
+        }),
+      })
+
+      if (!sendRes.ok) {
+        const d = await sendRes.json()
+        throw new Error(d.error ?? 'Send failed')
+      }
+
+      const sendData = await sendRes.json()
+      toast.success(`Resent! ${sendData.sent} sent, ${sendData.failed} failed.`)
+      loadHistory()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Resend failed')
+    }
+    setResending(prev => ({ ...prev, [c.id]: false }))
   }
 
   // ─── Render ─────────────────────────────────────────────────────────────────
@@ -874,6 +942,7 @@ export default function PostcardsPage() {
                     <th className="px-4 py-2.5 font-medium text-zinc-500 text-xs uppercase tracking-wide">Pieces</th>
                     <th className="px-4 py-2.5 font-medium text-zinc-500 text-xs uppercase tracking-wide">Cost</th>
                     <th className="px-4 py-2.5 font-medium text-zinc-500 text-xs uppercase tracking-wide">Response Rate %</th>
+                    <th className="px-4 py-2.5 font-medium text-zinc-500 text-xs uppercase tracking-wide"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100">
@@ -912,6 +981,19 @@ export default function PostcardsPage() {
                             Save
                           </Button>
                         </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5 whitespace-nowrap"
+                          disabled={!!resending[c.id]}
+                          onClick={() => resendCampaign(c)}
+                        >
+                          {resending[c.id]
+                            ? <><Loader2 size={13} className="animate-spin" /> Sending…</>
+                            : <><RotateCcw size={13} /> Resend</>}
+                        </Button>
                       </td>
                     </tr>
                   ))}
