@@ -22,21 +22,48 @@ interface RecipientPayload {
 }
 
 /**
- * Fetch an image URL and return a base64 data URI.
- * Lob's renderer cannot load external images from Unsplash/Google due to
- * hotlink protection and API-key referrer restrictions. Embedding as a
- * data URI means Lob never makes any external image requests.
+ * Fetch an image and upload it to Supabase Storage so Lob can
+ * load it from a reliable public CDN URL (avoids Unsplash hotlink
+ * blocks and Google API-key referrer restrictions).
+ * Returns the public URL, or null if anything fails.
  */
-async function toDataUri(url: string): Promise<string | null> {
+async function uploadImageForLob(
+  imageUrl: string,
+  storagePath: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  adminClient: any,
+): Promise<string | null> {
   try {
-    const res = await fetch(url, {
+    const res = await fetch(imageUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LawnControl/1.0)' },
     })
     if (!res.ok) return null
-    const buffer = await res.arrayBuffer()
+
+    const buffer = Buffer.from(await res.arrayBuffer())
     const contentType = res.headers.get('content-type') || 'image/jpeg'
-    return `data:${contentType};base64,${Buffer.from(buffer).toString('base64')}`
-  } catch {
+
+    // Ensure the bucket exists (no-op if already created)
+    await adminClient.storage.createBucket('postcard-images', {
+      public: true,
+      fileSizeLimit: 5242880, // 5 MB
+    })
+
+    const { error: uploadErr } = await adminClient.storage
+      .from('postcard-images')
+      .upload(storagePath, buffer, { contentType, upsert: true })
+
+    if (uploadErr) {
+      console.error('[postcards/send] Storage upload error:', uploadErr.message)
+      return null
+    }
+
+    const { data } = adminClient.storage
+      .from('postcard-images')
+      .getPublicUrl(storagePath)
+
+    return data?.publicUrl ?? null
+  } catch (err) {
+    console.error('[postcards/send] uploadImageForLob error:', err)
     return null
   }
 }
@@ -78,17 +105,20 @@ export async function POST(request: NextRequest) {
     try {
       const fullAddress = `${recipient.address}, ${recipient.city}, ${recipient.state} ${recipient.zip}`
 
-      // Build the image URL — Street View if we have the key, otherwise sample lawn photo
-      const imageUrl = gmapsKey
+      // Build the source image URL
+      const sourceImageUrl = gmapsKey
         ? `https://maps.googleapis.com/maps/api/streetview?size=1350x900&location=${encodeURIComponent(fullAddress)}&key=${gmapsKey}`
         : SAMPLE_HOUSE_PHOTO
 
-      // Pre-fetch and embed as base64 so Lob never hits an external image host
-      const bgDataUri = await toDataUri(imageUrl)
+      // Upload to Supabase Storage → reliable CDN URL Lob can fetch
+      const storagePath = `campaigns/${campaign_id}/${recipient.id}.jpg`
+      let bgUrl = await uploadImageForLob(sourceImageUrl, storagePath, adminClient)
 
-      // If house photo failed, try falling back to the sample lawn photo
-      const finalBgDataUri =
-        bgDataUri ?? (gmapsKey ? await toDataUri(SAMPLE_HOUSE_PHOTO) : null)
+      // If Street View fetch failed, fall back to the sample lawn photo
+      if (!bgUrl && gmapsKey) {
+        const fallbackPath = `samples/lawn-fallback.jpg`
+        bgUrl = await uploadImageForLob(SAMPLE_HOUSE_PHOTO, fallbackPath, adminClient)
+      }
 
       const frontHtml = buildFrontHtml({
         name: recipient.name || 'Neighbor',
@@ -96,7 +126,7 @@ export async function POST(request: NextRequest) {
           recipient.ai_copy ||
           'We provide professional lawn care in your area. A personalized quote is included on this card.',
         quote: formatQuote(recipient.quote_amount || 35),
-        streetViewUrl: finalBgDataUri,
+        streetViewUrl: bgUrl,
         streetAddress: recipient.address,
         totalLawns: totalLawnsCount,
         nearbyCount: recipient.nearby_count || 0,
