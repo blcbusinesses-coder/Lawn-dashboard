@@ -67,60 +67,63 @@ export function buildFrontHtml(p: FrontParams): string {
   <!-- ══ Full-bleed background photo ══ -->
   <div style="position:absolute;inset:0;">
     <img src="${bgPhoto}" style="width:100%;height:100%;object-fit:cover;display:block;" />
-    <!-- Heavy dark overlay left → transparent right so photo shows on right side -->
-    <div style="position:absolute;inset:0;background:linear-gradient(to right,rgba(10,35,18,0.97) 0%,rgba(10,35,18,0.93) 38%,rgba(10,35,18,0.55) 62%,rgba(10,35,18,0.10) 100%);"></div>
+    <!-- Gradient: dark on left for text legibility, fades out quickly so photo dominates -->
+    <div style="position:absolute;inset:0;background:linear-gradient(to right,rgba(8,28,14,0.95) 0%,rgba(8,28,14,0.88) 30%,rgba(8,28,14,0.45) 55%,rgba(8,28,14,0.05) 100%);"></div>
   </div>
 
   <!-- ══ Content layer ══ -->
-  <div style="position:absolute;inset:0;display:flex;flex-direction:column;padding:30px 36px;">
+  <div style="position:absolute;inset:0;display:flex;flex-direction:column;padding:28px 34px;">
 
     <!-- Top: wolf + company name -->
-    <div style="display:flex;align-items:center;gap:14px;margin-bottom:auto;">
-      <span style="font-size:36px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5));">&#128058;</span>
-      <div>
-        <div class="oswald" style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:3px;text-transform:uppercase;line-height:1;">Gray Wolf Workers</div>
-        <div style="color:rgba(255,255,255,0.45);font-size:9px;letter-spacing:2.5px;text-transform:uppercase;margin-top:3px;">Professional Lawn Care &bull; Kendallville, IN</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:auto;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span style="font-size:34px;line-height:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.6));">&#128058;</span>
+        <div>
+          <div class="oswald" style="color:#ffffff;font-size:19px;font-weight:700;letter-spacing:3px;text-transform:uppercase;line-height:1;text-shadow:0 1px 4px rgba(0,0,0,0.5);">Gray Wolf Workers</div>
+          <div style="color:rgba(255,255,255,0.8);font-size:9px;letter-spacing:2.5px;text-transform:uppercase;margin-top:3px;text-shadow:0 1px 3px rgba(0,0,0,0.6);">Professional Lawn Care &bull; Kendallville, IN</div>
+        </div>
+      </div>
+      <!-- Phone top-right — subtle, always visible -->
+      <div style="text-align:right;">
+        <div style="color:rgba(255,255,255,0.65);font-size:9px;letter-spacing:2px;text-transform:uppercase;margin-bottom:3px;">Call or Text</div>
+        <div class="oswald" style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:1px;text-shadow:0 1px 4px rgba(0,0,0,0.5);">${escapeHtml(p.phone)}</div>
       </div>
     </div>
 
     <!-- Center: name + estimate — the hero -->
     <div style="margin-bottom:0;">
 
-      <div style="color:rgba(255,255,255,0.55);font-size:11px;letter-spacing:2.5px;text-transform:uppercase;margin-bottom:10px;">
+      <div style="color:rgba(255,255,255,0.85);font-size:11px;letter-spacing:2.5px;text-transform:uppercase;margin-bottom:10px;text-shadow:0 1px 3px rgba(0,0,0,0.5);">
         A personal note for your home
       </div>
 
-      <div class="oswald" style="color:#ffffff;font-size:76px;font-weight:700;line-height:0.9;margin-bottom:20px;text-shadow:0 2px 12px rgba(0,0,0,0.4);">
+      <div class="oswald" style="color:#ffffff;font-size:76px;font-weight:700;line-height:0.9;margin-bottom:20px;text-shadow:0 3px 14px rgba(0,0,0,0.5);">
         Hey,<br/>${escapeHtml(p.name)}.
       </div>
 
       <!-- Quote -->
-      <div style="display:inline-block;border:2px solid rgba(255,255,255,0.35);border-radius:6px;padding:14px 22px;margin-bottom:22px;background:rgba(0,0,0,0.25);">
-        <div style="color:rgba(255,255,255,0.55);font-size:9px;letter-spacing:2.5px;text-transform:uppercase;margin-bottom:6px;">Your Custom Estimate</div>
+      <div style="display:inline-block;border:2px solid rgba(255,255,255,0.45);border-radius:6px;padding:14px 22px;margin-bottom:22px;background:rgba(0,0,0,0.35);">
+        <div style="color:rgba(255,255,255,0.85);font-size:9px;letter-spacing:2.5px;text-transform:uppercase;margin-bottom:6px;">Your Custom Estimate</div>
         <div class="oswald" style="color:#ffffff;font-size:54px;font-weight:700;line-height:1;letter-spacing:1px;">${escapeHtml(p.quote)}</div>
-        <div style="color:rgba(255,255,255,0.4);font-size:10px;margin-top:4px;">Per visit &bull; No contract &bull; Cancel anytime</div>
+        <div style="color:rgba(255,255,255,0.7);font-size:10px;margin-top:4px;">Per visit &bull; No contract &bull; Cancel anytime</div>
       </div>
 
       <!-- Stats -->
       <div style="display:flex;gap:28px;">
-        <div style="color:rgba(255,255,255,0.7);font-size:12px;font-weight:500;">
+        <div style="color:rgba(255,255,255,0.88);font-size:12px;font-weight:500;text-shadow:0 1px 3px rgba(0,0,0,0.5);">
           &#127807; <span class="oswald" style="font-size:16px;font-weight:600;">${p.totalLawns}</span> lawns this season
         </div>
-        <div style="color:rgba(255,255,255,0.7);font-size:12px;font-weight:500;">
+        <div style="color:rgba(255,255,255,0.88);font-size:12px;font-weight:500;text-shadow:0 1px 3px rgba(0,0,0,0.5);">
           &#128205; <span class="oswald" style="font-size:16px;font-weight:600;">${p.nearbyCount}</span> neighbors on our route
         </div>
       </div>
 
     </div>
 
-    <!-- Bottom: CTA bar -->
-    <div style="margin-top:auto;display:flex;align-items:center;justify-content:space-between;padding-top:18px;border-top:1px solid rgba(255,255,255,0.15);">
-      <div style="color:rgba(255,255,255,0.4);font-size:11px;line-height:1.6;">
-        Locally owned &bull; Fully insured<br/>Kendallville, IN
-      </div>
-      <div style="background:#ffffff;color:#0d2e1a;padding:13px 34px;border-radius:5px;text-align:center;">
-        <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;opacity:0.5;margin-bottom:3px;">Call or Text</div>
-        <div class="oswald" style="font-size:22px;font-weight:700;letter-spacing:1px;">${escapeHtml(p.phone)}</div>
+    <!-- Bottom: fine print -->
+    <div style="margin-top:auto;padding-top:14px;">
+      <div style="color:rgba(255,255,255,0.7);font-size:10px;letter-spacing:1px;text-shadow:0 1px 3px rgba(0,0,0,0.5);">
+        Locally owned &bull; Fully insured &bull; Kendallville, IN
       </div>
     </div>
 
