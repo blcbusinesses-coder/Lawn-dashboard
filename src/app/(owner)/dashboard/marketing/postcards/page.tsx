@@ -153,6 +153,12 @@ export default function PostcardsPage() {
   const [launchError, setLaunchError] = useState<string | null>(null)
   const [resending, setResending]     = useState<Record<string, boolean>>({})
 
+  // Postcard mockup preview
+  const [mockupFront, setMockupFront]   = useState<string | null>(null)
+  const [mockupBack, setMockupBack]     = useState<string | null>(null)
+  const [mockupLoading, setMockupLoading] = useState(false)
+  const [mockupFlipped, setMockupFlipped] = useState(false)
+
   const totalCost = addresses.length * PRICE_PER_PIECE
   const overBudget = totalCost > campaign.budget_cap && campaign.budget_cap > 0
   const readyCount = addresses.filter(r => r.status === 'ready').length
@@ -469,6 +475,34 @@ export default function PostcardsPage() {
     setResending(prev => ({ ...prev, [c.id]: false }))
   }
 
+  // ── Load postcard mockup ──────────────────────────────────────────────────
+  async function loadMockup() {
+    setMockupLoading(true)
+    setMockupFlipped(false)
+
+    // Use first ready recipient's data if available, otherwise sample data
+    const sample = addresses.find(r => r.status === 'ready') ?? null
+    const params = new URLSearchParams({
+      name:          sample?.name          ?? 'Alex Johnson',
+      address:       sample?.address       ?? '456 Oak Street',
+      quote_amount:  String(sample?.quote_amount  ?? 45),
+      nearby_count:  String(sample?.nearby_count  ?? 4),
+      phone:         campaign.phone        ?? '(260) 000-0000',
+      ai_copy:       sample?.ai_copy       ?? '',
+    })
+
+    try {
+      const res = await fetch(`/api/postcards/preview?${params}`)
+      if (!res.ok) throw new Error('Preview failed')
+      const data = await res.json()
+      setMockupFront(data.front)
+      setMockupBack(data.back)
+    } catch {
+      // ignore
+    }
+    setMockupLoading(false)
+  }
+
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -497,11 +531,10 @@ export default function PostcardsPage() {
           <Button
             variant={activeView === 'preview' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => { setActiveView('preview'); setPreviewIdx(0) }}
-            disabled={!addresses.some(r => r.status === 'ready')}
+            onClick={() => { setActiveView('preview'); loadMockup() }}
             className="gap-1.5"
           >
-            <Eye size={14} /> Preview
+            <Eye size={14} /> Preview Card
           </Button>
           <Button
             variant={activeView === 'history' ? 'default' : 'outline'}
@@ -818,101 +851,79 @@ export default function PostcardsPage() {
       {/* ── PREVIEW VIEW ───────────────────────────────────────────────────── */}
       {activeView === 'preview' && (
         <div className="space-y-4">
-          <Button variant="outline" size="sm" onClick={() => setActiveView('setup')} className="gap-1.5">
-            <ArrowLeft size={14} /> Back to Setup
-          </Button>
 
-          {addresses.filter(r => r.status === 'ready').length === 0 ? (
-            <div className="bg-white rounded-xl border border-zinc-200 py-16 text-center">
-              <p className="text-zinc-500">No ready addresses to preview. Analyze some addresses first.</p>
-            </div>
-          ) : (
-            (() => {
-              const readyRows = addresses.filter(r => r.status === 'ready')
-              const row = readyRows[previewIdx]
-              return (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <Button
-                      variant="outline" size="sm"
-                      onClick={() => setPreviewIdx(p => Math.max(0, p - 1))}
-                      disabled={previewIdx === 0}
-                    >
-                      <ArrowLeft size={14} />
-                    </Button>
-                    <span className="text-sm text-zinc-500">{previewIdx + 1} / {readyRows.length}</span>
-                    <Button
-                      variant="outline" size="sm"
-                      onClick={() => setPreviewIdx(p => Math.min(readyRows.length - 1, p + 1))}
-                      disabled={previewIdx === readyRows.length - 1}
-                    >
-                      <ArrowRight size={14} />
-                    </Button>
-                  </div>
+          {/* Controls */}
+          <div className="flex flex-wrap items-center gap-3">
+            <Button variant="outline" size="sm" onClick={() => setActiveView('setup')} className="gap-1.5">
+              <ArrowLeft size={14} /> Back to Setup
+            </Button>
+            <Button variant="outline" size="sm" onClick={loadMockup} disabled={mockupLoading} className="gap-1.5">
+              <RefreshCw size={13} className={mockupLoading ? 'animate-spin' : ''} /> Regenerate
+            </Button>
+            {(mockupFront || mockupBack) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setMockupFlipped(f => !f)}
+                className="gap-1.5"
+              >
+                <RotateCcw size={13} /> {mockupFlipped ? 'Show Front' : 'Show Back'}
+              </Button>
+            )}
+            <p className="text-xs text-zinc-400 ml-auto">
+              {addresses.find(r => r.status === 'ready')
+                ? 'Using your first analyzed recipient\'s data'
+                : 'Using sample data — analyze an address for personalized preview'}
+            </p>
+          </div>
 
-                  {row && (
-                    <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
-                      {/* Postcard front preview */}
-                      <div
-                        className="relative overflow-hidden"
-                        style={{ height: '340px', fontFamily: 'Arial, sans-serif' }}
-                      >
-                        {/* Header bar */}
-                        <div style={{ background: '#1a4a2e', color: 'white', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span>✂</span>
-                          <span style={{ fontWeight: 'bold', fontSize: '13px' }}>GRAY WOLF WORKERS — Lawn Care, Kendallville IN</span>
-                        </div>
-                        {/* Body */}
-                        <div style={{ display: 'flex', height: 'calc(100% - 80px)' }}>
-                          <div style={{ width: '55%', padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                            <h2 style={{ fontSize: '24px', margin: '0 0 10px', color: '#1a4a2e' }}>Hey, {row.name}.</h2>
-                            <p style={{ fontSize: '13px', lineHeight: 1.5, color: '#333', margin: '0 0 14px' }}>
-                              {row.ai_copy ?? 'Your personalized postcard copy will appear here.'}
-                            </p>
-                            <div style={{ background: '#1a4a2e', color: 'white', padding: '8px 16px', borderRadius: '20px', display: 'inline-block', fontWeight: 'bold', fontSize: '16px', width: 'fit-content' }}>
-                              Your Quote: {formatCurrency(row.quote_amount ?? 35)}/mow
-                            </div>
-                          </div>
-                          <div style={{ width: '45%', background: '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: '12px' }}>
-                            [Street View Photo]
-                          </div>
-                        </div>
-                        {/* Footer */}
-                        <div style={{ background: '#f5f5f5', padding: '8px 16px', display: 'flex', justifyContent: 'space-around', fontSize: '11px', color: '#555' }}>
-                          <span>🌿 Lawns this season</span>
-                          <span>📍 {row.nearby_count ?? 0} lawns near your house</span>
-                          <span>📞 {campaign.phone}</span>
-                        </div>
-                        <div style={{ background: '#1a4a2e', color: 'white', padding: '10px 16px', textAlign: 'center', fontSize: '14px', fontWeight: 'bold' }}>
-                          Ready for a clean lawn? Call or text {campaign.phone}
-                        </div>
-                      </div>
+          {/* Iframe mockup */}
+          <div className="bg-zinc-100 rounded-xl p-6 flex flex-col items-center gap-2">
+            <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">
+              {mockupFlipped ? 'Back' : 'Front'} — 6×9 Postcard
+            </p>
 
-                      {/* Meta */}
-                      <div className="p-4 border-t border-zinc-100 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                        <div>
-                          <p className="text-xs text-zinc-400 uppercase tracking-wide">Lot Size</p>
-                          <p className="font-medium text-zinc-700">{row.lot_size ?? '—'}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-zinc-400 uppercase tracking-wide">Home Size</p>
-                          <p className="font-medium text-zinc-700">{row.sq_footage ?? '—'}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-zinc-400 uppercase tracking-wide">Quote</p>
-                          <p className="font-medium text-green-600">{formatCurrency(row.quote_amount ?? 35)}/mow</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-zinc-400 uppercase tracking-wide">Nearby Clients</p>
-                          <p className="font-medium text-zinc-700">{row.nearby_count ?? 0}</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
-            })()
-          )}
+            {mockupLoading ? (
+              <div className="flex items-center justify-center" style={{ width: '810px', height: '540px' }}>
+                <Loader2 size={32} className="animate-spin text-zinc-400" />
+              </div>
+            ) : (mockupFront || mockupBack) ? (
+              /* Card scaled to fit: 9in×6in at 96dpi = 864×576px, scaled to 810px wide */
+              <div
+                style={{
+                  width: '810px',
+                  height: '540px',
+                  overflow: 'hidden',
+                  borderRadius: '6px',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+                  flexShrink: 0,
+                }}
+              >
+                <iframe
+                  key={mockupFlipped ? 'back' : 'front'}
+                  srcDoc={mockupFlipped ? (mockupBack ?? '') : (mockupFront ?? '')}
+                  style={{
+                    width: '864px',
+                    height: '576px',
+                    border: 'none',
+                    transformOrigin: 'top left',
+                    transform: 'scale(0.9375)',   /* 810/864 */
+                  }}
+                  sandbox="allow-same-origin"
+                  scrolling="no"
+                />
+              </div>
+            ) : (
+              <div className="flex items-center justify-center text-zinc-400 text-sm" style={{ width: '810px', height: '540px' }}>
+                Click &quot;Regenerate&quot; to load the preview
+              </div>
+            )}
+
+            <p className="text-xs text-zinc-400 mt-1">
+              Photo is a sample — real postcards use Google Street View of the recipient&apos;s house
+            </p>
+          </div>
+
         </div>
       )}
 
