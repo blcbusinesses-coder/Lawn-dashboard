@@ -64,9 +64,8 @@ export function buildFrontHtml(p: FrontParams): string {
 </head>
 <body>
 
-  <!-- Full-bleed background photo -->
-  <div style="position:absolute;top:0;left:0;right:0;bottom:0;">
-    <img src="${bgPhoto}" style="width:100%;height:100%;object-fit:cover;display:block;" />
+  <!-- Full-bleed background photo via CSS (more reliable in headless Chrome than <img object-fit>) -->
+  <div style="position:absolute;top:0;left:0;right:0;bottom:0;background-image:url('${bgPhoto}');background-size:cover;background-position:center;background-repeat:no-repeat;">
     <!-- Gradient: dark left for text, fades out so photo dominates right side -->
     <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(to right,rgba(8,28,14,0.95) 0%,rgba(8,28,14,0.88) 30%,rgba(8,28,14,0.45) 55%,rgba(8,28,14,0.05) 100%);"></div>
   </div>
