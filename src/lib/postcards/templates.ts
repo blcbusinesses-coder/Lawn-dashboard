@@ -59,23 +59,32 @@ export function buildFrontHtml(p: FrontParams): string {
     overflow: hidden;
     font-family: 'Roboto', Arial, sans-serif;
     position: relative;
-    /* Background image directly on body — per Lob's own example */
-    background-image: url("${bgPhoto}");
-    background-size: 9.25in 6.25in;
-    background-repeat: no-repeat;
-    background-position: center;
     background-color: #0d2e1a;
+  }
+  /* Real <img> filling the card — headless-Chrome PDF renderers (Lob) paint
+     <img> reliably, unlike CSS background-image. */
+  .bgphoto {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 9.25in;
+    height: 6.25in;
+    object-fit: cover;
+    z-index: 0;
   }
   .oswald { font-family: 'Oswald', 'Arial Narrow', Arial, sans-serif; }
 </style>
 </head>
 <body>
 
+  <!-- Background photo as a real image element -->
+  <img class="bgphoto" src="${bgPhoto}" alt="" />
+
   <!-- Gradient overlay: dark left for text legibility, fades right so photo shows -->
-  <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(to right,rgba(8,28,14,0.95) 0%,rgba(8,28,14,0.88) 30%,rgba(8,28,14,0.45) 55%,rgba(8,28,14,0.05) 100%);"></div>
+  <div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:1;background:linear-gradient(to right,rgba(8,28,14,0.95) 0%,rgba(8,28,14,0.88) 30%,rgba(8,28,14,0.45) 55%,rgba(8,28,14,0.05) 100%);"></div>
 
   <!-- Content layer -->
-  <div style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;padding:28px 34px;">
+  <div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:2;display:flex;flex-direction:column;padding:28px 34px;">
 
     <!-- Top: wolf + company name + phone -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:auto;">
