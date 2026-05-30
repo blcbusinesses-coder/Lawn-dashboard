@@ -4,7 +4,6 @@ import {
   buildFrontHtml,
   buildBackHtml,
   formatQuote,
-  SAMPLE_HOUSE_PHOTO,
 } from '@/lib/postcards/templates'
 
 interface RecipientPayload {
@@ -22,55 +21,15 @@ interface RecipientPayload {
 }
 
 /**
- * Fetch an image and upload it to Supabase Storage so Lob can
- * load it from a reliable public CDN URL (avoids Unsplash hotlink
- * blocks and Google API-key referrer restrictions).
- * Returns the public URL, or null if anything fails.
+ * Returns the base URL of this deployment so we can build absolute URLs
+ * for Lob to fetch (e.g. the image proxy endpoint).
+ * Priority: custom domain env var → Vercel production URL → Vercel deployment URL
  */
-async function uploadImageForLob(
-  imageUrl: string,
-  storagePath: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  adminClient: any,
-): Promise<{ url: string | null; fetchStatus?: number; fetchType?: string; bufferBytes?: number; bucketError?: string; uploadError?: string }> {
-  try {
-    const res = await fetch(imageUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LawnControl/1.0)' },
-    })
-    const fetchStatus = res.status
-    const fetchType = res.headers.get('content-type') ?? 'unknown'
-    if (!res.ok) return { url: null, fetchStatus, fetchType }
-
-    const buffer = Buffer.from(await res.arrayBuffer())
-    const contentType = fetchType || 'image/jpeg'
-    const bufferBytes = buffer.byteLength
-
-    // Ensure the bucket exists — ignore "already exists" errors
-    const { error: bucketErr } = await adminClient.storage.createBucket('postcard-images', {
-      public: true,
-      fileSizeLimit: 10485760,
-    })
-    const bucketError = (bucketErr && !bucketErr.message?.includes('already exists'))
-      ? bucketErr.message
-      : undefined
-
-    const { error: uploadErr } = await adminClient.storage
-      .from('postcard-images')
-      .upload(storagePath, buffer, { contentType, upsert: true })
-
-    if (uploadErr) {
-      return { url: null, fetchStatus, fetchType, bufferBytes, bucketError, uploadError: uploadErr.message }
-    }
-
-    const { data } = adminClient.storage
-      .from('postcard-images')
-      .getPublicUrl(storagePath)
-
-    return { url: data?.publicUrl ?? null, fetchStatus, fetchType, bufferBytes, bucketError }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    return { url: null, uploadError: `Unexpected: ${msg}` }
-  }
+function getBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
+  return 'http://localhost:3000'
 }
 
 export async function POST(request: NextRequest) {
@@ -89,6 +48,7 @@ export async function POST(request: NextRequest) {
   const lobKey = process.env.LOB_API_KEY
   const gmapsKey = process.env.GOOGLE_MAPS_API_KEY
   const campaignPhone = phone ?? '(260) 000-0000'
+  const baseUrl = getBaseUrl()
 
   if (!lobKey) return NextResponse.json({ error: 'LOB_API_KEY not configured' }, { status: 500 })
 
@@ -117,26 +77,16 @@ export async function POST(request: NextRequest) {
 
       const fullAddress = `${recipient.address}, ${recipient.city}, ${recipient.state} ${recipient.zip}`
 
-      // Build the source image URL
-      const sourceImageUrl = gmapsKey
-        ? `https://maps.googleapis.com/maps/api/streetview?size=1350x900&location=${encodeURIComponent(fullAddress)}&key=${gmapsKey}`
-        : SAMPLE_HOUSE_PHOTO
+      // Build image URL pointing to our own proxy endpoint.
+      // Lob fetches this URL → our server fetches Street View with the API key
+      // → streams the image back. No Supabase Storage, no hotlink issues.
+      const bgImageUrl = gmapsKey
+        ? `${baseUrl}/api/postcards/image?address=${encodeURIComponent(fullAddress)}`
+        : `${baseUrl}/api/postcards/image`
+
+      debug.baseUrl = baseUrl
+      debug.bgImageUrl = bgImageUrl
       debug.gmapsKeyPresent = !!gmapsKey
-      debug.sourceImageUrl = sourceImageUrl.replace(gmapsKey ?? '', '[KEY]')
-
-      // Upload to Supabase Storage → reliable CDN URL Lob can fetch
-      const storagePath = `campaigns/${campaign_id}/${recipient.id}.jpg`
-      const primaryResult = await uploadImageForLob(sourceImageUrl, storagePath, adminClient)
-      debug.primary = primaryResult
-      let bgUrl = primaryResult.url
-
-      // If Street View fetch failed, fall back to the sample lawn photo
-      if (!bgUrl && gmapsKey) {
-        const fallbackResult = await uploadImageForLob(SAMPLE_HOUSE_PHOTO, `samples/lawn-fallback.jpg`, adminClient)
-        debug.fallback = fallbackResult
-        bgUrl = fallbackResult.url
-      }
-      debug.finalBgUrl = bgUrl
 
       const frontHtml = buildFrontHtml({
         name: recipient.name || 'Neighbor',
@@ -144,7 +94,7 @@ export async function POST(request: NextRequest) {
           recipient.ai_copy ||
           'We provide professional lawn care in your area. A personalized quote is included on this card.',
         quote: formatQuote(recipient.quote_amount || 35),
-        streetViewUrl: bgUrl,
+        streetViewUrl: bgImageUrl,
         streetAddress: recipient.address,
         totalLawns: totalLawnsCount,
         nearbyCount: recipient.nearby_count || 0,
