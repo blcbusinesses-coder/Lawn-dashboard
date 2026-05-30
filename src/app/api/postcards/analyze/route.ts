@@ -128,6 +128,37 @@ export async function POST(request: NextRequest) {
     aiCopy = `Your property at ${address.trim()} looks like a great fit for our lawn service. We mow lawns all across Kendallville and would love to take care of yours. Your personalized quote is included on this card.`
   }
 
+  // Fetch Street View image now and store in Supabase so Lob has a stable URL at send time
+  let streetViewUrl: string | null = null
+  const gmapsKey = process.env.GOOGLE_MAPS_API_KEY
+  if (gmapsKey) {
+    try {
+      const svUrl = `https://maps.googleapis.com/maps/api/streetview?size=1350x900&location=${encodeURIComponent(address.trim())}&key=${gmapsKey}`
+      const svRes = await fetch(svUrl)
+      if (svRes.ok) {
+        const contentType = svRes.headers.get('content-type') || 'image/jpeg'
+        if (contentType.startsWith('image/')) {
+          const arrayBuffer = await svRes.arrayBuffer()
+          const safeName = address.trim().toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 60)
+          const filePath = `sv/${Date.now()}-${safeName}.jpg`
+          const { data: uploadData, error: uploadErr } = await adminClient.storage
+            .from('postcard-images')
+            .upload(filePath, arrayBuffer, { contentType, upsert: true })
+          if (uploadErr) {
+            console.error('[analyze] Street View storage upload failed:', uploadErr.message)
+          } else if (uploadData) {
+            const { data: urlData } = adminClient.storage
+              .from('postcard-images')
+              .getPublicUrl(uploadData.path)
+            streetViewUrl = urlData?.publicUrl ?? null
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[analyze] Street View fetch/upload error:', err)
+    }
+  }
+
   return NextResponse.json({
     lot_size: lotSqft ? `${Math.round(lotSqft).toLocaleString()} sq ft` : null,
     sq_footage: livingSqft ? `${Math.round(livingSqft).toLocaleString()} sq ft` : null,
@@ -135,5 +166,6 @@ export async function POST(request: NextRequest) {
     ai_copy: aiCopy,
     quote_amount: quoteAmount,
     coords,
+    street_view_url: streetViewUrl,
   })
 }

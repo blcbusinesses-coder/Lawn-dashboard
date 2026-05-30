@@ -18,6 +18,7 @@ interface RecipientPayload {
   nearby_count: number
   lot_size?: string
   sq_footage?: string
+  street_view_url?: string
 }
 
 /**
@@ -77,14 +78,14 @@ export async function POST(request: NextRequest) {
 
       const fullAddress = `${recipient.address}, ${recipient.city}, ${recipient.state} ${recipient.zip}`
 
-      // Build image URL pointing to our own proxy endpoint.
-      // Lob fetches this URL → our server fetches Street View with the API key
-      // → streams the image back. No Supabase Storage, no hotlink issues.
-      const bgImageUrl = gmapsKey
-        ? `${baseUrl}/api/postcards/image?address=${encodeURIComponent(fullAddress)}`
-        : `${baseUrl}/api/postcards/image`
+      // Use the Street View image URL pre-fetched and uploaded at analyze time.
+      // Falls back to the proxy endpoint if analyze didn't store one.
+      const bgImageUrl = recipient.street_view_url
+        ?? (gmapsKey
+          ? `${baseUrl}/api/postcards/image?address=${encodeURIComponent(fullAddress)}`
+          : `${baseUrl}/api/postcards/image`)
 
-      debug.baseUrl = baseUrl
+      debug.streetViewFromAnalyze = recipient.street_view_url ?? null
       debug.bgImageUrl = bgImageUrl
       debug.gmapsKeyPresent = !!gmapsKey
 

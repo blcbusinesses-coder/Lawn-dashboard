@@ -31,6 +31,7 @@ interface RecipientRow {
   nearby_count?: number
   lot_size?: string
   sq_footage?: string
+  street_view_url?: string
   error?: string
 }
 
@@ -288,6 +289,7 @@ export default function PostcardsPage() {
               quote_amount: data.quote_amount,
               lot_size: data.lot_size,
               sq_footage: data.sq_footage,
+              street_view_url: data.street_view_url ?? undefined,
             }
           : r
       ))
@@ -380,6 +382,7 @@ export default function PostcardsPage() {
             nearby_count: r.nearby_count ?? 0,
             lot_size: r.lot_size,
             sq_footage: r.sq_footage,
+            street_view_url: r.street_view_url,
           })),
         }),
       })
