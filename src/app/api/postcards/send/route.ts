@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
       // Fall back to the sample lawn photo URL if no Maps key is configured.
       const bgImageUrl = recipient.street_view_url
         ?? (gmapsKey
-          ? `https://maps.googleapis.com/maps/api/streetview?size=1350x900&location=${encodeURIComponent(fullAddress)}&key=${gmapsKey}`
+          ? `https://maps.googleapis.com/maps/api/streetview?size=640x640&location=${encodeURIComponent(fullAddress)}&key=${gmapsKey}`
           : SAMPLE_HOUSE_PHOTO)
 
       debug.streetViewFromAnalyze = recipient.street_view_url ?? null

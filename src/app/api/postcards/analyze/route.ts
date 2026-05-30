@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
   const gmapsKey = process.env.GOOGLE_MAPS_API_KEY
   if (gmapsKey) {
     try {
-      const svUrl = `https://maps.googleapis.com/maps/api/streetview?size=1350x900&location=${encodeURIComponent(address.trim())}&key=${gmapsKey}`
+      const svUrl = `https://maps.googleapis.com/maps/api/streetview?size=640x640&location=${encodeURIComponent(address.trim())}&key=${gmapsKey}`
       const svRes = await fetch(svUrl)
       if (svRes.ok) {
         const contentType = svRes.headers.get('content-type') || 'image/jpeg'
