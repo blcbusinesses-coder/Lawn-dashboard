@@ -60,7 +60,7 @@ export function buildFrontHtml(p: FrontParams): string {
     font-family: 'Roboto', Arial, sans-serif;
     position: relative;
     /* Background image directly on body — per Lob's own example */
-    background-image: url(${bgPhoto});
+    background-image: url("${bgPhoto}");
     background-size: 9.25in 6.25in;
     background-repeat: no-repeat;
     background-position: center;
