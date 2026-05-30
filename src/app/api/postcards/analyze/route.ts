@@ -1,7 +1,7 @@
 import { anthropic } from '@/lib/anthropic/client'
 import { lookupProperty } from '@/lib/property/lookup'
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient, createServiceClient } from '@/lib/supabase/server'
 
 const SYSTEM_PROMPT = `You are a direct mail copywriter for Gray Wolf Workers, a lawn care company in Kendallville, IN.
 Write 2-3 short, conversational sentences for a postcard addressed to a homeowner.
@@ -141,13 +141,17 @@ export async function POST(request: NextRequest) {
           const arrayBuffer = await svRes.arrayBuffer()
           const safeName = address.trim().toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 60)
           const filePath = `sv/${Date.now()}-${safeName}.jpg`
-          const { data: uploadData, error: uploadErr } = await adminClient.storage
+          // Use the true service-role client — createAdminClient is built on
+          // @supabase/ssr and runs Storage writes as the logged-in user (RLS
+          // blocks them). createServiceClient always uses the service-role key.
+          const serviceClient = createServiceClient()
+          const { data: uploadData, error: uploadErr } = await serviceClient.storage
             .from('postcard-images')
-            .upload(filePath, arrayBuffer, { contentType, upsert: true })
+            .upload(filePath, Buffer.from(arrayBuffer), { contentType, upsert: true })
           if (uploadErr) {
             console.error('[analyze] Street View storage upload failed:', uploadErr.message)
           } else if (uploadData) {
-            const { data: urlData } = adminClient.storage
+            const { data: urlData } = serviceClient.storage
               .from('postcard-images')
               .getPublicUrl(uploadData.path)
             streetViewUrl = urlData?.publicUrl ?? null

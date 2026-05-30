@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient, createServiceClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import {
   buildFrontHtml,
@@ -44,33 +44,34 @@ async function uploadImageToSupabase(
   sourceUrl: string,
   path: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  adminClient: any,
+  serviceClient: any,
   minBytes = 1000,
-): Promise<string | null> {
+): Promise<{ url: string | null; reason?: string }> {
   try {
     const res = await fetch(sourceUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LawnControl/1.0)' },
     })
-    if (!res.ok) return null
+    if (!res.ok) return { url: null, reason: `fetch ${res.status}` }
     const contentType = res.headers.get('content-type') || 'image/jpeg'
-    if (!contentType.startsWith('image/')) return null
+    if (!contentType.startsWith('image/')) return { url: null, reason: `not-image ${contentType}` }
     const buf = Buffer.from(await res.arrayBuffer())
-    if (buf.byteLength < minBytes) return null // reject placeholder / empty images
+    if (buf.byteLength < minBytes) return { url: null, reason: `too-small ${buf.byteLength}b` }
 
-    const { data, error } = await adminClient.storage
+    const { data, error } = await serviceClient.storage
       .from('postcard-images')
       .upload(path, buf, { contentType, upsert: true })
     if (error) {
       console.error('[send] image upload error:', error.message)
-      return null
+      return { url: null, reason: `upload: ${error.message}` }
     }
-    const { data: urlData } = adminClient.storage
+    const { data: urlData } = serviceClient.storage
       .from('postcard-images')
       .getPublicUrl(data.path)
-    return urlData?.publicUrl ?? null
+    return { url: urlData?.publicUrl ?? null, reason: urlData?.publicUrl ? undefined : 'no-public-url' }
   } catch (err) {
-    console.error('[send] image upload exception:', err)
-    return null
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[send] image upload exception:', msg)
+    return { url: null, reason: `exception: ${msg}` }
   }
 }
 
@@ -87,6 +88,7 @@ export async function POST(request: NextRequest) {
   }
 
   const adminClient = await createAdminClient()
+  const serviceClient = createServiceClient() // true service-role, for Storage uploads (bypasses RLS)
   const lobKey = process.env.LOB_API_KEY
   const gmapsKey = process.env.GOOGLE_MAPS_API_KEY
   const campaignPhone = phone ?? '(260) 000-0000'
@@ -134,15 +136,21 @@ export async function POST(request: NextRequest) {
       if (!bgImageUrl && gmapsKey) {
         const svUrl = `https://maps.googleapis.com/maps/api/streetview?size=640x640&location=${encodeURIComponent(fullAddress)}&key=${gmapsKey}`
         // minBytes 10000 rejects Google's tiny "no imagery here" placeholder
-        bgImageUrl = await uploadImageToSupabase(svUrl, `img/${campaign_id}/${recipient.id}-${ts}-sv.jpg`, adminClient, 10000)
-        if (bgImageUrl) debug.imageSource = 'streetview'
+        const r = await uploadImageToSupabase(svUrl, `img/${campaign_id}/${recipient.id}-${ts}-sv.jpg`, serviceClient, 10000)
+        bgImageUrl = r.url
+        if (r.url) debug.imageSource = 'streetview'
+        else debug.streetViewReason = r.reason
+      } else if (!bgImageUrl) {
+        debug.streetViewReason = 'no GOOGLE_MAPS_API_KEY'
       }
 
       // 3) Last resort: re-host the sample lawn photo on Supabase so the card
       //    at least shows a nice lawn instead of a dark-green void.
       if (!bgImageUrl) {
-        bgImageUrl = await uploadImageToSupabase(SAMPLE_HOUSE_PHOTO, `img/${campaign_id}/${recipient.id}-${ts}-sample.jpg`, adminClient)
-        if (bgImageUrl) debug.imageSource = 'sample'
+        const r = await uploadImageToSupabase(SAMPLE_HOUSE_PHOTO, `img/${campaign_id}/${recipient.id}-${ts}-sample.jpg`, serviceClient)
+        bgImageUrl = r.url
+        if (r.url) debug.imageSource = 'sample'
+        else debug.sampleReason = r.reason
       }
 
       debug.bgImageUrl = bgImageUrl
