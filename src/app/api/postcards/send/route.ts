@@ -33,27 +33,36 @@ async function uploadImageForLob(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   adminClient: any,
 ): Promise<string | null> {
+  console.log('[img] Fetching:', imageUrl.slice(0, 120))
   try {
     const res = await fetch(imageUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LawnControl/1.0)' },
     })
-    if (!res.ok) return null
+    console.log('[img] Fetch status:', res.status, res.headers.get('content-type'))
+    if (!res.ok) {
+      console.error('[img] Fetch failed:', res.status, await res.text().catch(() => ''))
+      return null
+    }
 
     const buffer = Buffer.from(await res.arrayBuffer())
     const contentType = res.headers.get('content-type') || 'image/jpeg'
+    console.log('[img] Buffer size:', buffer.byteLength, 'bytes, type:', contentType)
 
-    // Ensure the bucket exists (no-op if already created)
-    await adminClient.storage.createBucket('postcard-images', {
+    // Ensure the bucket exists — ignore "already exists" errors
+    const { error: bucketErr } = await adminClient.storage.createBucket('postcard-images', {
       public: true,
-      fileSizeLimit: 5242880, // 5 MB
+      fileSizeLimit: 5242880,
     })
+    if (bucketErr && !bucketErr.message?.includes('already exists')) {
+      console.error('[img] Bucket create error:', bucketErr.message)
+    }
 
     const { error: uploadErr } = await adminClient.storage
       .from('postcard-images')
       .upload(storagePath, buffer, { contentType, upsert: true })
 
     if (uploadErr) {
-      console.error('[postcards/send] Storage upload error:', uploadErr.message)
+      console.error('[img] Upload error:', uploadErr.message)
       return null
     }
 
@@ -61,9 +70,10 @@ async function uploadImageForLob(
       .from('postcard-images')
       .getPublicUrl(storagePath)
 
+    console.log('[img] Public URL:', data?.publicUrl)
     return data?.publicUrl ?? null
   } catch (err) {
-    console.error('[postcards/send] uploadImageForLob error:', err)
+    console.error('[img] Unexpected error:', err)
     return null
   }
 }
@@ -115,15 +125,19 @@ export async function POST(request: NextRequest) {
       const sourceImageUrl = gmapsKey
         ? `https://maps.googleapis.com/maps/api/streetview?size=1350x900&location=${encodeURIComponent(fullAddress)}&key=${gmapsKey}`
         : SAMPLE_HOUSE_PHOTO
+      console.log('[send] gmapsKey present:', !!gmapsKey, '| sourceImageUrl:', sourceImageUrl.slice(0, 120))
 
       // Upload to Supabase Storage → reliable CDN URL Lob can fetch
       const storagePath = `campaigns/${campaign_id}/${recipient.id}.jpg`
       let bgUrl = await uploadImageForLob(sourceImageUrl, storagePath, adminClient)
+      console.log('[send] bgUrl after primary fetch:', bgUrl)
 
       // If Street View fetch failed, fall back to the sample lawn photo
       if (!bgUrl && gmapsKey) {
+        console.log('[send] Falling back to sample lawn photo')
         const fallbackPath = `samples/lawn-fallback.jpg`
         bgUrl = await uploadImageForLob(SAMPLE_HOUSE_PHOTO, fallbackPath, adminClient)
+        console.log('[send] bgUrl after fallback:', bgUrl)
       }
 
       const frontHtml = buildFrontHtml({
