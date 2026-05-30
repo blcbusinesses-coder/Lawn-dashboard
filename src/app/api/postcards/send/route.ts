@@ -68,8 +68,8 @@ async function uploadImageForLob(
 
     return { url: data?.publicUrl ?? null, fetchStatus, fetchType, bufferBytes, bucketError }
   } catch (err) {
-    console.error('[img] Unexpected error:', err)
-    return null
+    const msg = err instanceof Error ? err.message : String(err)
+    return { url: null, uploadError: `Unexpected: ${msg}` }
   }
 }
 
