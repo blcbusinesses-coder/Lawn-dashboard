@@ -207,7 +207,13 @@ export default function ExpensesPage() {
       payment_method: 'capital',
       due_date:       '',
     })
-    toast.success('Receipt parsed! Review and confirm.')
+    if (parsed.receipt_storage_error) {
+      toast.warning(`⚠️ Receipt image could NOT be saved: ${parsed.receipt_storage_error}. The expense data was parsed but the image will not be stored. Check Supabase Storage bucket "receipts" exists.`)
+    } else if (parsed.receipt_url) {
+      toast.success('Receipt parsed and image saved! Review and confirm.')
+    } else {
+      toast.success('Receipt parsed! Review and confirm.')
+    }
     setParsing(false)
     setFormOpen(true)
   }
