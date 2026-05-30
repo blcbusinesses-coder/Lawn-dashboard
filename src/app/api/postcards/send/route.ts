@@ -32,46 +32,41 @@ async function uploadImageForLob(
   storagePath: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   adminClient: any,
-): Promise<string | null> {
-  console.log('[img] Fetching:', imageUrl.slice(0, 120))
+): Promise<{ url: string | null; fetchStatus?: number; fetchType?: string; bufferBytes?: number; bucketError?: string; uploadError?: string }> {
   try {
     const res = await fetch(imageUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LawnControl/1.0)' },
     })
-    console.log('[img] Fetch status:', res.status, res.headers.get('content-type'))
-    if (!res.ok) {
-      console.error('[img] Fetch failed:', res.status, await res.text().catch(() => ''))
-      return null
-    }
+    const fetchStatus = res.status
+    const fetchType = res.headers.get('content-type') ?? 'unknown'
+    if (!res.ok) return { url: null, fetchStatus, fetchType }
 
     const buffer = Buffer.from(await res.arrayBuffer())
-    const contentType = res.headers.get('content-type') || 'image/jpeg'
-    console.log('[img] Buffer size:', buffer.byteLength, 'bytes, type:', contentType)
+    const contentType = fetchType || 'image/jpeg'
+    const bufferBytes = buffer.byteLength
 
     // Ensure the bucket exists — ignore "already exists" errors
     const { error: bucketErr } = await adminClient.storage.createBucket('postcard-images', {
       public: true,
-      fileSizeLimit: 5242880,
+      fileSizeLimit: 10485760,
     })
-    if (bucketErr && !bucketErr.message?.includes('already exists')) {
-      console.error('[img] Bucket create error:', bucketErr.message)
-    }
+    const bucketError = (bucketErr && !bucketErr.message?.includes('already exists'))
+      ? bucketErr.message
+      : undefined
 
     const { error: uploadErr } = await adminClient.storage
       .from('postcard-images')
       .upload(storagePath, buffer, { contentType, upsert: true })
 
     if (uploadErr) {
-      console.error('[img] Upload error:', uploadErr.message)
-      return null
+      return { url: null, fetchStatus, fetchType, bufferBytes, bucketError, uploadError: uploadErr.message }
     }
 
     const { data } = adminClient.storage
       .from('postcard-images')
       .getPublicUrl(storagePath)
 
-    console.log('[img] Public URL:', data?.publicUrl)
-    return data?.publicUrl ?? null
+    return { url: data?.publicUrl ?? null, fetchStatus, fetchType, bufferBytes, bucketError }
   } catch (err) {
     console.error('[img] Unexpected error:', err)
     return null
@@ -131,14 +126,15 @@ export async function POST(request: NextRequest) {
 
       // Upload to Supabase Storage → reliable CDN URL Lob can fetch
       const storagePath = `campaigns/${campaign_id}/${recipient.id}.jpg`
-      let bgUrl = await uploadImageForLob(sourceImageUrl, storagePath, adminClient)
-      debug.bgUrlAfterPrimary = bgUrl
+      const primaryResult = await uploadImageForLob(sourceImageUrl, storagePath, adminClient)
+      debug.primary = primaryResult
+      let bgUrl = primaryResult.url
 
       // If Street View fetch failed, fall back to the sample lawn photo
       if (!bgUrl && gmapsKey) {
-        const fallbackPath = `samples/lawn-fallback.jpg`
-        bgUrl = await uploadImageForLob(SAMPLE_HOUSE_PHOTO, fallbackPath, adminClient)
-        debug.bgUrlAfterFallback = bgUrl
+        const fallbackResult = await uploadImageForLob(SAMPLE_HOUSE_PHOTO, `samples/lawn-fallback.jpg`, adminClient)
+        debug.fallback = fallbackResult
+        bgUrl = fallbackResult.url
       }
       debug.finalBgUrl = bgUrl
 
