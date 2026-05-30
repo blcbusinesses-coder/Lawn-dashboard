@@ -4,6 +4,7 @@ import {
   buildFrontHtml,
   buildBackHtml,
   formatQuote,
+  SAMPLE_HOUSE_PHOTO,
 } from '@/lib/postcards/templates'
 
 interface RecipientPayload {
@@ -21,17 +22,6 @@ interface RecipientPayload {
   street_view_url?: string
 }
 
-/**
- * Returns the base URL of this deployment so we can build absolute URLs
- * for Lob to fetch (e.g. the image proxy endpoint).
- * Priority: custom domain env var → Vercel production URL → Vercel deployment URL
- */
-function getBaseUrl(): string {
-  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL
-  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
-  return 'http://localhost:3000'
-}
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
@@ -49,7 +39,6 @@ export async function POST(request: NextRequest) {
   const lobKey = process.env.LOB_API_KEY
   const gmapsKey = process.env.GOOGLE_MAPS_API_KEY
   const campaignPhone = phone ?? '(260) 000-0000'
-  const baseUrl = getBaseUrl()
 
   if (!lobKey) return NextResponse.json({ error: 'LOB_API_KEY not configured' }, { status: 500 })
 
@@ -78,15 +67,16 @@ export async function POST(request: NextRequest) {
 
       const fullAddress = `${recipient.address}, ${recipient.city}, ${recipient.state} ${recipient.zip}`
 
-      // Use the Street View image URL pre-fetched and uploaded at analyze time.
-      // Falls back to the proxy endpoint if analyze didn't store one.
+      // Pass the Street View URL directly — if the API key has no HTTP-referrer
+      // restrictions (which is common for server-side keys), Lob can fetch it fine.
+      // Fall back to the sample lawn photo URL if no Maps key is configured.
       const bgImageUrl = recipient.street_view_url
         ?? (gmapsKey
-          ? `${baseUrl}/api/postcards/image?address=${encodeURIComponent(fullAddress)}`
-          : `${baseUrl}/api/postcards/image`)
+          ? `https://maps.googleapis.com/maps/api/streetview?size=1350x900&location=${encodeURIComponent(fullAddress)}&key=${gmapsKey}`
+          : SAMPLE_HOUSE_PHOTO)
 
       debug.streetViewFromAnalyze = recipient.street_view_url ?? null
-      debug.bgImageUrl = bgImageUrl
+      debug.bgImageUrl = bgImageUrl.replace(gmapsKey ?? '', '[KEY]')
       debug.gmapsKeyPresent = !!gmapsKey
 
       const frontHtml = buildFrontHtml({
