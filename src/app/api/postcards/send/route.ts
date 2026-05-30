@@ -109,9 +109,10 @@ export async function POST(request: NextRequest) {
     .single()
   const campaignName = (campaign as Record<string, unknown> | null)?.name ?? 'Campaign'
 
-  const results: Array<{ id: string; success: boolean; lob_id?: string; error?: string }> = []
+  const results: Array<{ id: string; success: boolean; lob_id?: string; error?: string; debug?: Record<string, unknown> }> = []
 
   for (const recipient of recipients) {
+    const debug: Record<string, unknown> = {}
     try {
       // Guard: Lob requires a ZIP code
       if (!recipient.zip?.trim()) {
@@ -125,20 +126,21 @@ export async function POST(request: NextRequest) {
       const sourceImageUrl = gmapsKey
         ? `https://maps.googleapis.com/maps/api/streetview?size=1350x900&location=${encodeURIComponent(fullAddress)}&key=${gmapsKey}`
         : SAMPLE_HOUSE_PHOTO
-      console.log('[send] gmapsKey present:', !!gmapsKey, '| sourceImageUrl:', sourceImageUrl.slice(0, 120))
+      debug.gmapsKeyPresent = !!gmapsKey
+      debug.sourceImageUrl = sourceImageUrl.replace(gmapsKey ?? '', '[KEY]')
 
       // Upload to Supabase Storage → reliable CDN URL Lob can fetch
       const storagePath = `campaigns/${campaign_id}/${recipient.id}.jpg`
       let bgUrl = await uploadImageForLob(sourceImageUrl, storagePath, adminClient)
-      console.log('[send] bgUrl after primary fetch:', bgUrl)
+      debug.bgUrlAfterPrimary = bgUrl
 
       // If Street View fetch failed, fall back to the sample lawn photo
       if (!bgUrl && gmapsKey) {
-        console.log('[send] Falling back to sample lawn photo')
         const fallbackPath = `samples/lawn-fallback.jpg`
         bgUrl = await uploadImageForLob(SAMPLE_HOUSE_PHOTO, fallbackPath, adminClient)
-        console.log('[send] bgUrl after fallback:', bgUrl)
+        debug.bgUrlAfterFallback = bgUrl
       }
+      debug.finalBgUrl = bgUrl
 
       const frontHtml = buildFrontHtml({
         name: recipient.name || 'Neighbor',
@@ -216,7 +218,7 @@ export async function POST(request: NextRequest) {
           error_message: errText.slice(0, 500),
         })
 
-        results.push({ id: recipient.id, success: false, error: errText })
+        results.push({ id: recipient.id, success: false, error: errText, debug })
         continue
       }
 
@@ -240,10 +242,10 @@ export async function POST(request: NextRequest) {
         status: 'sent',
       })
 
-      results.push({ id: recipient.id, success: true, lob_id: lobPostcardId ?? undefined })
+      results.push({ id: recipient.id, success: true, lob_id: lobPostcardId ?? undefined, debug })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      results.push({ id: recipient.id, success: false, error: msg })
+      results.push({ id: recipient.id, success: false, error: msg, debug })
     }
   }
 

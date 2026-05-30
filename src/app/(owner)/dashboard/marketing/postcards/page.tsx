@@ -392,12 +392,13 @@ export default function PostcardsPage() {
       const sendData = await sendRes.json()
 
       // Update row statuses based on results
-      const resultMap: Record<string, { success: boolean; error?: string }> = {}
+      const resultMap: Record<string, { success: boolean; error?: string; debug?: Record<string, unknown> }> = {}
       for (const r of sendData.results ?? []) resultMap[r.id] = r
       setAddresses(prev => prev.map(r => {
         const result = resultMap[r.id]
         if (!result) return r
-        return { ...r, status: result.success ? 'sent' : 'failed', error: result.error }
+        const debugStr = result.debug ? '\n\nDEBUG: ' + JSON.stringify(result.debug, null, 2) : ''
+        return { ...r, status: result.success ? 'sent' : 'failed', error: result.error ? result.error + debugStr : (result.debug ? 'DEBUG: ' + JSON.stringify(result.debug, null, 2) : undefined) }
       }))
 
       toast.success(`Campaign launched! ${sendData.sent} sent, ${sendData.failed} failed.`)
