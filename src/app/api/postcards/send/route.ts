@@ -23,41 +23,45 @@ interface RecipientPayload {
 }
 
 /**
- * Fetch an image URL and return a base64 data URI.
- * We embed the image directly in the HTML so Lob never needs to make
- * any external image requests (avoids API key referrer restrictions).
+ * Fetch an image from `sourceUrl` server-side, then upload it to Supabase
+ * Storage and return its PUBLIC URL.
+ *
+ * Why this design (learned the hard way):
+ *  - Lob's headless-Chrome renderer can fetch INLINE html fine, but it
+ *    CANNOT reach Unsplash (blocks Lob's servers) or a referrer-restricted
+ *    Google Street View URL. So we must host the image somewhere Lob can
+ *    actually fetch.
+ *  - Supabase Storage public objects ARE reachable by Lob and serve images
+ *    with the correct `image/jpeg` content-type.
+ *  - We (our server) CAN fetch Unsplash and Street View — there are no
+ *    referrer restrictions on a plain server-side fetch — so we pull the
+ *    bytes here and re-host them on Supabase.
+ *
+ * `minBytes` guards against Google's tiny "no imagery here" gray placeholder
+ * (~5-6 KB). A real Street View tile is 30 KB+, so we reject anything smaller.
  */
-async function imageToDataUri(url: string): Promise<string | null> {
+async function uploadImageToSupabase(
+  sourceUrl: string,
+  path: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  adminClient: any,
+  minBytes = 1000,
+): Promise<string | null> {
   try {
-    const res = await fetch(url, {
+    const res = await fetch(sourceUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LawnControl/1.0)' },
     })
     if (!res.ok) return null
     const contentType = res.headers.get('content-type') || 'image/jpeg'
     if (!contentType.startsWith('image/')) return null
     const buf = Buffer.from(await res.arrayBuffer())
-    if (buf.byteLength < 1000) return null // reject tiny placeholder images
-    return `data:${contentType};base64,${buf.toString('base64')}`
-  } catch {
-    return null
-  }
-}
+    if (buf.byteLength < minBytes) return null // reject placeholder / empty images
 
-/**
- * Upload an HTML string to Supabase Storage and return its public URL.
- * Lob accepts a remote URL for front/back — no 10K character limit applies.
- * The HTML contains the image as a base64 data URI so Lob needs zero
- * external image requests.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function uploadHtmlForLob(html: string, path: string, adminClient: any): Promise<string | null> {
-  try {
-    const buf = Buffer.from(html, 'utf-8')
     const { data, error } = await adminClient.storage
       .from('postcard-images')
-      .upload(path, buf, { contentType: 'text/html; charset=utf-8', upsert: true })
+      .upload(path, buf, { contentType, upsert: true })
     if (error) {
-      console.error('[send] HTML upload error:', error.message)
+      console.error('[send] image upload error:', error.message)
       return null
     }
     const { data: urlData } = adminClient.storage
@@ -65,7 +69,7 @@ async function uploadHtmlForLob(html: string, path: string, adminClient: any): P
       .getPublicUrl(data.path)
     return urlData?.publicUrl ?? null
   } catch (err) {
-    console.error('[send] HTML upload exception:', err)
+    console.error('[send] image upload exception:', err)
     return null
   }
 }
@@ -112,29 +116,47 @@ export async function POST(request: NextRequest) {
       }
 
       const fullAddress = `${recipient.address}, ${recipient.city}, ${recipient.state} ${recipient.zip}`
+      const ts = Date.now()
 
-      // ── Fetch the background image server-side ────────────────────────────
-      // First try the Supabase URL stored at analyze time, then fall back to
-      // fetching Street View directly. Either way we embed as base64 so Lob
-      // doesn't need to make any external image requests.
-      const imageSourceUrl = recipient.street_view_url
-        ?? (gmapsKey
-          ? `https://maps.googleapis.com/maps/api/streetview?size=640x640&location=${encodeURIComponent(fullAddress)}&key=${gmapsKey}`
-          : SAMPLE_HOUSE_PHOTO)
+      // ── Get a Lob-reachable background image URL ──────────────────────────
+      // Lob CAN fetch Supabase public objects but CANNOT fetch Unsplash or a
+      // referrer-restricted Street View URL. So the image MUST live on
+      // Supabase. We fetch it server-side and re-host it.
+      let bgImageUrl: string | null = null
 
-      const bgDataUri = await imageToDataUri(imageSourceUrl)
-        ?? await imageToDataUri(SAMPLE_HOUSE_PHOTO)  // fallback lawn photo
+      // 1) If analyze already stored a Supabase image, use it as-is.
+      if (recipient.street_view_url?.includes('/storage/v1/object/public/')) {
+        bgImageUrl = recipient.street_view_url
+        debug.imageSource = 'analyze-supabase'
+      }
 
-      debug.imageSourceUrl = imageSourceUrl.replace(gmapsKey ?? '', '[KEY]')
-      debug.imageEmbedded = !!bgDataUri
-      debug.imageSizeKb = bgDataUri ? Math.round(bgDataUri.length / 1024) : 0
+      // 2) Otherwise fetch Street View server-side and upload to Supabase.
+      if (!bgImageUrl && gmapsKey) {
+        const svUrl = `https://maps.googleapis.com/maps/api/streetview?size=640x640&location=${encodeURIComponent(fullAddress)}&key=${gmapsKey}`
+        // minBytes 10000 rejects Google's tiny "no imagery here" placeholder
+        bgImageUrl = await uploadImageToSupabase(svUrl, `img/${campaign_id}/${recipient.id}-${ts}-sv.jpg`, adminClient, 10000)
+        if (bgImageUrl) debug.imageSource = 'streetview'
+      }
 
-      // ── Build HTML with base64 image baked in ─────────────────────────────
+      // 3) Last resort: re-host the sample lawn photo on Supabase so the card
+      //    at least shows a nice lawn instead of a dark-green void.
+      if (!bgImageUrl) {
+        bgImageUrl = await uploadImageToSupabase(SAMPLE_HOUSE_PHOTO, `img/${campaign_id}/${recipient.id}-${ts}-sample.jpg`, adminClient)
+        if (bgImageUrl) debug.imageSource = 'sample'
+      }
+
+      debug.bgImageUrl = bgImageUrl
+      debug.imageHosted = !!bgImageUrl
+
+      // ── Build INLINE HTML referencing the Supabase image URL ──────────────
+      // Inline HTML renders reliably on Lob (this is why text always worked)
+      // and stays well under Lob's 10K inline limit since the image is a URL,
+      // not base64.
       const frontHtml = buildFrontHtml({
         name: recipient.name || 'Neighbor',
         aiCopy: recipient.ai_copy || 'We provide professional lawn care in your area. A personalized quote is included on this card.',
         quote: formatQuote(recipient.quote_amount || 35),
-        streetViewUrl: bgDataUri,  // data URI — no external request needed
+        streetViewUrl: bgImageUrl,  // Supabase public URL — Lob can fetch it
         streetAddress: recipient.address,
         totalLawns: totalLawnsCount,
         nearbyCount: recipient.nearby_count || 0,
@@ -147,21 +169,8 @@ export async function POST(request: NextRequest) {
         name: recipient.name || 'Neighbor',
       })
 
-      // ── Upload HTML files to Supabase so Lob can fetch via URL ────────────
-      // Remote URL = no 10K inline limit, and image is already embedded.
-      const ts = Date.now()
-      const [frontUrl, backUrl] = await Promise.all([
-        uploadHtmlForLob(frontHtml, `html/${campaign_id}/${recipient.id}-${ts}-front.html`, adminClient),
-        uploadHtmlForLob(backHtml,  `html/${campaign_id}/${recipient.id}-${ts}-back.html`,  adminClient),
-      ])
-
-      debug.frontUrl = frontUrl
-      debug.backUrl  = backUrl
-
-      // If Supabase upload fails, fall back to inline HTML (image will be
-      // missing but at least the postcard sends)
-      const front = frontUrl ?? frontHtml
-      const back  = backUrl  ?? backHtml
+      const front = frontHtml
+      const back  = backHtml
 
       const lobPayload = {
         description: `${campaignName} — ${recipient.name}`,
