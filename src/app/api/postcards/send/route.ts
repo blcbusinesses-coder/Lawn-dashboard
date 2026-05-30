@@ -22,6 +22,53 @@ interface RecipientPayload {
   street_view_url?: string
 }
 
+/**
+ * Fetch an image URL and return a base64 data URI.
+ * We embed the image directly in the HTML so Lob never needs to make
+ * any external image requests (avoids API key referrer restrictions).
+ */
+async function imageToDataUri(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LawnControl/1.0)' },
+    })
+    if (!res.ok) return null
+    const contentType = res.headers.get('content-type') || 'image/jpeg'
+    if (!contentType.startsWith('image/')) return null
+    const buf = Buffer.from(await res.arrayBuffer())
+    if (buf.byteLength < 1000) return null // reject tiny placeholder images
+    return `data:${contentType};base64,${buf.toString('base64')}`
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Upload an HTML string to Supabase Storage and return its public URL.
+ * Lob accepts a remote URL for front/back — no 10K character limit applies.
+ * The HTML contains the image as a base64 data URI so Lob needs zero
+ * external image requests.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function uploadHtmlForLob(html: string, path: string, adminClient: any): Promise<string | null> {
+  try {
+    const buf = Buffer.from(html, 'utf-8')
+    const { data, error } = await adminClient.storage
+      .from('postcard-images')
+      .upload(path, buf, { contentType: 'text/html; charset=utf-8', upsert: true })
+    if (error) {
+      console.error('[send] HTML upload error:', error.message)
+      return null
+    }
+    const { data: urlData } = adminClient.storage
+      .from('postcard-images')
+      .getPublicUrl(data.path)
+    return urlData?.publicUrl ?? null
+  } catch (err) {
+    console.error('[send] HTML upload exception:', err)
+    return null
+  }
+}
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
@@ -59,7 +106,6 @@ export async function POST(request: NextRequest) {
   for (const recipient of recipients) {
     const debug: Record<string, unknown> = {}
     try {
-      // Guard: Lob requires a ZIP code
       if (!recipient.zip?.trim()) {
         results.push({ id: recipient.id, success: false, error: 'Missing ZIP code — Lob requires address_zip' })
         continue
@@ -67,25 +113,28 @@ export async function POST(request: NextRequest) {
 
       const fullAddress = `${recipient.address}, ${recipient.city}, ${recipient.state} ${recipient.zip}`
 
-      // Pass the Street View URL directly — if the API key has no HTTP-referrer
-      // restrictions (which is common for server-side keys), Lob can fetch it fine.
-      // Fall back to the sample lawn photo URL if no Maps key is configured.
-      const bgImageUrl = recipient.street_view_url
+      // ── Fetch the background image server-side ────────────────────────────
+      // First try the Supabase URL stored at analyze time, then fall back to
+      // fetching Street View directly. Either way we embed as base64 so Lob
+      // doesn't need to make any external image requests.
+      const imageSourceUrl = recipient.street_view_url
         ?? (gmapsKey
           ? `https://maps.googleapis.com/maps/api/streetview?size=640x640&location=${encodeURIComponent(fullAddress)}&key=${gmapsKey}`
           : SAMPLE_HOUSE_PHOTO)
 
-      debug.streetViewFromAnalyze = recipient.street_view_url ?? null
-      debug.bgImageUrl = bgImageUrl.replace(gmapsKey ?? '', '[KEY]')
-      debug.gmapsKeyPresent = !!gmapsKey
+      const bgDataUri = await imageToDataUri(imageSourceUrl)
+        ?? await imageToDataUri(SAMPLE_HOUSE_PHOTO)  // fallback lawn photo
 
+      debug.imageSourceUrl = imageSourceUrl.replace(gmapsKey ?? '', '[KEY]')
+      debug.imageEmbedded = !!bgDataUri
+      debug.imageSizeKb = bgDataUri ? Math.round(bgDataUri.length / 1024) : 0
+
+      // ── Build HTML with base64 image baked in ─────────────────────────────
       const frontHtml = buildFrontHtml({
         name: recipient.name || 'Neighbor',
-        aiCopy:
-          recipient.ai_copy ||
-          'We provide professional lawn care in your area. A personalized quote is included on this card.',
+        aiCopy: recipient.ai_copy || 'We provide professional lawn care in your area. A personalized quote is included on this card.',
         quote: formatQuote(recipient.quote_amount || 35),
-        streetViewUrl: bgImageUrl,
+        streetViewUrl: bgDataUri,  // data URI — no external request needed
         streetAddress: recipient.address,
         totalLawns: totalLawnsCount,
         nearbyCount: recipient.nearby_count || 0,
@@ -94,11 +143,25 @@ export async function POST(request: NextRequest) {
 
       const backHtml = buildBackHtml({
         phone: campaignPhone,
-        aiCopy:
-          recipient.ai_copy ||
-          'We provide professional lawn care in your area and would love to take care of yours. Your personalized quote is on the other side.',
+        aiCopy: recipient.ai_copy || 'We provide professional lawn care in your area and would love to take care of yours. Your personalized quote is on the other side.',
         name: recipient.name || 'Neighbor',
       })
+
+      // ── Upload HTML files to Supabase so Lob can fetch via URL ────────────
+      // Remote URL = no 10K inline limit, and image is already embedded.
+      const ts = Date.now()
+      const [frontUrl, backUrl] = await Promise.all([
+        uploadHtmlForLob(frontHtml, `html/${campaign_id}/${recipient.id}-${ts}-front.html`, adminClient),
+        uploadHtmlForLob(backHtml,  `html/${campaign_id}/${recipient.id}-${ts}-back.html`,  adminClient),
+      ])
+
+      debug.frontUrl = frontUrl
+      debug.backUrl  = backUrl
+
+      // If Supabase upload fails, fall back to inline HTML (image will be
+      // missing but at least the postcard sends)
+      const front = frontUrl ?? frontHtml
+      const back  = backUrl  ?? backHtml
 
       const lobPayload = {
         description: `${campaignName} — ${recipient.name}`,
@@ -119,8 +182,8 @@ export async function POST(request: NextRequest) {
           address_country: 'US',
         },
         size: '6x9',
-        front: frontHtml,
-        back: backHtml,
+        front,
+        back,
         mail_type: 'usps_first_class',
         use_type: 'marketing',
       }
@@ -140,18 +203,11 @@ export async function POST(request: NextRequest) {
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (adminClient.from('postcard_recipients') as any).upsert({
-          campaign_id,
-          name: recipient.name,
-          address: recipient.address,
-          city: recipient.city,
-          state: recipient.state,
-          zip: recipient.zip,
-          ai_copy: recipient.ai_copy,
-          quote_amount: recipient.quote_amount,
-          nearby_count: recipient.nearby_count,
-          lot_size: recipient.lot_size,
-          sq_footage: recipient.sq_footage,
-          status: 'failed',
+          campaign_id, name: recipient.name, address: recipient.address,
+          city: recipient.city, state: recipient.state, zip: recipient.zip,
+          ai_copy: recipient.ai_copy, quote_amount: recipient.quote_amount,
+          nearby_count: recipient.nearby_count, lot_size: recipient.lot_size,
+          sq_footage: recipient.sq_footage, status: 'failed',
           error_message: errText.slice(0, 500),
         })
 
@@ -164,18 +220,11 @@ export async function POST(request: NextRequest) {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (adminClient.from('postcard_recipients') as any).upsert({
-        campaign_id,
-        name: recipient.name,
-        address: recipient.address,
-        city: recipient.city,
-        state: recipient.state,
-        zip: recipient.zip,
-        ai_copy: recipient.ai_copy,
-        quote_amount: recipient.quote_amount,
-        nearby_count: recipient.nearby_count,
-        lot_size: recipient.lot_size,
-        sq_footage: recipient.sq_footage,
-        lob_postcard_id: lobPostcardId,
+        campaign_id, name: recipient.name, address: recipient.address,
+        city: recipient.city, state: recipient.state, zip: recipient.zip,
+        ai_copy: recipient.ai_copy, quote_amount: recipient.quote_amount,
+        nearby_count: recipient.nearby_count, lot_size: recipient.lot_size,
+        sq_footage: recipient.sq_footage, lob_postcard_id: lobPostcardId,
         status: 'sent',
       })
 
