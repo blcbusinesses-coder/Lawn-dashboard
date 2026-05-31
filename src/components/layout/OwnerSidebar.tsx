@@ -25,6 +25,7 @@ const NAV_GROUPS = [
       { href: '/dashboard/content',              label: 'Content',         Icon: PenTool },
       { href: '/dashboard/site',                 label: 'Website',         Icon: Globe },
       { href: '/dashboard/marketing/postcards',  label: 'Postcards',       Icon: Mail },
+      { href: '/dashboard/marketing/letters',    label: 'Letters',         Icon: FileText },
     ],
   },
   {
