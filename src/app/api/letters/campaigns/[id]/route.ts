@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(
@@ -6,7 +6,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const adminClient = await createAdminClient()
+  const adminClient = createServiceClient()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: campaign, error: campaignError } = await (adminClient.from('letter_campaigns') as any)
@@ -32,7 +32,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const adminClient = await createAdminClient()
+  const adminClient = createServiceClient()
   const body = await request.json()
 
   const allowed = ['response_rate', 'pieces_sent', 'total_cost', 'lob_campaign_id', 'name', 'description']

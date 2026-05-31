@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { buildLetterHtml, formatQuote, type LetterType } from '@/lib/letters/templates'
 
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'campaign_id and recipients are required' }, { status: 400 })
   }
 
-  const adminClient = await createAdminClient()
+  const adminClient = createServiceClient()
   const lobKey = process.env.LOB_API_KEY
   const campaignPhone = phone ?? '(260) 000-0000'
   const letterType: LetterType =

@@ -1,7 +1,7 @@
 import { anthropic } from '@/lib/anthropic/client'
 import { lookupProperty } from '@/lib/property/lookup'
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
 import type { LetterType } from '@/lib/letters/templates'
 
 // Letter copywriter prompts. The body is 2-3 short paragraphs — the template
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
   const letterType: LetterType =
     letter_type === 'new_homeowner' || letter_type === 'violation' ? letter_type : 'general'
 
-  const adminClient = await createAdminClient()
+  const adminClient = createServiceClient()
   const { data: settingsRows } = await adminClient.from('automation_settings').select('key, value')
   const settings: Record<string, unknown> = {}
   for (const row of settingsRows ?? []) settings[row.key] = row.value

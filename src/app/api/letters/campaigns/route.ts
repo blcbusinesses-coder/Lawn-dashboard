@@ -1,8 +1,8 @@
-import { createAdminClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET() {
-  const adminClient = await createAdminClient()
+  const adminClient = createServiceClient()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: campaigns, error } = await (adminClient.from('letter_campaigns') as any)
@@ -36,7 +36,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const adminClient = await createAdminClient()
+  const adminClient = createServiceClient()
   const body = await request.json()
 
   const { name, description, tags, letter_type, send_date, budget_cap, phone } = body
