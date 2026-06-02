@@ -13,7 +13,10 @@ import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatCurrency } from '@/lib/utils/currency'
 
-interface RunResult { found?: number; queued?: number; skipped?: number; error?: string | null }
+interface RunResult {
+  found?: number; queued?: number; skipped?: number; error?: string | null
+  reasons?: Record<string, number>
+}
 interface Source {
   key: string
   label: string
@@ -81,7 +84,13 @@ export default function LetterMonitorPage() {
       if (!res.ok || data.error) {
         toast.error(`Run failed: ${data.error ?? res.statusText}`)
       } else {
-        toast.success(`${src.label}: found ${data.found ?? 0}, queued ${data.queued ?? 0}, skipped ${data.skipped ?? 0}`)
+        const reasons = data.reasons && Object.keys(data.reasons).length
+          ? ` — ${Object.entries(data.reasons).map(([k, v]) => `${k}: ${v}`).join(', ')}`
+          : ''
+        toast.success(
+          `${src.label}: found ${data.found ?? 0}, queued ${data.queued ?? 0}, skipped ${data.skipped ?? 0}${reasons}`,
+          { duration: 8000 }
+        )
       }
       await load()
     } catch (err) {

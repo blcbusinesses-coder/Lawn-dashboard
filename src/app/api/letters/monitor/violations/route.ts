@@ -69,6 +69,10 @@ export async function POST() {
   let queued = 0
   let skipped = 0
   let errorMsg: string | null = null
+  // Why things got skipped — surfaced in the response for diagnosis.
+  const reasons: Record<string, number> = {}
+  const samples: Array<Record<string, unknown>> = []
+  const bump = (r: string) => { reasons[r] = (reasons[r] ?? 0) + 1; skipped++ }
 
   try {
     const res = await fetch(feedUrl, { signal: AbortSignal.timeout(30_000) })
@@ -84,12 +88,19 @@ export async function POST() {
       if (queued >= maxPerRun) break
       const coords = f.geometry?.coordinates ?? f.properties?.coordinates
       const evoId = f.properties?.evo_id ? String(f.properties.evo_id) : null
-      if (!coords || coords.length < 2) { skipped++; continue }
+      if (!coords || coords.length < 2) { bump('no_coords'); continue }
 
       const { lat, lng } = mercatorToLatLng(coords[0], coords[1])
       const parsed = await reverseGeocode(lat, lng)
-      if (!parsed) { skipped++; continue }
-      if (targetZips.length > 0 && !targetZips.includes(parsed.zip.slice(0, 5))) { skipped++; continue }
+      if (samples.length < 10) {
+        samples.push({ evo_id: evoId, lat: +lat.toFixed(6), lng: +lng.toFixed(6), geocoded: parsed
+          ? `${parsed.address}, ${parsed.city}, ${parsed.state} ${parsed.zip}` : null })
+      }
+      // Nominatim asks for <=1 req/sec; be polite between lookups.
+      await new Promise(r => setTimeout(r, 1100))
+
+      if (!parsed) { bump('geocode_failed'); continue }
+      if (targetZips.length > 0 && !targetZips.includes(parsed.zip.slice(0, 5))) { bump(`out_of_zip:${parsed.zip}`); continue }
 
       const result = await queueRecipient({
         source: 'violation',
@@ -103,15 +114,15 @@ export async function POST() {
         skipContent: true,
       })
       if (result === 'queued') queued++
-      else if (result === 'duplicate') skipped++
-      else skipped++
+      else if (result === 'duplicate') bump('duplicate')
+      else bump('insert_error')
     }
   } catch (err) {
     errorMsg = err instanceof Error ? err.message : String(err)
     console.error('[letters/monitor/violations]', errorMsg)
   }
 
-  const result = { found, queued, skipped, error: errorMsg }
+  const result = { found, queued, skipped, error: errorMsg, reasons, samples }
   if (runId) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (admin.from('letter_monitor_runs') as any)

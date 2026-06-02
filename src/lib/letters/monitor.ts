@@ -20,13 +20,46 @@ export interface ParsedAddress {
   zip: string
 }
 
-/** Reverse-geocode lat/lng → mailing address via Google Geocoding API. */
+/**
+ * Reverse-geocode lat/lng → mailing address. Uses Nominatim (OpenStreetMap,
+ * free, no key) to match the rest of the app, with Google as a fallback when
+ * GOOGLE_MAPS_API_KEY is set AND the Geocoding API is enabled for it.
+ */
 export async function reverseGeocode(lat: number, lng: number): Promise<ParsedAddress | null> {
-  const key = process.env.GOOGLE_MAPS_API_KEY
-  if (!key) {
-    console.warn('[letters/monitor] GOOGLE_MAPS_API_KEY not set — cannot reverse geocode')
+  const nom = await reverseGeocodeNominatim(lat, lng)
+  if (nom) return nom
+  return reverseGeocodeGoogle(lat, lng)
+}
+
+async function reverseGeocodeNominatim(lat: number, lng: number): Promise<ParsedAddress | null> {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=jsonv2&addressdetails=1`,
+      { headers: { 'User-Agent': 'GrayWolfWorkers/1.0', 'Accept-Language': 'en-US' }, signal: AbortSignal.timeout(10_000) }
+    )
+    if (!res.ok) return null
+    const data = (await res.json()) as {
+      address?: Record<string, string>
+    }
+    const a = data.address
+    if (!a) return null
+    const street = [a.house_number, a.road].filter(Boolean).join(' ').trim()
+    const city = a.city || a.town || a.village || a.hamlet || a.municipality || ''
+    // Nominatim gives "US-IN"; fall back to full state name if missing.
+    const iso = a['ISO3166-2-lvl4'] || ''
+    const state = iso.includes('-') ? iso.split('-')[1] : (a.state || '')
+    const zip = (a.postcode || '').slice(0, 5)
+    if (!street || !zip) return null
+    return { address: street, city, state, zip }
+  } catch (err) {
+    console.error('[letters/monitor] Nominatim reverse failed:', err)
     return null
   }
+}
+
+async function reverseGeocodeGoogle(lat: number, lng: number): Promise<ParsedAddress | null> {
+  const key = process.env.GOOGLE_MAPS_API_KEY
+  if (!key) return null
   try {
     const res = await fetch(
       `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${key}`,
@@ -38,8 +71,6 @@ export async function reverseGeocode(lat: number, lng: number): Promise<ParsedAd
       results: Array<{ address_components: Array<{ long_name: string; short_name: string; types: string[] }> }>
     }
     if (data.status !== 'OK' || !data.results?.length) return null
-
-    // Prefer a street_address / premise result over a generic one.
     const result =
       data.results.find(r => r.address_components.some(c => c.types.includes('street_number'))) ??
       data.results[0]
@@ -47,16 +78,14 @@ export async function reverseGeocode(lat: number, lng: number): Promise<ParsedAd
       const c = result.address_components.find(c => c.types.includes(type))
       return c ? (short ? c.short_name : c.long_name) : ''
     }
-    const streetNumber = comp('street_number')
-    const route = comp('route')
-    const street = [streetNumber, route].filter(Boolean).join(' ').trim()
+    const street = [comp('street_number'), comp('route')].filter(Boolean).join(' ').trim()
     const city = comp('locality') || comp('sublocality') || comp('administrative_area_level_3')
     const state = comp('administrative_area_level_1', true)
     const zip = comp('postal_code')
     if (!street || !zip) return null
     return { address: street, city, state, zip }
   } catch (err) {
-    console.error('[letters/monitor] reverseGeocode failed:', err)
+    console.error('[letters/monitor] Google reverse failed:', err)
     return null
   }
 }
