@@ -10,7 +10,7 @@ import {
   Users, Home, ClipboardCheck, Receipt, FileText, Bot,
   TrendingUp, HardHat, MessageSquare, Inbox, Star, Settings2,
   CheckSquare, BarChart2, Wrench, Gauge, Globe, CloudSun, PenTool, Filter,
-  Megaphone, DollarSign, ChevronDown, LogOut, Zap, Mail,
+  Megaphone, DollarSign, ChevronDown, LogOut, Zap, Mail, ListChecks,
 } from 'lucide-react'
 
 const NAV_GROUPS = [
@@ -26,6 +26,7 @@ const NAV_GROUPS = [
       { href: '/dashboard/site',                 label: 'Website',         Icon: Globe },
       { href: '/dashboard/marketing/postcards',  label: 'Postcards',       Icon: Mail },
       { href: '/dashboard/marketing/letters',    label: 'Letters',         Icon: FileText },
+      { href: '/dashboard/marketing/letters/monitor', label: 'Letter Lists', Icon: ListChecks },
     ],
   },
   {
