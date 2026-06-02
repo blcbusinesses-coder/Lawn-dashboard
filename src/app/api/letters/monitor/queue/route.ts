@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendLetterToLob, type SendableRecipient } from '@/lib/letters/monitor'
+import { generateLetterContent } from '@/lib/letters/generate'
 import type { LetterType } from '@/lib/letters/templates'
+
+export const maxDuration = 60
+
+function letterTypeFor(source: unknown): LetterType {
+  return source === 'new_homeowner' ? 'new_homeowner' : source === 'violation' ? 'violation' : 'general'
+}
 
 // GET /api/letters/monitor/queue — list recipients awaiting review.
 export async function GET() {
@@ -20,11 +27,48 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const admin = createServiceClient()
   const body = await request.json()
-  const { action, ids, phone } = body as { action: 'approve' | 'skip'; ids: string[]; phone?: string }
+  const { action, ids, phone } = body as { action: 'approve' | 'skip' | 'generate'; ids: string[]; phone?: string }
 
   if (!ids?.length) return NextResponse.json({ error: 'ids are required' }, { status: 400 })
-  if (action !== 'approve' && action !== 'skip') {
-    return NextResponse.json({ error: 'action must be approve or skip' }, { status: 400 })
+  if (action !== 'approve' && action !== 'skip' && action !== 'generate') {
+    return NextResponse.json({ error: 'action must be approve, skip, or generate' }, { status: 400 })
+  }
+
+  // generate → fill in quote + AI copy for address-only rows. Client should send
+  // a small batch (ideally one id) per call so each request stays under the
+  // serverless time limit (each row does a Zillow lookup + Haiku call).
+  if (action === 'generate') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: rows } = await (admin.from('letter_recipients') as any)
+      .select('*')
+      .in('id', ids)
+      .eq('status', 'review')
+
+    const results: Array<{ id: string; success: boolean; error?: string }> = []
+    for (const row of (rows ?? []) as Array<Record<string, unknown>>) {
+      const id = row.id as string
+      try {
+        const content = await generateLetterContent({
+          address: `${row.address ?? ''}, ${row.city ?? ''}, ${row.state ?? ''} ${row.zip ?? ''}`,
+          name: (row.name as string) || undefined,
+          letterType: letterTypeFor(row.source),
+        })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (admin.from('letter_recipients') as any)
+          .update({
+            lot_size: content.lot_size,
+            sq_footage: content.sq_footage,
+            property_features: content.features,
+            ai_copy: content.ai_copy,
+            quote_amount: content.quote_amount,
+          })
+          .eq('id', id)
+        results.push({ id, success: true })
+      } catch (err) {
+        results.push({ id, success: false, error: err instanceof Error ? err.message : String(err) })
+      }
+    }
+    return NextResponse.json({ results, generated: results.filter(r => r.success).length })
   }
 
   if (action === 'skip') {
@@ -48,8 +92,12 @@ export async function POST(request: NextRequest) {
 
   for (const row of (rows ?? []) as Array<Record<string, unknown>>) {
     const id = row.id as string
-    const letterType: LetterType =
-      row.source === 'new_homeowner' ? 'new_homeowner' : row.source === 'violation' ? 'violation' : 'general'
+    const letterType = letterTypeFor(row.source)
+    // Never mail a row that hasn't had its quote + copy generated yet.
+    if (!row.ai_copy || row.quote_amount == null) {
+      results.push({ id, success: false, error: 'Not generated yet — generate the letter copy first' })
+      continue
+    }
     try {
       const lobId = await sendLetterToLob(row as unknown as SendableRecipient, {
         phone: campaignPhone,

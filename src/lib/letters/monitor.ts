@@ -91,14 +91,18 @@ export interface QueueInput {
   city: string
   state: string
   zip: string
+  /** When true, insert the address only (no Zillow/AI). Quote + copy are
+   *  generated later, per-row, to stay within serverless time limits. */
+  skipContent?: boolean
 }
 
 export type QueueResult = 'queued' | 'duplicate' | 'error'
 
 /**
  * Dedupes against existing letter_recipients rows (by source+external_id and
- * source+dedup_key), generates quote + AI copy, and inserts a 'review' row.
- * Never inserts a duplicate; never mails — approval happens in the queue UI.
+ * source+dedup_key) and inserts a 'review' row. With skipContent=false it also
+ * generates the quote + AI copy. Never inserts a duplicate; never mails —
+ * approval happens in the queue UI.
  */
 export async function queueRecipient(input: QueueInput): Promise<QueueResult> {
   const admin = createServiceClient()
@@ -116,29 +120,33 @@ export async function queueRecipient(input: QueueInput): Promise<QueueResult> {
   if (existing && existing.length > 0) return 'duplicate'
 
   try {
-    const content = await generateLetterContent({
-      address: `${input.address}, ${input.city}, ${input.state} ${input.zip}`,
-      name: input.name,
-      letterType: input.letterType,
-    })
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (admin.from('letter_recipients') as any).insert({
+    const row: Record<string, unknown> = {
       name: input.name,
       address: input.address,
       city: input.city,
       state: input.state,
       zip: input.zip,
-      lot_size: content.lot_size,
-      sq_footage: content.sq_footage,
-      property_features: content.features,
-      ai_copy: content.ai_copy,
-      quote_amount: content.quote_amount,
       source: input.source,
       external_id: input.externalId,
       dedup_key: dedupKey,
       status: 'review',
-    })
+    }
+
+    if (!input.skipContent) {
+      const content = await generateLetterContent({
+        address: `${input.address}, ${input.city}, ${input.state} ${input.zip}`,
+        name: input.name,
+        letterType: input.letterType,
+      })
+      row.lot_size = content.lot_size
+      row.sq_footage = content.sq_footage
+      row.property_features = content.features
+      row.ai_copy = content.ai_copy
+      row.quote_amount = content.quote_amount
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (admin.from('letter_recipients') as any).insert(row)
     if (error) {
       // Unique-index race → treat as duplicate, not error.
       if (error.code === '23505') return 'duplicate'

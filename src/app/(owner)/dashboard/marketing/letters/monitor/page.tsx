@@ -50,6 +50,7 @@ export default function LetterMonitorPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [phone, setPhone] = useState('(260) 000-0000')
   const [sending, setSending] = useState(false)
+  const [genProgress, setGenProgress] = useState<{ done: number; total: number } | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -115,6 +116,30 @@ export default function LetterMonitorPage() {
     setSelected(prev => (prev.size === queue.length ? new Set() : new Set(queue.map(q => q.id))))
   }
 
+  // Generate quote + AI copy for address-only rows, one at a time so each
+  // request (a Zillow lookup + Haiku call) stays within the serverless limit.
+  async function generateMissing() {
+    const pending = queue.filter(q => !q.ai_copy).map(q => q.id)
+    if (pending.length === 0) { toast.info('All entries already have letter copy'); return }
+    setGenProgress({ done: 0, total: pending.length })
+    let ok = 0
+    for (let i = 0; i < pending.length; i++) {
+      try {
+        const res = await fetch('/api/letters/monitor/queue', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'generate', ids: [pending[i]] }),
+        })
+        const data = await res.json()
+        if (res.ok && data.generated > 0) ok++
+      } catch { /* keep going */ }
+      setGenProgress({ done: i + 1, total: pending.length })
+    }
+    setGenProgress(null)
+    toast.success(`Generated copy for ${ok} of ${pending.length}`)
+    await load()
+  }
+
   async function act(action: 'approve' | 'skip') {
     const ids = [...selected]
     if (ids.length === 0) { toast.error('Select at least one entry'); return }
@@ -140,6 +165,7 @@ export default function LetterMonitorPage() {
   }
 
   const selectedCost = [...selected].length * 0.93
+  const missingCopy = queue.filter(q => !q.ai_copy).length
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
@@ -229,7 +255,7 @@ export default function LetterMonitorPage() {
                     </p>
                     <Button size="sm" onClick={() => runSource(src)} disabled={running === src.key}>
                       {running === src.key ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-                      Run now
+                      {src.key === 'violations_311' ? 'Pull all addresses' : 'Run now'}
                     </Button>
                   </div>
                 </div>
@@ -241,6 +267,12 @@ export default function LetterMonitorPage() {
       <div className="rounded-xl border border-zinc-800 bg-zinc-900/50">
         <div className="flex flex-wrap items-center gap-3 p-4 border-b border-zinc-800">
           <h2 className="text-sm font-semibold text-white">Review Queue ({queue.length})</h2>
+          {missingCopy > 0 && (
+            <Button size="sm" variant="outline" onClick={generateMissing} disabled={genProgress !== null}>
+              {genProgress ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              {genProgress ? `Generating ${genProgress.done}/${genProgress.total}` : `Generate copy (${missingCopy})`}
+            </Button>
+          )}
           <div className="flex items-center gap-2 ml-auto">
             <Label className="text-xs text-zinc-500">Phone</Label>
             <Input value={phone} onChange={e => setPhone(e.target.value)} className="h-8 w-36 text-sm" />
@@ -290,9 +322,15 @@ export default function LetterMonitorPage() {
                       {item.source === 'violation' ? 'Violation' : 'New homeowner'}
                     </span>
                   </td>
-                  <td className="p-3 text-zinc-200">{item.quote_amount != null ? formatCurrency(item.quote_amount) : '—'}</td>
+                  <td className="p-3 text-zinc-200">
+                    {item.quote_amount != null
+                      ? formatCurrency(item.quote_amount)
+                      : <span className="text-xs text-amber-400">Needs copy</span>}
+                  </td>
                   <td className="p-3 text-xs text-zinc-400 max-w-md">
-                    <span className="line-clamp-3">{item.ai_copy}</span>
+                    {item.ai_copy
+                      ? <span className="line-clamp-3">{item.ai_copy}</span>
+                      : <span className="text-zinc-600 italic">Not generated yet — click “Generate copy”.</span>}
                   </td>
                 </tr>
               ))}

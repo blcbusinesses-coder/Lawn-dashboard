@@ -3,6 +3,8 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { mercatorToLatLng, reverseGeocode, queueRecipient } from '@/lib/letters/monitor'
 import type { LetterType } from '@/lib/letters/templates'
 
+export const maxDuration = 60
+
 const SOURCE_KEY = 'violations_311'
 
 interface Feature {
@@ -50,7 +52,10 @@ export async function POST() {
   const feedUrl = config.feed_url ?? 'https://www.kendallvillein.gov/311/map/'
   const serviceName = (config.service_name ?? 'Tall Grass / Weeds').toLowerCase()
   const targetZips = (config.target_zips ?? []).map(z => z.slice(0, 5))
-  const maxPerRun = config.max_per_run ?? 25
+  // Pull the entire list by default. Address-only ingest is fast (reverse
+  // geocode only), so there is no per-address Apify/AI cost here — quote + copy
+  // are generated later, per-row, from the review queue.
+  const maxPerRun = config.max_per_run ?? Number.POSITIVE_INFINITY
   const letterType = (src.letter_type as LetterType) ?? 'violation'
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -95,6 +100,7 @@ export async function POST() {
         city: parsed.city,
         state: parsed.state,
         zip: parsed.zip,
+        skipContent: true,
       })
       if (result === 'queued') queued++
       else if (result === 'duplicate') skipped++
