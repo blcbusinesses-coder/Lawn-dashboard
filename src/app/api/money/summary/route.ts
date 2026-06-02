@@ -1,6 +1,6 @@
 import { createAdminClient as createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { format, subMonths, startOfMonth, endOfMonth, eachWeekOfInterval, parseISO } from 'date-fns'
+import { format, subMonths, startOfMonth, endOfMonth, parseISO } from 'date-fns'
 
 // Months between two startOfMonth dates (b - a), e.g. May→Jul = 2
 function monthDiff(a: Date, b: Date): number {
@@ -11,6 +11,14 @@ export async function GET(request: NextRequest) {
   const supabase = await createClient()
   const { searchParams } = new URL(request.url)
   const months = parseInt(searchParams.get('months') ?? '12')
+  // Optional single-month focus: ?month=YYYY-MM returns just that month.
+  const monthParam = searchParams.get('month')
+  const singleMonth = monthParam && /^\d{4}-\d{2}$/.test(monthParam) ? monthParam : null
+
+  // Build the list of months to report on (newest last).
+  const targetDates: Date[] = singleMonth
+    ? [parseISO(`${singleMonth}-01`)]
+    : Array.from({ length: months }, (_, idx) => subMonths(new Date(), months - 1 - idx))
 
   // ── Fetch all CC/loan obligations once (outside the month loop) ─────────────
   // These are spread across months rather than counted in full on purchase date.
@@ -26,8 +34,7 @@ export async function GET(request: NextRequest) {
 
   const result = []
 
-  for (let i = months - 1; i >= 0; i--) {
-    const d = subMonths(new Date(), i)
+  for (const d of targetDates) {
     const monthStart = startOfMonth(d)
     const monthEnd   = endOfMonth(d)
     const start = format(monthStart, 'yyyy-MM-dd')
@@ -35,16 +42,15 @@ export async function GET(request: NextRequest) {
     const label = format(d, 'MMM yyyy')
 
     // ── Revenue from job_logs × price_per_mow ──────────────────────────────────
-    const weeksInMonth = eachWeekOfInterval(
-      { start: monthStart, end: monthEnd },
-      { weekStartsOn: 1 }
-    ).map((w) => format(w, 'yyyy-MM-dd'))
-
+    // Attribute by the actual week_start date falling in the month. Month-
+    // boundary weeks are split (in the jobs UI) into two week_start values — one
+    // per month — so each month gets only the mows that happened in it.
     const { data: jobData } = await supabase
       .from('job_logs')
       .select('properties(price_per_mow)')
       .eq('status', 'done')
-      .in('week_start', weeksInMonth)
+      .gte('week_start', start)
+      .lte('week_start', end)
 
     const mowRevenue = (jobData ?? []).reduce((sum, j) => {
       const prop = j.properties as { price_per_mow: number } | null

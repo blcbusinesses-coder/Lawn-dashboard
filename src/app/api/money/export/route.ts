@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { format, subMonths, startOfMonth, endOfMonth, eachWeekOfInterval } from 'date-fns'
+import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 
 function csv(rows: string[][]): string {
   return rows
@@ -27,11 +27,9 @@ export async function GET(request: NextRequest) {
     const label = format(d, 'MMM yyyy')
     const monthKey = format(d, 'yyyy-MM')
 
-    const weeksInMonth = eachWeekOfInterval({ start: monthStart, end: monthEnd }, { weekStartsOn: 1 })
-      .map((w) => format(w, 'yyyy-MM-dd'))
-
     const { data: jobData } = await supabase.from('job_logs')
-      .select('properties(price_per_mow)').eq('status', 'done').in('week_start', weeksInMonth)
+      .select('properties(price_per_mow)').eq('status', 'done')
+      .gte('week_start', start).lte('week_start', end)
     const mowRevenue = (jobData ?? []).reduce((s, j) => s + ((j.properties as { price_per_mow: number } | null)?.price_per_mow ?? 0), 0)
 
     const { data: oneOffData } = await supabase.from('one_off_jobs')

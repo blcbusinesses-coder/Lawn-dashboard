@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { format, startOfMonth, endOfMonth, eachWeekOfInterval, parseISO } from 'date-fns'
+import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns'
 import * as XLSX from 'xlsx'
 
 export async function GET(request: NextRequest) {
@@ -44,17 +44,14 @@ export async function GET(request: NextRequest) {
     const end        = format(monthEnd,   'yyyy-MM-dd')
     const label      = format(monthDate,  'MMM yyyy')
 
-    const weeksInMonth = eachWeekOfInterval(
-      { start: monthStart, end: monthEnd },
-      { weekStartsOn: 1 }
-    ).map(w => format(w, 'yyyy-MM-dd'))
-
-    // Income: mowing
+    // Income: mowing — attribute by week_start date within the month so split
+    // month-boundary weeks land in the correct month.
     const { data: jobData } = await supabase
       .from('job_logs')
       .select('week_start, properties(address, price_per_mow, customers(full_name))')
       .eq('status', 'done')
-      .in('week_start', weeksInMonth)
+      .gte('week_start', start)
+      .lte('week_start', end)
       .order('week_start')
 
     let mowRevenue = 0

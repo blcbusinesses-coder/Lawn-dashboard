@@ -5,6 +5,11 @@ export async function GET(request: NextRequest) {
   const supabase = await createClient()
   const { searchParams } = new URL(request.url)
   const weekStart = searchParams.get('week_start')
+  // Range form: pull every job_log whose week_start falls in [from, to]. Used by
+  // the jobs page so a month-boundary week (split into two week_start values)
+  // loads both slices in one request.
+  const from = searchParams.get('from')
+  const to = searchParams.get('to')
 
   let query = supabase
     .from('job_logs')
@@ -12,6 +17,8 @@ export async function GET(request: NextRequest) {
 
   if (weekStart) {
     query = query.eq('week_start', weekStart)
+  } else if (from && to) {
+    query = query.gte('week_start', from).lte('week_start', to)
   }
 
   const { data, error } = await query.order('created_at', { ascending: false })

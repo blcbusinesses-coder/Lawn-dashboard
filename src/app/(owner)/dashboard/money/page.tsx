@@ -28,6 +28,19 @@ interface MonthData {
   tax_profit: number        // simple cash-basis profit
 }
 
+interface MonthDetail extends MonthData {
+  mow_revenue: number
+  one_off_revenue: number
+}
+
+interface MonthInvoice {
+  id: string
+  total_amount: number
+  status: 'draft' | 'sent' | 'paid' | 'void'
+  customers: { full_name: string } | null
+  invoice_payments: { amount: number }[]
+}
+
 interface Customer { id: string; full_name: string }
 
 interface Prepayment {
@@ -51,6 +64,13 @@ export default function MoneyPage() {
   const [loading, setLoading] = useState(true)
   const [range, setRange]     = useState(12)
   const [taxMode, setTaxMode] = useState(false)
+
+  // Single-month focus view ('' = off). When set, shows a dedicated breakdown
+  // for that month (financials + invoice collection).
+  const [monthView, setMonthView]         = useState('')
+  const [monthDetail, setMonthDetail]     = useState<MonthDetail | null>(null)
+  const [monthInvoices, setMonthInvoices] = useState<MonthInvoice[]>([])
+  const [monthLoading, setMonthLoading]   = useState(false)
 
   // Collapsed state for the three panels
   const [collapsed, setCollapsed] = useState({ payroll: false, reserve: false, prepaid: false })
@@ -88,6 +108,22 @@ export default function MoneyPage() {
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false) })
   }, [range])
+
+  // Load the focused month (financial summary + that month's invoices).
+  useEffect(() => {
+    if (!monthView) { setMonthDetail(null); setMonthInvoices([]); return }
+    setMonthLoading(true)
+    Promise.all([
+      fetch(`/api/money/summary?month=${monthView}`).then(r => r.json()),
+      fetch(`/api/invoices?month=${monthView}`).then(r => r.json()),
+    ])
+      .then(([summary, invoices]) => {
+        setMonthDetail(Array.isArray(summary) ? summary[0] ?? null : null)
+        setMonthInvoices(Array.isArray(invoices) ? invoices.filter((i: MonthInvoice) => i.status !== 'void') : [])
+      })
+      .catch(() => { setMonthDetail(null); setMonthInvoices([]) })
+      .finally(() => setMonthLoading(false))
+  }, [monthView])
 
   const loadPrepayments = useCallback(async () => {
     setPrepLoading(true)
@@ -266,6 +302,21 @@ export default function MoneyPage() {
           <p className="text-sm text-zinc-500 mt-1">Revenue, expenses, and profit overview</p>
         </div>
         <div className="flex gap-2 flex-wrap items-center">
+          {/* Single-month focus picker */}
+          <div className="flex items-center gap-1.5">
+            <input
+              type="month"
+              value={monthView}
+              max={format(new Date(), 'yyyy-MM')}
+              onChange={e => setMonthView(e.target.value)}
+              className="border border-zinc-200 rounded-md px-2.5 py-1.5 text-xs text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+              aria-label="View a specific month"
+            />
+            {monthView && (
+              <Button size="sm" variant="ghost" onClick={() => setMonthView('')}>Clear</Button>
+            )}
+          </div>
+
           {/* Range */}
           {[1, 3, 6, 12].map(r => (
             <Button key={r} size="sm" variant={range === r ? 'default' : 'outline'} onClick={() => setRange(r)}>
@@ -307,6 +358,102 @@ export default function MoneyPage() {
           <span><strong>Tax View:</strong> Expenses counted when entered (no spreading). All expense types included. Simple Revenue − Expenses − Payroll = Profit.</span>
         </div>
       )}
+
+      {/* ── Single-month focus panel ────────────────────────────────────────── */}
+      {monthView && (() => {
+        const label = format(parseISO(`${monthView}-01`), 'MMMM yyyy')
+        const paidOf = (inv: MonthInvoice) => inv.invoice_payments.reduce((s, p) => s + Number(p.amount), 0)
+        const billed     = monthInvoices.reduce((s, inv) => s + inv.total_amount, 0)
+        const collected  = monthInvoices.reduce((s, inv) => s + paidOf(inv), 0)
+        const outstanding = Math.max(billed - collected, 0)
+
+        return (
+          <div className="mb-6 bg-white rounded-xl border border-zinc-200 overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-zinc-100 bg-zinc-50 flex items-center justify-between gap-3 flex-wrap">
+              <h2 className="text-sm font-semibold text-zinc-800">{label} — Full Breakdown</h2>
+              <button onClick={() => setMonthView('')} className="text-xs text-zinc-400 hover:text-zinc-700">Close</button>
+            </div>
+
+            {monthLoading ? (
+              <div className="p-5 space-y-3">{[1,2].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>
+            ) : !monthDetail ? (
+              <p className="px-5 py-8 text-center text-sm text-zinc-400">No data for {label}.</p>
+            ) : (
+              <div className="p-5 space-y-5">
+                {/* Financial stat grid */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-3">
+                    <p className="text-xs text-zinc-400 uppercase tracking-wide">Revenue</p>
+                    <p className="text-xl font-bold text-green-600 mt-1">{formatCurrency(monthDetail.revenue)}</p>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      Mow {formatCurrency(monthDetail.mow_revenue)} · One-off {formatCurrency(monthDetail.one_off_revenue)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-3">
+                    <p className="text-xs text-zinc-400 uppercase tracking-wide">Expenses</p>
+                    <p className="text-xl font-bold text-red-500 mt-1">{formatCurrency(monthDetail.raw_expenses)}</p>
+                    {monthDetail.capital_expenses > 0 && (
+                      <p className="text-xs text-zinc-400 mt-1">incl. {formatCurrency(monthDetail.capital_expenses)} capital</p>
+                    )}
+                  </div>
+                  <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-3">
+                    <p className="text-xs text-zinc-400 uppercase tracking-wide">Payroll</p>
+                    <p className="text-xl font-bold text-orange-500 mt-1">{formatCurrency(monthDetail.payroll)}</p>
+                  </div>
+                  <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-3">
+                    <p className="text-xs text-zinc-400 uppercase tracking-wide">Net Profit</p>
+                    <p className={`text-xl font-bold mt-1 ${(taxMode ? monthDetail.tax_profit : monthDetail.profit) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                      {formatCurrency(taxMode ? monthDetail.tax_profit : monthDetail.profit)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Invoice collection for the month */}
+                <div className="rounded-lg border border-zinc-100 overflow-hidden">
+                  <div className="px-4 py-2.5 bg-zinc-50 border-b border-zinc-100 flex items-center justify-between flex-wrap gap-2">
+                    <span className="text-sm font-semibold text-zinc-700">Invoices ({monthInvoices.length})</span>
+                    <div className="flex gap-4 text-xs">
+                      <span className="text-zinc-400">Billed <span className="font-semibold text-zinc-700">{formatCurrency(billed)}</span></span>
+                      <span className="text-zinc-400">Collected <span className="font-semibold text-green-600">{formatCurrency(collected)}</span></span>
+                      <span className="text-zinc-400">Outstanding <span className="font-semibold text-orange-600">{formatCurrency(outstanding)}</span></span>
+                    </div>
+                  </div>
+                  {monthInvoices.length === 0 ? (
+                    <p className="px-4 py-5 text-center text-sm text-zinc-400">No invoices for this month.</p>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead><tr className="border-b border-zinc-100 text-xs text-zinc-400 uppercase tracking-wider">
+                        <th className="text-left px-4 py-2 font-medium">Customer</th>
+                        <th className="text-left px-4 py-2 font-medium">Status</th>
+                        <th className="text-right px-4 py-2 font-medium">Billed</th>
+                        <th className="text-right px-4 py-2 font-medium">Paid</th>
+                        <th className="text-right px-4 py-2 font-medium">Balance</th>
+                      </tr></thead>
+                      <tbody className="divide-y divide-zinc-50">
+                        {monthInvoices.map(inv => {
+                          const paid = paidOf(inv)
+                          const bal  = Math.max(inv.total_amount - paid, 0)
+                          return (
+                            <tr key={inv.id} className="hover:bg-zinc-50">
+                              <td className="px-4 py-2 font-medium text-zinc-800">{inv.customers?.full_name ?? '—'}</td>
+                              <td className="px-4 py-2 text-zinc-500 capitalize">{inv.status}</td>
+                              <td className="px-4 py-2 text-right text-zinc-700">{formatCurrency(inv.total_amount)}</td>
+                              <td className="px-4 py-2 text-right text-green-600">{paid > 0 ? formatCurrency(paid) : '—'}</td>
+                              <td className="px-4 py-2 text-right font-semibold">
+                                {bal > 0 ? <span className="text-orange-600">{formatCurrency(bal)}</span> : <span className="text-green-600">Paid</span>}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* ── Summary cards ────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
