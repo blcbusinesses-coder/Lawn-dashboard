@@ -78,6 +78,13 @@ export default function InvoicesPage() {
   const [filterStatus, setFilterStatus] = useState<string>('draft')
   const [sending, setSending]           = useState<string | null>(null)
   const [editingMsg, setEditingMsg]     = useState<{ id: string; message: string } | null>(null)
+  const [regenerating, setRegenerating] = useState<string | null>(null)
+
+  // Edit invoice (line items + message) dialog
+  const [editInv, setEditInv]           = useState<Invoice | null>(null)
+  const [editItems, setEditItems]       = useState<{ description: string; quantity: number; unit_price: number }[]>([])
+  const [editMessage, setEditMessage]   = useState('')
+  const [editSaving, setEditSaving]     = useState(false)
 
   // Generate dialog
   const [genOpen, setGenOpen]   = useState(false)
@@ -179,6 +186,40 @@ export default function InvoicesPage() {
     })
     if (res.ok) { toast.success('Message updated'); setEditingMsg(null); load() }
     else toast.error('Could not save')
+  }
+
+  function openEdit(inv: Invoice) {
+    setEditInv(inv)
+    setEditItems(
+      inv.invoice_line_items.map((li) => ({
+        description: li.description,
+        quantity: li.quantity,
+        unit_price: li.unit_price,
+      }))
+    )
+    setEditMessage(inv.ai_message ?? '')
+  }
+
+  async function handleSaveEdit() {
+    if (!editInv) return
+    if (editItems.some((li) => !li.description.trim())) return toast.error('All line items need a description')
+    if (editItems.length === 0) return toast.error('Add at least one line item')
+    setEditSaving(true)
+    const res = await fetch(`/api/invoices/${editInv.id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ line_items: editItems, ai_message: editMessage.trim() || null }),
+    })
+    setEditSaving(false)
+    if (res.ok) { toast.success('Invoice updated'); setEditInv(null); load() }
+    else { const { error } = await res.json(); toast.error(error ?? 'Could not save') }
+  }
+
+  async function handleRegenerate(invoiceId: string) {
+    setRegenerating(invoiceId)
+    const res = await fetch(`/api/invoices/${invoiceId}/regenerate`, { method: 'POST' })
+    setRegenerating(null)
+    if (res.ok) { toast.success('Invoice regenerated from completed jobs'); load() }
+    else { const { error } = await res.json(); toast.error(error ?? 'Could not regenerate') }
   }
 
   function openRecordPayment(inv: Invoice) {
@@ -508,6 +549,10 @@ export default function InvoicesPage() {
                               No email on file
                             </span>
                           )}
+                          <Button size="sm" variant="outline" onClick={() => openEdit(inv)}>Edit</Button>
+                          <Button size="sm" variant="outline" onClick={() => handleRegenerate(inv.id)} disabled={regenerating === inv.id}>
+                            {regenerating === inv.id ? 'Regenerating…' : 'Regenerate'}
+                          </Button>
                           <Button size="sm" variant="ghost" className="text-red-500" onClick={() => handleVoid(inv.id)}>Void</Button>
                         </>
                       )}
@@ -821,6 +866,66 @@ export default function InvoicesPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setGenOpen(false)}>Cancel</Button>
             <Button onClick={handleGenerate} disabled={generating}>{generating?'Generating…':'Generate'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Edit Invoice Dialog ──────────────────────────────────────────────── */}
+      <Dialog open={!!editInv} onOpenChange={(o) => { if (!o) setEditInv(null) }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Edit Invoice</DialogTitle></DialogHeader>
+          {editInv && (
+            <p className="text-sm text-zinc-500">
+              {editInv.customers?.full_name} · {format(new Date(editInv.period_start + 'T00:00:00'), 'MMM d')}
+              {' – '}{format(new Date(editInv.period_end + 'T00:00:00'), 'MMM d, yyyy')}
+            </p>
+          )}
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-zinc-700">Line Items</label>
+                <button type="button"
+                  onClick={() => setEditItems([...editItems, { description: '', quantity: 1, unit_price: 0 }])}
+                  className="text-xs text-zinc-500 hover:text-zinc-800 border border-zinc-200 rounded px-2 py-1 hover:bg-zinc-50">
+                  + Add item
+                </button>
+              </div>
+              <div className="grid grid-cols-12 gap-2 text-xs font-medium text-zinc-500 px-1">
+                <span className="col-span-6">Description</span>
+                <span className="col-span-2 text-center">Qty</span>
+                <span className="col-span-3 text-right">Unit Price</span>
+                <span className="col-span-1" />
+              </div>
+              {editItems.map((item, i) => (
+                <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                  <input className="col-span-6 border border-zinc-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400"
+                    placeholder="Description" value={item.description}
+                    onChange={(e) => { const n=[...editItems]; n[i]={...n[i],description:e.target.value}; setEditItems(n) }} />
+                  <input type="number" min="0" className="col-span-2 border border-zinc-200 rounded px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-zinc-400"
+                    value={item.quantity}
+                    onChange={(e) => { const n=[...editItems]; n[i]={...n[i],quantity:parseInt(e.target.value)||0}; setEditItems(n) }} />
+                  <input type="number" min="0" step="0.01" className="col-span-3 border border-zinc-200 rounded px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-zinc-400"
+                    placeholder="0.00" value={item.unit_price||''}
+                    onChange={(e) => { const n=[...editItems]; n[i]={...n[i],unit_price:parseFloat(e.target.value)||0}; setEditItems(n) }} />
+                  <button type="button" disabled={editItems.length===1}
+                    onClick={() => setEditItems(editItems.filter((_,idx)=>idx!==i))}
+                    className="col-span-1 text-zinc-300 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed text-lg leading-none flex items-center justify-center">×</button>
+                </div>
+              ))}
+              <div className="flex justify-end pt-1 border-t border-zinc-100">
+                <p className="text-sm font-semibold text-zinc-900">
+                  Total: {formatCurrency(editItems.reduce((s,li)=>s+li.quantity*li.unit_price,0))}
+                </p>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-zinc-700">Email message <span className="font-normal text-zinc-400">(optional)</span></label>
+              <Textarea value={editMessage} onChange={(e) => setEditMessage(e.target.value)} rows={3} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditInv(null)}>Cancel</Button>
+            <Button onClick={handleSaveEdit} disabled={editSaving}>{editSaving ? 'Saving…' : 'Save Changes'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
