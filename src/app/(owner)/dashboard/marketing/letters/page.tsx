@@ -62,11 +62,8 @@ type ActiveView = 'setup' | 'preview' | 'history'
 
 const PRICE_PER_PIECE = 0.93
 
-const LETTER_TYPES: { value: LetterType; label: string; hint: string }[] = [
-  { value: 'general',       label: 'General Outreach',  hint: 'Friendly intro offering lawn care service' },
-  { value: 'new_homeowner', label: 'New Homeowner',     hint: 'Welcome-to-the-neighborhood angle for recent buyers' },
-  { value: 'violation',     label: 'Grass Violation',   hint: 'Tactful help for properties with a city notice' },
-]
+// This tab is general outreach only. New-homeowner and grass-violation
+// outreach live in their own sub-tabs (letters/new-homeowner, letters/violations).
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -515,30 +512,6 @@ export default function LettersPage() {
       {/* ── SETUP VIEW ─────────────────────────────────────────────────────── */}
       {activeView === 'setup' && (
         <div className="space-y-4">
-
-          {/* Letter type selector */}
-          <div className="bg-white rounded-xl border border-zinc-200 p-4">
-            <Label className="mb-2 block">Letter Type</Label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              {LETTER_TYPES.map(lt => (
-                <button
-                  key={lt.value}
-                  onClick={() => setCampaign(p => ({ ...p, letter_type: lt.value }))}
-                  className={`text-left rounded-lg border p-3 transition-colors ${
-                    campaign.letter_type === lt.value
-                      ? 'border-purple-400 bg-purple-50 ring-1 ring-purple-200'
-                      : 'border-zinc-200 hover:border-zinc-300 bg-white'
-                  }`}
-                >
-                  <div className="text-sm font-semibold text-zinc-800">{lt.label}</div>
-                  <div className="text-xs text-zinc-500 mt-0.5">{lt.hint}</div>
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-zinc-400 mt-2">
-              The letter type shapes the AI tone. Re-analyze addresses after changing it to refresh the copy.
-            </p>
-          </div>
 
           {/* Input panel */}
           <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">

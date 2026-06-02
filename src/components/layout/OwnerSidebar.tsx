@@ -13,7 +13,18 @@ import {
   Megaphone, DollarSign, ChevronDown, LogOut, Zap, Mail, ListChecks,
 } from 'lucide-react'
 
-const NAV_GROUPS = [
+type NavLeaf = { href: string; label: string; Icon: typeof FileText }
+type NavItem = NavLeaf & { children?: NavLeaf[] }
+type NavGroup = {
+  id: string
+  label: string
+  Icon: typeof FileText
+  accent: string
+  dot: string
+  items: NavItem[]
+}
+
+const NAV_GROUPS: NavGroup[] = [
   {
     id: 'marketing',
     label: 'Marketing',
@@ -25,8 +36,15 @@ const NAV_GROUPS = [
       { href: '/dashboard/content',              label: 'Content',         Icon: PenTool },
       { href: '/dashboard/site',                 label: 'Website',         Icon: Globe },
       { href: '/dashboard/marketing/postcards',  label: 'Postcards',       Icon: Mail },
-      { href: '/dashboard/marketing/letters',    label: 'Letters',         Icon: FileText },
-      { href: '/dashboard/marketing/letters/monitor', label: 'Letter Lists', Icon: ListChecks },
+      {
+        href: '/dashboard/marketing/letters',
+        label: 'Letters',
+        Icon: FileText,
+        children: [
+          { href: '/dashboard/marketing/letters/new-homeowner', label: 'New Homeowner',   Icon: Home },
+          { href: '/dashboard/marketing/letters/violations',    label: 'Grass Violations', Icon: ListChecks },
+        ],
+      },
     ],
   },
   {
@@ -194,8 +212,11 @@ export function OwnerSidebar({ open = false, onClose }: OwnerSidebarProps) {
               {/* Items */}
               {isOpen && (
                 <ul className="mt-0.5 ml-3 pl-3 border-l border-zinc-800 space-y-0.5">
-                  {group.items.map(({ href, label, Icon }) => {
+                  {group.items.map(({ href, label, Icon, children }) => {
                     const active = pathname === href
+                    // A parent is "expanded" when the user is on it or any of its children.
+                    const childActive = children?.some(c => pathname === c.href) ?? false
+                    const showChildren = !!children && (active || childActive)
                     return (
                       <li key={href}>
                         <Link
@@ -210,6 +231,30 @@ export function OwnerSidebar({ open = false, onClose }: OwnerSidebarProps) {
                           <Icon size={14} strokeWidth={active ? 2.5 : 2} className={active ? 'text-white' : 'text-zinc-500'} />
                           {label}
                         </Link>
+
+                        {showChildren && (
+                          <ul className="mt-0.5 ml-3 pl-3 border-l border-zinc-800 space-y-0.5">
+                            {children!.map((child) => {
+                              const cActive = pathname === child.href
+                              return (
+                                <li key={child.href}>
+                                  <Link
+                                    href={child.href}
+                                    className={cn(
+                                      'flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] font-medium transition-colors',
+                                      cActive
+                                        ? 'bg-purple-500/15 text-purple-200'
+                                        : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-200'
+                                    )}
+                                  >
+                                    <child.Icon size={13} strokeWidth={cActive ? 2.5 : 2} className={cActive ? 'text-purple-300' : 'text-zinc-600'} />
+                                    {child.label}
+                                  </Link>
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        )}
                       </li>
                     )
                   })}
