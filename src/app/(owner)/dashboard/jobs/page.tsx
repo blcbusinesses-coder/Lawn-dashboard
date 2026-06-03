@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { getWeekStart, prevWeek, nextWeek, formatWeekLabel, toDateString, getWeekSegments } from '@/lib/utils/dates'
+import { getWeekStart, prevWeek, nextWeek, formatWeekLabel, toDateString } from '@/lib/utils/dates'
 import { formatCurrency } from '@/lib/utils/currency'
 import { format, addDays } from 'date-fns'
 
@@ -85,8 +85,6 @@ export default function JobsPage() {
 
   const weekDateStr = toDateString(weekStart)
   const weekEndStr = toDateString(addDays(weekStart, 6))
-  // One ISO week → one or two billable segments (split at a month boundary).
-  const segments = getWeekSegments(weekStart)
 
   // ── Load weekly jobs ────────────────────────────────────────────────────────
   const loadWeekly = useCallback(async () => {
@@ -129,21 +127,22 @@ export default function JobsPage() {
   }, [])
 
   // ── Weekly job actions ──────────────────────────────────────────────────────
-  // Pending/optimistic state is keyed by `${segmentWeekStart}:${propertyId}` so
-  // a split week tracks each slice independently.
-  async function setStatus(segWeekStart: string, propertyId: string, status: 'done' | 'skipped' | null) {
-    const key = `${segWeekStart}:${propertyId}`
+  // Each check-off stamps completed_at (handled server-side); month attribution
+  // is derived from that date in the money/invoice views, so a single weekly
+  // table keyed on the ISO-week Monday is all we need here.
+  async function setStatus(propertyId: string, status: 'done' | 'skipped' | null) {
+    const key = propertyId
     if (pending.has(key)) return
     setOptimistic((prev) => new Map(prev).set(key, status))
     setPending((prev) => new Set(prev).add(key))
     try {
       if (status === null) {
-        await fetch(`/api/jobs?property_id=${propertyId}&week_start=${segWeekStart}`, { method: 'DELETE' })
+        await fetch(`/api/jobs?property_id=${propertyId}&week_start=${weekDateStr}`, { method: 'DELETE' })
       } else {
         const res = await fetch('/api/jobs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ property_id: propertyId, week_start: segWeekStart, status }),
+          body: JSON.stringify({ property_id: propertyId, week_start: weekDateStr, status }),
         })
         if (!res.ok) throw new Error((await res.json()).error)
       }
@@ -259,32 +258,27 @@ export default function JobsPage() {
   }
 
   // ── Derived values ──────────────────────────────────────────────────────────
-  // Effective status for a property within a given segment, honoring any
-  // in-flight optimistic update.
-  function statusFor(segWeekStart: string, p: Property): 'done' | 'skipped' | null {
-    const opt = optimistic.get(`${segWeekStart}:${p.id}`)
+  // Effective status for a property this week, honoring any in-flight optimistic
+  // update. jobLogs is already scoped to this week's range, so any row for the
+  // property counts as this week.
+  function statusFor(p: Property): 'done' | 'skipped' | null {
+    const opt = optimistic.get(p.id)
     if (opt !== undefined) return opt
-    return jobLogs.find((j) => j.property_id === p.id && j.week_start === segWeekStart)?.status ?? null
+    return jobLogs.find((j) => j.property_id === p.id)?.status ?? null
   }
 
-  // Per-segment property+status list for rendering.
-  function segmentRows(segWeekStart: string): (PropertyWithStatus & { effStatus: 'done' | 'skipped' | null })[] {
-    return properties.map((p) => ({
-      ...p,
-      jobLog: jobLogs.find((j) => j.property_id === p.id && j.week_start === segWeekStart) ?? null,
-      effStatus: statusFor(segWeekStart, p),
-    }))
-  }
+  // Property + status list for rendering.
+  const rows: (PropertyWithStatus & { effStatus: 'done' | 'skipped' | null })[] = properties.map((p) => ({
+    ...p,
+    jobLog: jobLogs.find((j) => j.property_id === p.id) ?? null,
+    effStatus: statusFor(p),
+  }))
 
-  // Week totals across every segment (so split weeks still roll up correctly).
-  const doneCount = segments.reduce(
-    (sum, seg) => sum + properties.filter((p) => statusFor(seg.weekStart, p) === 'done').length, 0
-  )
-  const mowRevenue = segments.reduce(
-    (sum, seg) => sum + properties
-      .filter((p) => statusFor(seg.weekStart, p) === 'done')
-      .reduce((s, p) => s + p.price_per_mow, 0), 0
-  )
+  // Week totals.
+  const doneCount = properties.filter((p) => statusFor(p) === 'done').length
+  const mowRevenue = properties
+    .filter((p) => statusFor(p) === 'done')
+    .reduce((s, p) => s + p.price_per_mow, 0)
 
   // One-off jobs completed this week
   const oneOffThisWeek = oneOffJobs.filter(
@@ -319,7 +313,7 @@ export default function JobsPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-xl border border-zinc-200 p-4">
             <p className="text-xs text-zinc-500 uppercase tracking-wide">Lawns Done</p>
-            <p className="text-2xl font-bold text-zinc-900 mt-1">{doneCount} / {properties.length * segments.length}</p>
+            <p className="text-2xl font-bold text-zinc-900 mt-1">{doneCount} / {properties.length}</p>
           </div>
           <div className="bg-white rounded-xl border border-zinc-200 p-4">
             <p className="text-xs text-zinc-500 uppercase tracking-wide">Mowing Revenue</p>
@@ -335,82 +329,65 @@ export default function JobsPage() {
           </div>
         </div>
 
-        {/* When an ISO week straddles a month boundary it renders as two
-            tables — mows marked in each slice bill to that slice's month. */}
-        <div className="space-y-4">
-          {segments.map((seg) => {
-            const rows = segmentRows(seg.weekStart)
-            return (
-              <div key={seg.weekStart} className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
-                {seg.split && (
-                  <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-100 flex items-center justify-between gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-amber-800">{seg.label}</span>
-                    <span className="text-xs font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
-                      Bills to {seg.billsTo}
-                    </span>
-                  </div>
-                )}
-                <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-zinc-100 bg-zinc-50">
-                      <th className="text-left px-4 py-3 font-medium text-zinc-600">Property</th>
-                      <th className="text-left px-4 py-3 font-medium text-zinc-600">Customer</th>
-                      <th className="text-left px-4 py-3 font-medium text-zinc-600">Price</th>
-                      <th className="text-left px-4 py-3 font-medium text-zinc-600">Status</th>
-                      <th className="px-4 py-3 font-medium text-zinc-600 text-right">Actions</th>
+        <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-zinc-100 bg-zinc-50">
+                <th className="text-left px-4 py-3 font-medium text-zinc-600">Property</th>
+                <th className="text-left px-4 py-3 font-medium text-zinc-600">Customer</th>
+                <th className="text-left px-4 py-3 font-medium text-zinc-600">Price</th>
+                <th className="text-left px-4 py-3 font-medium text-zinc-600">Status</th>
+                <th className="px-4 py-3 font-medium text-zinc-600 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="border-b border-zinc-50">
+                    {Array.from({ length: 5 }).map((_, j) => (
+                      <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                    ))}
+                  </tr>
+                ))
+              ) : rows.length === 0 ? (
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-zinc-400">No properties. Add some in the Properties tab first.</td></tr>
+              ) : (
+                rows.map((p) => {
+                  const status = p.effStatus
+                  const isPending = pending.has(p.id)
+                  return (
+                    <tr key={p.id} className="border-b border-zinc-50 hover:bg-zinc-50 transition-colors">
+                      <td className="px-4 py-3 font-medium text-zinc-900">{p.address}</td>
+                      <td className="px-4 py-3 text-zinc-600">{p.customers?.full_name}</td>
+                      <td className="px-4 py-3 text-zinc-600">{formatCurrency(p.price_per_mow)}</td>
+                      <td className="px-4 py-3">
+                        {status === 'done' && <Badge className="bg-green-100 text-green-700 border-green-200">Done</Badge>}
+                        {status === 'skipped' && <Badge variant="secondary">Skipped</Badge>}
+                        {status === null && <Badge variant="outline" className="text-zinc-400">Pending</Badge>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2 justify-end">
+                          <Button size="sm" variant={status === 'done' ? 'default' : 'outline'}
+                            className={status === 'done' ? 'bg-green-600 hover:bg-green-700' : ''}
+                            disabled={isPending}
+                            onClick={() => setStatus(p.id, status === 'done' ? null : 'done')}>
+                            ✓ Done
+                          </Button>
+                          <Button size="sm" variant={status === 'skipped' ? 'secondary' : 'ghost'}
+                            disabled={isPending}
+                            onClick={() => setStatus(p.id, status === 'skipped' ? null : 'skipped')}>
+                            Skip
+                          </Button>
+                        </div>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {loading ? (
-                      Array.from({ length: 5 }).map((_, i) => (
-                        <tr key={i} className="border-b border-zinc-50">
-                          {Array.from({ length: 5 }).map((_, j) => (
-                            <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
-                          ))}
-                        </tr>
-                      ))
-                    ) : rows.length === 0 ? (
-                      <tr><td colSpan={5} className="px-4 py-8 text-center text-zinc-400">No properties. Add some in the Properties tab first.</td></tr>
-                    ) : (
-                      rows.map((p) => {
-                        const status = p.effStatus
-                        const isPending = pending.has(`${seg.weekStart}:${p.id}`)
-                        return (
-                          <tr key={p.id} className="border-b border-zinc-50 hover:bg-zinc-50 transition-colors">
-                            <td className="px-4 py-3 font-medium text-zinc-900">{p.address}</td>
-                            <td className="px-4 py-3 text-zinc-600">{p.customers?.full_name}</td>
-                            <td className="px-4 py-3 text-zinc-600">{formatCurrency(p.price_per_mow)}</td>
-                            <td className="px-4 py-3">
-                              {status === 'done' && <Badge className="bg-green-100 text-green-700 border-green-200">Done</Badge>}
-                              {status === 'skipped' && <Badge variant="secondary">Skipped</Badge>}
-                              {status === null && <Badge variant="outline" className="text-zinc-400">Pending</Badge>}
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="flex gap-2 justify-end">
-                                <Button size="sm" variant={status === 'done' ? 'default' : 'outline'}
-                                  className={status === 'done' ? 'bg-green-600 hover:bg-green-700' : ''}
-                                  disabled={isPending}
-                                  onClick={() => setStatus(seg.weekStart, p.id, status === 'done' ? null : 'done')}>
-                                  ✓ Done
-                                </Button>
-                                <Button size="sm" variant={status === 'skipped' ? 'secondary' : 'ghost'}
-                                  disabled={isPending}
-                                  onClick={() => setStatus(seg.weekStart, p.id, status === 'skipped' ? null : 'skipped')}>
-                                  Skip
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })
-                    )}
-                  </tbody>
-                </table>
-                </div>
-              </div>
-            )
-          })}
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+          </div>
         </div>
       </div>
 

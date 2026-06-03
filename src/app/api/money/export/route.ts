@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 
     const { data: jobData } = await supabase.from('job_logs')
       .select('properties(price_per_mow)').eq('status', 'done')
-      .gte('week_start', start).lte('week_start', end)
+      .or(`and(completed_at.gte.${start}T00:00:00,completed_at.lte.${end}T23:59:59),and(completed_at.is.null,week_start.gte.${start},week_start.lte.${end})`)
     const mowRevenue = (jobData ?? []).reduce((s, j) => s + ((j.properties as { price_per_mow: number } | null)?.price_per_mow ?? 0), 0)
 
     const { data: oneOffData } = await supabase.from('one_off_jobs')
