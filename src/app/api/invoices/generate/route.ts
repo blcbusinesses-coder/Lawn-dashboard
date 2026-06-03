@@ -12,13 +12,14 @@ export async function POST(request: NextRequest) {
   const periodEnd = format(endOfMonth(periodDate), 'yyyy-MM-dd')
   const periodLabel = format(periodDate, 'MMMM yyyy')
 
-  // Get all completed jobs in the period — attribute by the day each lawn was
-  // checked off (completed_at), falling back to week_start for older rows.
+  // Get all completed jobs in the period — attribute by service week (week_start),
+  // which reflects when the route was mowed rather than when it was checked off.
   const { data: jobLogs, error: jobError } = await supabase
     .from('job_logs')
     .select('*, properties(id, address, price_per_mow, customer_id, customers(id, full_name, email))')
     .eq('status', 'done')
-    .or(`and(completed_at.gte.${periodStart}T00:00:00,completed_at.lte.${periodEnd}T23:59:59),and(completed_at.is.null,week_start.gte.${periodStart},week_start.lte.${periodEnd})`)
+    .gte('week_start', periodStart)
+    .lte('week_start', periodEnd)
 
   if (jobError) return NextResponse.json({ error: jobError.message }, { status: 500 })
   if (!jobLogs?.length) {

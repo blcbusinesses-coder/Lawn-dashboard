@@ -42,14 +42,16 @@ export async function GET(request: NextRequest) {
     const label = format(d, 'MMM yyyy')
 
     // ── Revenue from job_logs × price_per_mow ──────────────────────────────────
-    // Attribute each mow by the DAY it was checked off (completed_at). Whatever
-    // day the lawn was marked done is the month its revenue counts toward. Older
-    // rows that predate the completed_at column fall back to week_start.
+    // Attribute each mow by its service week (week_start) — this reflects when the
+    // route was actually mowed. We deliberately do NOT use completed_at, which is
+    // just the click timestamp and can lag by days when jobs are checked off in
+    // bulk after the fact (that would push late-April work into May, etc.).
     const { data: jobData } = await supabase
       .from('job_logs')
       .select('properties(price_per_mow)')
       .eq('status', 'done')
-      .or(`and(completed_at.gte.${start}T00:00:00,completed_at.lte.${end}T23:59:59),and(completed_at.is.null,week_start.gte.${start},week_start.lte.${end})`)
+      .gte('week_start', start)
+      .lte('week_start', end)
 
     const mowRevenue = (jobData ?? []).reduce((sum, j) => {
       const prop = j.properties as { price_per_mow: number } | null

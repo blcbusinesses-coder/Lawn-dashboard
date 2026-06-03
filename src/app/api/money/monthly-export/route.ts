@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   const supabase = await createAdminClient()
 
   // ── Collect data for each month ───────────────────────────────────────────
-  type MowRow      = { week_start: string; completed_at: string | null; properties: { address: string; price_per_mow: number; customers: { full_name: string } | null } | null }
+  type MowRow      = { week_start: string; properties: { address: string; price_per_mow: number; customers: { full_name: string } | null } | null }
   type OneOffRow   = { completed_date: string; description: string | null; amount: number | null; customers: { full_name: string } | null }
   type TimeLog     = { duration_minutes: number | null; profiles: { id: string; full_name: string; hourly_rate: number | null } | null }
   type ManualRow   = { hours: number | null; profiles: { id: string; full_name: string; hourly_rate: number | null } | null }
@@ -48,20 +48,19 @@ export async function GET(request: NextRequest) {
     // month-boundary weeks land in the correct month.
     const { data: jobData } = await supabase
       .from('job_logs')
-      .select('week_start, completed_at, properties(address, price_per_mow, customers(full_name))')
+      .select('week_start, properties(address, price_per_mow, customers(full_name))')
       .eq('status', 'done')
-      .or(`and(completed_at.gte.${start}T00:00:00,completed_at.lte.${end}T23:59:59),and(completed_at.is.null,week_start.gte.${start},week_start.lte.${end})`)
+      .gte('week_start', start)
+      .lte('week_start', end)
       .order('week_start')
 
     let mowRevenue = 0
     for (const j of (jobData ?? []) as MowRow[]) {
       const price = j.properties?.price_per_mow ?? 0
       mowRevenue += price
-      // Show the actual day checked off (falls back to week_start for old rows)
-      const checkedDate = j.completed_at ? format(parseISO(j.completed_at), 'yyyy-MM-dd') : j.week_start
       incomeRows.push([
         label,
-        checkedDate,
+        j.week_start,
         'Mowing',
         j.properties?.customers?.full_name ?? '',
         j.properties?.address ?? '',
