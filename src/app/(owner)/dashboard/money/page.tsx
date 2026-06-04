@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog'
 import { formatCurrency } from '@/lib/utils/currency'
 import { toast } from 'sonner'
-import { Download, Plus, Trash2, FileSpreadsheet, Check, PiggyBank, ChevronDown, ChevronRight, Receipt } from 'lucide-react'
+import { Download, Plus, Trash2, FileSpreadsheet, Check, PiggyBank, ChevronDown, ChevronRight, Receipt, Wallet } from 'lucide-react'
 import { format, subMonths, parseISO, differenceInCalendarMonths, startOfMonth } from 'date-fns'
 
 interface MonthData {
@@ -72,8 +72,9 @@ export default function MoneyPage() {
   const [monthInvoices, setMonthInvoices] = useState<MonthInvoice[]>([])
   const [monthLoading, setMonthLoading]   = useState(false)
 
-  // Collapsed state for the three panels
-  const [collapsed, setCollapsed] = useState({ payroll: false, reserve: false, prepaid: false })
+  // Collapsed state for the three panels — all start closed so the Money tab
+  // opens clean; expand on demand.
+  const [collapsed, setCollapsed] = useState({ payroll: true, reserve: true, prepaid: true })
   const toggle = (k: keyof typeof collapsed) => setCollapsed(p => ({ ...p, [k]: !p[k] }))
 
   const [exporting, setExporting]                   = useState(false)
@@ -93,6 +94,11 @@ export default function MoneyPage() {
   const [obLoading, setObLoading]         = useState(true)
   const [payrollSummary, setPayrollSummary] = useState<PayrollSummary | null>(null)
   const [payrollLoading, setPayrollLoading] = useState(true)
+
+  // Bank balance (singleton business_settings) for the Cash Position panel.
+  const [bankBalance, setBankBalance]   = useState<number | null>(null)
+  const [balanceInput, setBalanceInput] = useState('')
+  const [savingBalance, setSavingBalance] = useState(false)
 
   const [prepayments, setPrepayments]     = useState<Prepayment[]>([])
   const [prepLoading, setPrepLoading]     = useState(true)
@@ -154,6 +160,26 @@ export default function MoneyPage() {
       .catch(() => setPayrollLoading(false))
   }, [])
 
+  useEffect(() => {
+    fetch('/api/money/settings')
+      .then(r => r.json())
+      .then(d => { const b = Number(d?.bank_balance ?? 0); setBankBalance(b); setBalanceInput(String(b)) })
+      .catch(() => { setBankBalance(0); setBalanceInput('0') })
+  }, [])
+
+  async function saveBalance() {
+    const val = parseFloat(balanceInput)
+    if (!Number.isFinite(val) || val < 0) { toast.error('Enter a valid balance'); return }
+    setSavingBalance(true)
+    const res = await fetch('/api/money/settings', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bank_balance: val }),
+    })
+    if (res.ok) { setBankBalance(val); toast.success('Balance updated') }
+    else toast.error('Failed to save — has migration 0016 been applied?')
+    setSavingBalance(false)
+  }
+
   // ── Reserve calculations ────────────────────────────────────────────────────
   const today = new Date()
   const reserveItems = obligations.map(ob => {
@@ -166,6 +192,19 @@ export default function MoneyPage() {
   const currentMonthData  = data.find(d => d.month === currentMonthLabel)
   const currentProfit     = currentMonthData?.profit ?? null
   const availableCash     = currentProfit !== null ? currentProfit - totalReserve : null
+
+  // ── Cash Position ────────────────────────────────────────────────────────────
+  // What's actually safe to pull out of the bank account, given that some of the
+  // cash sitting there is already spoken for: wages owed, money to set aside for
+  // upcoming credit-card/loan payments, and prepayments collected for future work.
+  const payrollOwed   = payrollSummary?.total_owed ?? 0
+  const currentMonthKey = format(today, 'yyyy-MM')
+  const futurePrepaid = prepayments
+    .filter(p => p.for_month > currentMonthKey)
+    .reduce((s, p) => s + p.amount, 0)
+  const safeToTake = bankBalance !== null
+    ? bankBalance - payrollOwed - totalReserve - futurePrepaid
+    : null
 
   // ── Totals ──────────────────────────────────────────────────────────────────
   const totals = data.reduce((acc, m) => ({
@@ -349,6 +388,70 @@ export default function MoneyPage() {
             Detail
           </Button>
         </div>
+      </div>
+
+      {/* ── Cash Position ───────────────────────────────────────────────────── */}
+      <div className="mb-6 bg-white rounded-xl border border-zinc-200 overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-zinc-100 bg-zinc-50 flex items-center gap-2.5">
+          <Wallet size={15} className="text-zinc-400 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-zinc-800">Cash Position</p>
+            <p className="text-xs text-zinc-400">What&rsquo;s safe to take after covering what you still owe</p>
+          </div>
+        </div>
+        <div className="p-5 grid gap-5 md:grid-cols-2">
+          {/* The subtraction */}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-medium text-zinc-700">Bank balance</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-zinc-400 text-sm">$</span>
+                <Input
+                  type="number" step="0.01" inputMode="decimal"
+                  value={balanceInput}
+                  onChange={e => setBalanceInput(e.target.value)}
+                  className="w-28 h-8 text-right text-sm"
+                  aria-label="Current bank balance"
+                />
+                <Button size="sm" variant="outline"
+                  onClick={saveBalance}
+                  disabled={savingBalance || balanceInput === String(bankBalance ?? '')}>
+                  {savingBalance ? '…' : 'Save'}
+                </Button>
+              </div>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-zinc-500">− Payroll still owed</span>
+              <span className="font-medium text-orange-600">− {formatCurrency(payrollOwed)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-zinc-500">− Reserve for credit cards / loans</span>
+              <span className="font-medium text-violet-600">− {formatCurrency(totalReserve)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-zinc-500">− Prepaid for future months</span>
+              <span className="font-medium text-zinc-500">− {formatCurrency(futurePrepaid)}</span>
+            </div>
+          </div>
+          {/* The answers */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-lg border border-green-100 bg-green-50 px-4 py-3 flex flex-col justify-center">
+              <p className="text-xs text-green-700/70 uppercase tracking-wide">Safe to take</p>
+              <p className={`text-2xl font-bold mt-1 ${safeToTake !== null && safeToTake >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                {safeToTake !== null ? formatCurrency(safeToTake) : '—'}
+              </p>
+            </div>
+            <div className="rounded-lg border border-orange-100 bg-orange-50 px-4 py-3 flex flex-col justify-center">
+              <p className="text-xs text-orange-700/70 uppercase tracking-wide">Keep for payroll</p>
+              <p className="text-2xl font-bold mt-1 text-orange-600">{formatCurrency(payrollOwed)}</p>
+            </div>
+          </div>
+        </div>
+        {safeToTake !== null && safeToTake < 0 && (
+          <div className="px-5 py-2.5 bg-red-50 border-t border-red-100 text-xs text-red-600">
+            Heads up — your balance doesn&rsquo;t fully cover payroll owed plus reserves. Don&rsquo;t pull any profit until more revenue lands.
+          </div>
+        )}
       </div>
 
       {/* ── Tax mode banner ─────────────────────────────────────────────────── */}
