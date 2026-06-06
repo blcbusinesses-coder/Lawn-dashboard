@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { formatCurrency } from '@/lib/utils/currency'
 import { toast } from 'sonner'
 import { Landmark, Plus, Trash2 } from 'lucide-react'
-import { format } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 
 interface Allocation {
   id: string
@@ -17,8 +17,12 @@ interface Allocation {
   created_at: string
 }
 interface Obligation {
-  id: string; merchant: string; amount: number
-  payment_method: 'credit_card' | 'loan'; due_date: string
+  id: string
+  merchant: string
+  amount: number
+  payment_method: 'credit_card' | 'loan'
+  due_date: string
+  allocated_amount: number
 }
 
 const num = (v: unknown) => {
@@ -32,26 +36,31 @@ export default function BankPage() {
   const [balanceInput, setBalanceInput] = useState('')
   const [savingBalance, setSavingBalance] = useState(false)
 
-  // Allocations
+  // Custom buckets (bank_allocations) and obligation buckets (unpaid expenses)
   const [allocations, setAllocations] = useState<Allocation[]>([])
+  const [obligations, setObligations] = useState<Obligation[]>([])
   const [loading, setLoading]         = useState(true)
 
-  // Context data for suggestions / revenue
-  const [payrollOwed, setPayrollOwed]   = useState(0)
-  const [obligations, setObligations]   = useState<Obligation[]>([])
-  const [monthRevenue, setMonthRevenue] = useState<number | null>(null)
+  // Context
+  const [payrollOwed, setPayrollOwed]     = useState(0)
+  const [monthRevenue, setMonthRevenue]   = useState<number | null>(null)
+  const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'))
 
-  // Add-allocation form
+  // Add-bucket form
   const [newName, setNewName]     = useState('')
   const [newTarget, setNewTarget] = useState('')
   const [adding, setAdding]       = useState(false)
 
   // ── Loaders ─────────────────────────────────────────────────────────────────
-  // Initial allocations load (loading starts true, so we only flip it off here).
   useEffect(() => {
-    fetch('/api/bank/allocations')
-      .then(r => (r.ok ? r.json() : []))
-      .then(d => setAllocations(Array.isArray(d) ? d : []))
+    Promise.all([
+      fetch('/api/bank/allocations').then(r => (r.ok ? r.json() : [])),
+      fetch('/api/expenses/obligations').then(r => (r.ok ? r.json() : [])),
+    ])
+      .then(([allocs, obs]) => {
+        setAllocations(Array.isArray(allocs) ? allocs : [])
+        setObligations(Array.isArray(obs) ? obs : [])
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
@@ -71,26 +80,25 @@ export default function BankPage() {
   }, [])
 
   useEffect(() => {
-    fetch('/api/expenses/obligations')
+    fetch(`/api/money/summary?month=${selectedMonth}`)
       .then(r => r.json())
-      .then(d => setObligations(Array.isArray(d) ? d : []))
-      .catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    const monthKey = format(new Date(), 'yyyy-MM')
-    fetch(`/api/money/summary?month=${monthKey}`)
-      .then(r => r.json())
-      .then(d => setMonthRevenue(Array.isArray(d) ? num(d[0]?.revenue) : null))
-      .catch(() => {})
-  }, [])
+      .then(d => setMonthRevenue(Array.isArray(d) ? num(d[0]?.revenue) : 0))
+      .catch(() => setMonthRevenue(0))
+  }, [selectedMonth])
 
   // ── Derived totals ────────────────────────────────────────────────────────────
-  const totalAllocated   = allocations.reduce((s, a) => s + num(a.allocated_amount), 0)
-  const totalStillNeeded = allocations.reduce((s, a) => s + Math.max(0, num(a.target_amount) - num(a.allocated_amount)), 0)
-  const unallocated      = (bankBalance ?? 0) - totalAllocated
+  const obStillNeeded     = obligations.reduce((s, o) => s + Math.max(0, num(o.amount) - num(o.allocated_amount)), 0)
+  const customStillNeeded = allocations.reduce((s, a) => s + Math.max(0, num(a.target_amount) - num(a.allocated_amount)), 0)
+  const totalStillNeeded  = obStillNeeded + customStillNeeded
+  const totalSetAside =
+    obligations.reduce((s, o) => s + num(o.allocated_amount), 0) +
+    allocations.reduce((s, a) => s + num(a.allocated_amount), 0)
 
-  // ── Actions ─────────────────────────────────────────────────────────────────
+  // What's left for the two partners after payroll and every bill is covered.
+  const freeToSplit = (bankBalance ?? 0) - payrollOwed - totalStillNeeded
+  const perPartner  = freeToSplit / 2
+
+  // ── Balance ─────────────────────────────────────────────────────────────────
   async function saveBalance() {
     const val = parseFloat(balanceInput)
     if (!Number.isFinite(val) || val < 0) { toast.error('Enter a valid balance'); return }
@@ -104,13 +112,39 @@ export default function BankPage() {
     setSavingBalance(false)
   }
 
-  async function addAllocation(name: string, target: number, allocated = 0) {
+  // ── Obligation buckets (set-aside is a running total on the expense) ──────────
+  async function setObligationAside(id: string, raw: string) {
+    const ob = obligations.find(o => o.id === id)
+    if (!ob) return
+    const n = parseFloat(raw)
+    const value = Number.isFinite(n) && n >= 0 ? n : 0
+    if (value === num(ob.allocated_amount)) return
+
+    const prev = obligations
+    setObligations(p => p.map(o => (o.id === id ? { ...o, allocated_amount: value } : o)))
+    const res = await fetch('/api/expenses/obligations', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, allocated_amount: value }),
+    })
+    if (!res.ok) { setObligations(prev); toast.error('Failed to save — has migration 0018 been applied?') }
+  }
+
+  function fundObligation(ob: Obligation) {
+    setObligations(p => p.map(o => (o.id === ob.id ? { ...o, allocated_amount: num(ob.amount) } : o)))
+    fetch('/api/expenses/obligations', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: ob.id, allocated_amount: num(ob.amount) }),
+    }).then(r => { if (!r.ok) toast.error('Failed to fund') })
+  }
+
+  // ── Custom buckets (bank_allocations) ─────────────────────────────────────────
+  async function addAllocation(name: string, target: number) {
     const trimmed = name.trim()
     if (!trimmed) { toast.error('Name is required'); return }
     setAdding(true)
     const res = await fetch('/api/bank/allocations', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: trimmed, target_amount: target, allocated_amount: allocated }),
+      body: JSON.stringify({ name: trimmed, target_amount: target, allocated_amount: 0 }),
     })
     if (res.ok) {
       const created = await res.json()
@@ -122,7 +156,6 @@ export default function BankPage() {
     setAdding(false)
   }
 
-  // Commit one field of one allocation (used on blur of the inline inputs).
   async function commitField(id: string, field: 'name' | 'target_amount' | 'allocated_amount', raw: string) {
     const current = allocations.find(a => a.id === id)
     if (!current) return
@@ -146,6 +179,11 @@ export default function BankPage() {
     if (!res.ok) { setAllocations(prev); toast.error('Failed to save change') }
   }
 
+  function fundCustom(a: Allocation) {
+    commitField(a.id, 'allocated_amount', String(num(a.target_amount)))
+    setAllocations(p => p.map(x => (x.id === a.id ? { ...x, allocated_amount: num(a.target_amount) } : x)))
+  }
+
   async function deleteAllocation(id: string) {
     const prev = allocations
     setAllocations(p => p.filter(a => a.id !== id))
@@ -153,30 +191,31 @@ export default function BankPage() {
     if (!res.ok) { setAllocations(prev); toast.error('Failed to remove') }
   }
 
-  // Set allocated = target for a row (fully fund it).
-  function fundFully(a: Allocation) {
-    commitField(a.id, 'allocated_amount', String(num(a.target_amount)))
-    setAllocations(p => p.map(x => (x.id === a.id ? { ...x, allocated_amount: num(a.target_amount) } : x)))
-  }
-
-  // ── Suggestions (things you owe that aren't a bucket yet) ──────────────────────
-  const existingNames = new Set(allocations.map(a => a.name.toLowerCase()))
-  const suggestions: { name: string; target: number }[] = []
-  if (payrollOwed > 0 && !existingNames.has('payroll')) suggestions.push({ name: 'Payroll', target: payrollOwed })
-  for (const ob of obligations) {
-    const label = ob.payment_method === 'credit_card' ? `${ob.merchant} (Credit Card)` : `${ob.merchant} (Loan)`
-    if (!existingNames.has(label.toLowerCase())) suggestions.push({ name: label, target: num(ob.amount) })
-  }
+  const bucketCount = obligations.length + allocations.length
+  const monthLabel  = format(parseISO(`${selectedMonth}-01`), 'MMMM')
 
   return (
     <div className="p-4 md:p-8 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-zinc-900">Bank Account</h1>
-        <p className="text-sm text-zinc-500 mt-1">Set what&rsquo;s in the account, then split it across what it&rsquo;s going toward.</p>
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-900">Bank Account</h1>
+          <p className="text-sm text-zinc-500 mt-1">The live view: set what&rsquo;s in the account, fund what it owes, see what you and your partner actually keep.</p>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-zinc-500">Evaluate month</span>
+          <input
+            type="month"
+            value={selectedMonth}
+            max={format(new Date(), 'yyyy-MM')}
+            onChange={e => setSelectedMonth(e.target.value)}
+            className="border border-zinc-200 rounded-md px-2.5 py-1.5 text-xs text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+            aria-label="Month to evaluate"
+          />
+        </div>
       </div>
 
-      {/* ── Summary ─────────────────────────────────────────────────────────── */}
+      {/* ── Overview ────────────────────────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
         <div className="px-5 py-3.5 border-b border-zinc-100 bg-zinc-50 flex items-center gap-2.5">
           <Landmark size={15} className="text-zinc-400 shrink-0" />
@@ -202,43 +241,58 @@ export default function BankPage() {
               </Button>
             </div>
           </div>
-          {/* Unallocated */}
+          {/* Selected month revenue */}
           <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-3">
-            <p className="text-xs text-zinc-400 uppercase tracking-wide">Not yet assigned</p>
-            <p className={`text-2xl font-bold mt-1 ${unallocated >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-              {formatCurrency(unallocated)}
+            <p className="text-xs text-zinc-400 uppercase tracking-wide">{monthLabel} revenue</p>
+            <p className="text-2xl font-bold mt-1 text-zinc-700">
+              {monthRevenue !== null ? formatCurrency(monthRevenue) : '—'}
             </p>
-            <p className="text-xs text-zinc-400 mt-0.5">{formatCurrency(totalAllocated)} assigned</p>
+            <p className="text-xs text-zinc-400 mt-0.5">money you have to direct</p>
           </div>
-          {/* Still needed */}
+          {/* Still to fund */}
           <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-3">
             <p className="text-xs text-zinc-400 uppercase tracking-wide">Still to fund</p>
             <p className={`text-2xl font-bold mt-1 ${totalStillNeeded > 0 ? 'text-orange-600' : 'text-green-600'}`}>
               {formatCurrency(totalStillNeeded)}
             </p>
-            <p className="text-xs text-zinc-400 mt-0.5">across all buckets</p>
+            <p className="text-xs text-zinc-400 mt-0.5">{formatCurrency(totalSetAside)} set aside so far</p>
           </div>
-          {/* This month revenue */}
-          <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-3">
-            <p className="text-xs text-zinc-400 uppercase tracking-wide">{format(new Date(), 'MMM')} revenue</p>
-            <p className="text-2xl font-bold mt-1 text-zinc-700">
-              {monthRevenue !== null ? formatCurrency(monthRevenue) : '—'}
+          {/* Take-home */}
+          <div className={`rounded-lg border px-4 py-3 ${freeToSplit >= 0 ? 'border-green-100 bg-green-50' : 'border-red-100 bg-red-50'}`}>
+            <p className="text-xs text-zinc-500 uppercase tracking-wide">Free to split</p>
+            <p className={`text-2xl font-bold mt-1 ${freeToSplit >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+              {bankBalance !== null ? formatCurrency(freeToSplit) : '—'}
             </p>
-            <p className="text-xs text-zinc-400 mt-0.5">coming in this month</p>
+            <p className="text-xs text-zinc-500 mt-0.5">≈ {formatCurrency(perPartner)} each (you + partner)</p>
           </div>
         </div>
-        {unallocated < 0 && (
+
+        {/* Profit math */}
+        <div className="border-t border-zinc-100 bg-zinc-50/60 px-5 py-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500">
+          <span className="font-medium text-zinc-700">{formatCurrency(bankBalance ?? 0)}</span> in the account
+          <span className="text-zinc-300">−</span>
+          <span className="font-medium text-orange-600">{formatCurrency(payrollOwed)}</span> payroll owed
+          <span className="text-zinc-300">−</span>
+          <span className="font-medium text-violet-600">{formatCurrency(totalStillNeeded)}</span> still needed for bills
+          <span className="text-zinc-300">=</span>
+          <span className={`font-semibold ${freeToSplit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(freeToSplit)}</span> free to split
+        </div>
+
+        {freeToSplit < 0 && (
           <div className="px-5 py-2.5 bg-red-50 border-t border-red-100 text-xs text-red-600">
-            You&rsquo;ve assigned more than what&rsquo;s in the account. Lower an allocation or update the balance.
+            Heads up — the account doesn&rsquo;t fully cover payroll plus what&rsquo;s still needed for bills. Don&rsquo;t pull profit until more revenue lands.
           </div>
         )}
       </div>
 
-      {/* ── Allocations ─────────────────────────────────────────────────────── */}
+      {/* ── Buckets ─────────────────────────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
         <div className="px-5 py-3.5 border-b border-zinc-100 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-zinc-800">Where the money is going</h2>
-          <span className="text-xs text-zinc-400">{allocations.length} bucket{allocations.length !== 1 ? 's' : ''}</span>
+          <div>
+            <h2 className="text-sm font-semibold text-zinc-800">Where the money is going</h2>
+            <p className="text-xs text-zinc-400 mt-0.5">Unpaid bills come in automatically, soonest due first. Add your own buckets below.</p>
+          </div>
+          <span className="text-xs text-zinc-400 shrink-0">{bucketCount} bucket{bucketCount !== 1 ? 's' : ''}</span>
         </div>
 
         {loading ? (
@@ -249,6 +303,7 @@ export default function BankPage() {
               <thead>
                 <tr className="border-b border-zinc-100 bg-zinc-50 text-xs text-zinc-500 uppercase tracking-wider">
                   <th className="text-left px-4 py-2.5 font-medium">Thing</th>
+                  <th className="text-left px-4 py-2.5 font-medium">Due</th>
                   <th className="text-right px-4 py-2.5 font-medium">Needs (target)</th>
                   <th className="text-right px-4 py-2.5 font-medium">Set aside</th>
                   <th className="text-right px-4 py-2.5 font-medium">Still needed</th>
@@ -256,15 +311,66 @@ export default function BankPage() {
                 </tr>
               </thead>
               <tbody>
-                {allocations.length === 0 ? (
-                  <tr><td colSpan={5} className="px-4 py-8 text-center text-zinc-400">
-                    No buckets yet. Add one below, or use a suggestion.
+                {bucketCount === 0 && (
+                  <tr><td colSpan={6} className="px-4 py-8 text-center text-zinc-400">
+                    No bills or buckets yet. Add one below.
                   </td></tr>
-                ) : allocations.map(a => {
+                )}
+
+                {/* Obligation buckets (unpaid expenses) — sorted by due date by the API */}
+                {obligations.map(ob => {
+                  const stillNeeded = Math.max(0, num(ob.amount) - num(ob.allocated_amount))
+                  const funded = stillNeeded === 0 && num(ob.amount) > 0
+                  return (
+                    <tr key={`ob-${ob.id}`} className="border-b border-zinc-50 hover:bg-zinc-50/50">
+                      <td className="px-4 py-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-zinc-800">{ob.merchant}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${ob.payment_method === 'credit_card' ? 'bg-sky-100 text-sky-700' : 'bg-violet-100 text-violet-700'}`}>
+                            {ob.payment_method === 'credit_card' ? 'Credit Card' : 'Loan'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2 text-zinc-500 whitespace-nowrap">{format(parseISO(ob.due_date), 'MMM d')}</td>
+                      <td className="px-4 py-2 text-right text-zinc-700">{formatCurrency(num(ob.amount))}</td>
+                      <td className="px-4 py-2 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <span className="text-zinc-400 text-xs">$</span>
+                          <input
+                            key={`ob-alloc-${ob.id}-${num(ob.allocated_amount)}`}
+                            type="number" step="0.01" inputMode="decimal"
+                            defaultValue={num(ob.allocated_amount)}
+                            onBlur={e => setObligationAside(ob.id, e.target.value)}
+                            className="w-24 text-right bg-transparent font-medium text-green-700 focus:outline-none focus:bg-white focus:ring-1 focus:ring-zinc-300 rounded px-1.5 py-1"
+                          />
+                        </div>
+                      </td>
+                      <td className="px-4 py-2 text-right font-semibold">
+                        {funded
+                          ? <span className="text-green-600">✓ Funded</span>
+                          : <span className="text-orange-600">{formatCurrency(stillNeeded)}</span>}
+                      </td>
+                      <td className="px-4 py-2">
+                        <div className="flex items-center justify-end">
+                          {!funded && num(ob.amount) > 0 && (
+                            <button
+                              onClick={() => fundObligation(ob)}
+                              className="text-xs text-zinc-400 hover:text-green-600 transition-colors"
+                              title="Set aside the full amount"
+                            >Fund</button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+
+                {/* Custom buckets */}
+                {allocations.map(a => {
                   const stillNeeded = Math.max(0, num(a.target_amount) - num(a.allocated_amount))
                   const funded = stillNeeded === 0 && num(a.target_amount) > 0
                   return (
-                    <tr key={a.id} className="border-b border-zinc-50 hover:bg-zinc-50/50">
+                    <tr key={`al-${a.id}`} className="border-b border-zinc-50 hover:bg-zinc-50/50">
                       <td className="px-4 py-2">
                         <input
                           key={`name-${a.id}`}
@@ -273,6 +379,7 @@ export default function BankPage() {
                           className="w-full bg-transparent font-medium text-zinc-800 focus:outline-none focus:bg-white focus:ring-1 focus:ring-zinc-300 rounded px-1.5 py-1 -mx-1.5"
                         />
                       </td>
+                      <td className="px-4 py-2 text-zinc-300">—</td>
                       <td className="px-4 py-2 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <span className="text-zinc-400 text-xs">$</span>
@@ -306,7 +413,7 @@ export default function BankPage() {
                         <div className="flex items-center justify-end gap-2">
                           {!funded && num(a.target_amount) > 0 && (
                             <button
-                              onClick={() => fundFully(a)}
+                              onClick={() => fundCustom(a)}
                               className="text-xs text-zinc-400 hover:text-green-600 transition-colors"
                               title="Set aside the full amount"
                             >Fund</button>
@@ -326,10 +433,10 @@ export default function BankPage() {
           </div>
         )}
 
-        {/* Add row */}
+        {/* Add custom bucket */}
         <div className="border-t border-zinc-100 px-4 py-3 bg-zinc-50/50 flex items-center gap-2 flex-wrap">
           <Input
-            placeholder="New bucket (e.g. Taxes, New mower)"
+            placeholder="New bucket (e.g. Taxes, Savings, New mower)"
             value={newName}
             onChange={e => setNewName(e.target.value)}
             className="h-9 max-w-xs"
@@ -354,29 +461,6 @@ export default function BankPage() {
           </Button>
         </div>
       </div>
-
-      {/* ── Suggestions ─────────────────────────────────────────────────────── */}
-      {suggestions.length > 0 && (
-        <div className="bg-white rounded-xl border border-zinc-200 p-4">
-          <p className="text-xs text-zinc-500 mb-2.5">
-            Quick add from what you owe — click to create a bucket with the amount pre-filled:
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {suggestions.map(s => (
-              <button
-                key={s.name}
-                onClick={() => addAllocation(s.name, s.target)}
-                disabled={adding}
-                className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full border border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 transition-colors disabled:opacity-50"
-              >
-                <Plus size={12} className="text-zinc-400" />
-                <span className="font-medium text-zinc-700">{s.name}</span>
-                <span className="text-zinc-400">{formatCurrency(s.target)}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

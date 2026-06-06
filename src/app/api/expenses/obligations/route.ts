@@ -19,13 +19,24 @@ export async function GET() {
 export async function PATCH(request: NextRequest) {
   const supabase = await createAdminClient()
   const body = await request.json()
-  const { id, settled_at } = body
+  const { id, settled_at, allocated_amount } = body
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+
+  // Two distinct operations share this endpoint:
+  //   • Setting aside money toward the bill (Bank Account tab) — updates allocated_amount.
+  //   • Marking the bill paid — stamps settled_at.
+  let update: Record<string, unknown>
+  if (allocated_amount !== undefined) {
+    const n = Number(allocated_amount)
+    update = { allocated_amount: Number.isFinite(n) && n >= 0 ? n : 0 }
+  } else {
+    update = { settled_at: settled_at ?? new Date().toISOString().split('T')[0] }
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from('expenses')
-    .update({ settled_at: settled_at ?? new Date().toISOString().split('T')[0] })
+    .update(update)
     .eq('id', id)
     .select()
     .single()
