@@ -10,7 +10,7 @@ import {
   Users, Home, ClipboardCheck, Receipt, FileText, Bot,
   TrendingUp, HardHat, MessageSquare, Inbox, Star, Settings2,
   CheckSquare, BarChart2, Wrench, Gauge, Globe, CloudSun, PenTool, Filter,
-  Megaphone, DollarSign, ChevronDown, LogOut, Zap, Mail, ListChecks,
+  Megaphone, DollarSign, ChevronDown, LogOut, Zap, Mail, ListChecks, Crosshair,
 } from 'lucide-react'
 
 type NavLeaf = { href: string; label: string; Icon: typeof FileText }
@@ -41,6 +41,7 @@ const NAV_GROUPS: NavGroup[] = [
         label: 'Letters',
         Icon: FileText,
         children: [
+          { href: '/dashboard/marketing/letters/blast',         label: 'Area Blast',       Icon: Crosshair },
           { href: '/dashboard/marketing/letters/new-homeowner', label: 'New Homeowner',   Icon: Home },
           { href: '/dashboard/marketing/letters/violations',    label: 'Grass Violations', Icon: ListChecks },
         ],

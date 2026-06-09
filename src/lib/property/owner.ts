@@ -18,7 +18,7 @@ const COMPANY_HINTS = [
 ]
 
 /** Title-case a SHOUTING public-record name: "SMITH, JOHN A" → "John A Smith". */
-function tidyName(raw: string): string {
+export function tidyName(raw: string): string {
   let s = raw.trim()
   // Public records are often "LAST, FIRST MIDDLE" — flip to "FIRST MIDDLE LAST".
   if (s.includes(',')) {
@@ -32,7 +32,7 @@ function tidyName(raw: string): string {
     .trim()
 }
 
-function looksLikeCompany(name: string): boolean {
+export function looksLikeCompany(name: string): boolean {
   const padded = ` ${name.toLowerCase()} `
   return COMPANY_HINTS.some((h) => padded.includes(h))
 }
