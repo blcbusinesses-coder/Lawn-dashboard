@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendLetterToLob, type SendableRecipient } from '@/lib/letters/monitor'
 import { generateLetterContent } from '@/lib/letters/generate'
+import { lookupOwnerName } from '@/lib/property/owner'
 import type { LetterType } from '@/lib/letters/templates'
 
 export const maxDuration = 60
@@ -9,6 +10,10 @@ export const maxDuration = 60
 function letterTypeFor(source: unknown): LetterType {
   return source === 'new_homeowner' ? 'new_homeowner' : source === 'violation' ? 'violation' : 'general'
 }
+
+// Generic placeholders that should be upgraded to a real owner name if we can
+// find one when generating the letter copy.
+const PLACEHOLDER_NAMES = new Set(['new neighbor', 'current resident', 'homeowner', 'neighbor'])
 
 // GET /api/letters/monitor/queue — list recipients awaiting review.
 export async function GET() {
@@ -48,14 +53,24 @@ export async function POST(request: NextRequest) {
     for (const row of (rows ?? []) as Array<Record<string, unknown>>) {
       const id = row.id as string
       try {
+        const fullAddress = `${row.address ?? ''}, ${row.city ?? ''}, ${row.state ?? ''} ${row.zip ?? ''}`
+
+        // Upgrade a generic placeholder to the real owner-of-record name.
+        let name = (row.name as string) || undefined
+        if (!name || PLACEHOLDER_NAMES.has(name.trim().toLowerCase())) {
+          const owner = await lookupOwnerName(fullAddress)
+          if (owner) name = owner
+        }
+
         const content = await generateLetterContent({
-          address: `${row.address ?? ''}, ${row.city ?? ''}, ${row.state ?? ''} ${row.zip ?? ''}`,
-          name: (row.name as string) || undefined,
+          address: fullAddress,
+          name,
           letterType: letterTypeFor(row.source),
         })
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (admin.from('letter_recipients') as any)
           .update({
+            name: name ?? row.name,
             lot_size: content.lot_size,
             sq_footage: content.sq_footage,
             property_features: content.features,

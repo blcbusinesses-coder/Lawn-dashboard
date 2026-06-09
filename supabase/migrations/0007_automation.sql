@@ -13,16 +13,16 @@ CREATE POLICY "owner_all_automation_settings" ON public.automation_settings
 -- Seed default pricing tiers
 INSERT INTO public.automation_settings (key, value, label) VALUES
   ('pricing_tiers', '[
-    {"max_sqft": 2500,  "price": 35,  "label": "Small (up to 2,500 sqft)"},
-    {"max_sqft": 4000,  "price": 45,  "label": "Medium-Small (up to 4,000 sqft)"},
-    {"max_sqft": 6000,  "price": 55,  "label": "Medium (up to 6,000 sqft)"},
-    {"max_sqft": 9000,  "price": 65,  "label": "Medium-Large (up to 9,000 sqft)"},
-    {"max_sqft": 12000, "price": 80,  "label": "Large (up to 12,000 sqft)"},
-    {"max_sqft": 20000, "price": 100, "label": "X-Large (up to 20,000 sqft)"},
+    {"max_sqft": 3000,  "price": 40,  "label": "Small (up to 3,000 sqft)"},
+    {"max_sqft": 5000,  "price": 45,  "label": "Medium-Small (up to 5,000 sqft)"},
+    {"max_sqft": 8000,  "price": 50,  "label": "Medium (up to 8,000 sqft)"},
+    {"max_sqft": 12000, "price": 60,  "label": "Medium-Large (up to 12,000 sqft)"},
+    {"max_sqft": 18000, "price": 75,  "label": "Large (up to 18,000 sqft)"},
+    {"max_sqft": 25000, "price": 95,  "label": "X-Large (up to 25,000 sqft)"},
     {"max_sqft": 43560, "price": 130, "label": "Up to 1 Acre"}
   ]'::jsonb, 'Pricing Tiers'),
-  ('fallback_price',       '55'::jsonb,    'Fallback Price (unknown lot size)'),
-  ('over_one_acre_price',  '165'::jsonb,   'Price for Lots Over 1 Acre'),
+  ('fallback_price',       '50'::jsonb,    'Fallback Price (unknown lot size)'),
+  ('over_one_acre_price',  '160'::jsonb,   'Price for Lots Over 1 Acre'),
   ('sms_signature',        '"– Gray Wolf Workers 🐺"'::jsonb, 'SMS Signature'),
   ('apify_actor',          '"maxcopell~zillow-detail-scraper"'::jsonb, 'Apify Actor ID')
 ON CONFLICT (key) DO NOTHING;

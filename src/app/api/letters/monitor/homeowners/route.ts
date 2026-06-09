@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { queueRecipient } from '@/lib/letters/monitor'
+import { lookupOwnerName } from '@/lib/property/owner'
 import type { LetterType } from '@/lib/letters/templates'
 
 const SOURCE_KEY = 'homeowners_zillow'
@@ -44,6 +45,8 @@ export async function POST() {
     lookback_days?: number
     target_zips?: string[]
     max_per_run?: number
+    quote_min?: number
+    quote_max?: number
   }
   const actor = (config.actor ?? 'maxcopell~zillow-scraper').replace('/', '~')
   const searchUrls = config.search_urls ?? []
@@ -51,6 +54,12 @@ export async function POST() {
   const targetZips = (config.target_zips ?? []).map(z => z.slice(0, 5))
   const maxPerRun = config.max_per_run ?? 25
   const letterType = (src.letter_type as LetterType) ?? 'new_homeowner'
+  // Sweet-spot quote band — only mail lawns that price near our ~$50 target.
+  // Defaults to $40–$60; override either bound via the source config.
+  const quoteBand = {
+    min: config.quote_min ?? 40,
+    max: config.quote_max ?? 60,
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: run } = await (admin.from('letter_monitor_runs') as any)
@@ -94,15 +103,21 @@ export async function POST() {
       }
       if (targetZips.length > 0 && !targetZips.includes(p.zip)) { skipped++; continue }
 
+      // Personalize with the owner-of-record name (RentCast); fall back to a
+      // friendly generic if unavailable or the owner is a company/trust.
+      const fullAddress = `${p.street}, ${p.city}, ${p.state || 'IN'} ${p.zip}`
+      const ownerName = await lookupOwnerName(fullAddress)
+
       const result = await queueRecipient({
         source: 'new_homeowner',
         letterType,
         externalId: p.zpid,
-        name: 'New Neighbor',
+        name: ownerName ?? 'New Neighbor',
         address: p.street,
         city: p.city,
         state: p.state || 'IN',
         zip: p.zip,
+        quoteBand,
       })
       if (result === 'queued') queued++
       else skipped++

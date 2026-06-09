@@ -123,9 +123,14 @@ export interface QueueInput {
   /** When true, insert the address only (no Zillow/AI). Quote + copy are
    *  generated later, per-row, to stay within serverless time limits. */
   skipContent?: boolean
+  /** Optional sweet-spot filter. When set (and content is generated), a
+   *  recipient whose computed quote falls outside [min, max] is rejected
+   *  ('out_of_band') instead of queued — so only ~target-price lawns get mail.
+   *  Ignored when skipContent is true (no quote available yet). */
+  quoteBand?: { min: number; max: number }
 }
 
-export type QueueResult = 'queued' | 'duplicate' | 'error'
+export type QueueResult = 'queued' | 'duplicate' | 'out_of_band' | 'error'
 
 /**
  * Dedupes against existing letter_recipients rows (by source+external_id and
@@ -167,6 +172,11 @@ export async function queueRecipient(input: QueueInput): Promise<QueueResult> {
         name: input.name,
         letterType: input.letterType,
       })
+      // Sweet-spot filter: only mail lawns whose quote lands in the target band.
+      if (input.quoteBand) {
+        const q = content.quote_amount
+        if (q < input.quoteBand.min || q > input.quoteBand.max) return 'out_of_band'
+      }
       row.lot_size = content.lot_size
       row.sq_footage = content.sq_footage
       row.property_features = content.features

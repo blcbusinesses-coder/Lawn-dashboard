@@ -26,7 +26,17 @@ export interface LetterParams {
   letterType?: LetterType
   /** Defaults to today, long format. */
   date?: string
+  /** New-customer offer headline. Defaults to the 75%-off-first-month offer. */
+  offerHeadline?: string
+  /** Fine print explaining the offer terms. */
+  offerDetail?: string
 }
+
+/** Default new-customer offer: 75% off the first month (commit to the full
+ * first month — it is NOT a free trial). */
+export const DEFAULT_OFFER_HEADLINE = '75% OFF your first month'
+export const DEFAULT_OFFER_DETAIL =
+  'New customers only. Start service this season and stay on for your full first month — we take 75% off, so those first weeks are practically on us. Not a free trial; just our way of earning your business.'
 
 const TAGLINE: Record<LetterType, string> = {
   general: 'A note about your lawn',
@@ -40,6 +50,8 @@ export function buildLetterHtml(p: LetterParams): string {
     new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 
   const letterType: LetterType = p.letterType ?? 'general'
+  const offerHeadline = p.offerHeadline ?? DEFAULT_OFFER_HEADLINE
+  const offerDetail   = p.offerDetail   ?? DEFAULT_OFFER_DETAIL
 
   const paragraphs = (p.aiCopy || '')
     .split(/\n{2,}|\n/)
@@ -93,10 +105,17 @@ export function buildLetterHtml(p: LetterParams): string {
     </div>
 
     <!-- Quote callout -->
-    <div style="margin:20px 0;padding:15px 20px;border:1px solid #0d2e1a;border-left:6px solid #0d2e1a;background:#f3f8f4;">
+    <div style="margin:20px 0 0;padding:15px 20px;border:1px solid #0d2e1a;border-left:6px solid #0d2e1a;background:#f3f8f4;">
       <div style="font-family:Arial,Helvetica,sans-serif;font-size:10px;text-transform:uppercase;letter-spacing:2px;color:#0d2e1a;margin-bottom:4px;">Your Custom Estimate</div>
       <div style="font-family:Arial,Helvetica,sans-serif;font-size:30px;font-weight:800;color:#0d2e1a;line-height:1;">${escapeHtml(p.quote)}</div>
       <div style="font-size:11px;color:#5a5a5a;margin-top:5px;">No contract &bull; Cancel anytime &bull; Locally owned &amp; fully insured</div>
+    </div>
+
+    <!-- New-customer offer banner -->
+    <div style="margin:0 0 20px;padding:13px 20px;background:#0d2e1a;color:#ffffff;border-left:6px solid #d4af37;">
+      <div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#d4af37;margin-bottom:3px;">Limited-time welcome offer</div>
+      <div style="font-family:Arial,Helvetica,sans-serif;font-size:19px;font-weight:800;line-height:1.15;">${escapeHtml(offerHeadline)}</div>
+      <div style="font-size:11px;line-height:1.5;color:#dce7df;margin-top:5px;">${escapeHtml(offerDetail)}</div>
     </div>
 
     <!-- Close -->
