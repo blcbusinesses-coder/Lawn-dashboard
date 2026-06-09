@@ -10,7 +10,7 @@ import {
   Users, Home, ClipboardCheck, Receipt, FileText, Bot,
   TrendingUp, HardHat, MessageSquare, Inbox, Star, Settings2,
   CheckSquare, BarChart2, Wrench, Gauge, Globe, CloudSun, PenTool, Filter,
-  Megaphone, DollarSign, ChevronDown, LogOut, Zap, Mail, ListChecks, Crosshair,
+  Megaphone, DollarSign, ChevronDown, LogOut, Zap, Mail, ListChecks, Crosshair, Search,
 } from 'lucide-react'
 
 type NavLeaf = { href: string; label: string; Icon: typeof FileText }
@@ -35,6 +35,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/dashboard/ads',                    label: 'Ad Intelligence', Icon: BarChart2 },
       { href: '/dashboard/content',              label: 'Content',         Icon: PenTool },
       { href: '/dashboard/site',                 label: 'Website',         Icon: Globe },
+      { href: '/dashboard/marketing/seo',        label: 'Local SEO',       Icon: Search },
       { href: '/dashboard/marketing/postcards',  label: 'Postcards',       Icon: Mail },
       {
         href: '/dashboard/marketing/letters',
