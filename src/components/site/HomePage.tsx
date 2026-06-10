@@ -2,61 +2,159 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 const PAGE_SIZE = 9
 
-// ── Design system ──────────────────────────────────────────────────────────────
-// Flat, editorial, photography-first. Solid colors only — no gradients, no
-// scale/zoom animations, no pill buttons. Square corners, thin rules, big type.
+// ─── Design system ─────────────────────────────────────────────────────────────
+// Modeled on the conversion structure of the big national lawn brands
+// (Lawn Doctor, Weed Man, Lawn Love): address capture in the hero, trust
+// signals above the fold, stats bar, how-it-works, guarantee, repeated CTAs,
+// FAQ, and a deep footer. Flat solid colors, real photography, no gradients.
 //
-//   ink:    #181b15   near-black headings / footer
-//   forest: #1e3d12   brand green (bars, buttons)
-//   grass:  #2f6418   accent / links
+//   pine:   #122b0a   darkest green (hero scrim, footer)
+//   forest: #1e3d12   primary brand green
+//   grass:  #2f6418   buttons hover / accents
+//   lime:   #8fd16f   bright accent on dark
+//   gold:   #e9b949   stars / offer
 //   paper:  #ffffff
 //   stone:  #f4f4ee   warm section background
-//   line:   #e2e2d8   hairline rules
-//   muted:  #5b6354   body text
+//   ink:    #181b15   headings on light
+//   muted:  #5b6354   body text on light
 
-const SERVICE_AREAS: Array<{ county: string; towns: string[] }> = [
-  { county: 'Noble County',    towns: ['Kendallville', 'Albion', 'Avilla', 'Rome City', 'Ligonier', 'Wolcottville'] },
-  { county: 'DeKalb County',   towns: ['Auburn', 'Garrett', 'Waterloo'] },
-  { county: 'LaGrange County', towns: ['LaGrange', 'Howe'] },
+const TOWNS_BY_COUNTY: Array<{ county: string; towns: string[] }> = [
+  { county: 'Noble County',      towns: ['Kendallville', 'Albion', 'Avilla', 'Rome City', 'Ligonier', 'Wolcottville'] },
+  { county: 'DeKalb County',     towns: ['Auburn', 'Garrett', 'Waterloo'] },
+  { county: 'LaGrange County',   towns: ['LaGrange', 'Howe'] },
   { county: 'Whitley & Steuben', towns: ['Columbia City', 'Churubusco', 'Angola'] },
 ]
 
 const SERVICES = [
   {
-    n: '01',
+    img: '/lawn1.jpg',
     title: 'Lawn Mowing',
-    desc: 'Weekly or bi-weekly cuts with clean edges every time. We show up on schedule, every time, so you never have to think about your lawn again.',
+    desc: 'Weekly or bi-weekly cuts on a schedule you can set your watch to.',
+    points: ['Sharp blades, even cut', 'Clippings handled', 'Same crew every visit'],
   },
   {
-    n: '02',
+    img: '/lawn4.jpg',
     title: 'Trimming & Edging',
-    desc: 'Crisp lines along driveways, sidewalks, and beds. Included with every mow — it is the finishing touch that separates a cut lawn from a kept one.',
+    desc: 'Crisp lines along every driveway, sidewalk, and flower bed — included with every mow.',
+    points: ['Driveways & walkways', 'Beds & tree rings', 'Blown clean after'],
   },
   {
-    n: '03',
+    img: '/lawn3.jpg',
     title: 'Yard Cleanup',
-    desc: 'Spring and fall cleanups, leaf removal, and debris hauling. We leave your property ready for the season ahead.',
+    desc: 'Spring and fall cleanups, leaf removal, and debris hauling.',
+    points: ['Leaf removal', 'Storm debris', 'Haul-away included'],
   },
   {
-    n: '04',
+    img: '/lawn2.jpg',
     title: 'Add-On Services',
-    desc: 'Fertilization, mulching, and custom work by request. Tell us what your yard needs and we will give you a straight answer and a fair price.',
+    desc: 'Fertilization, mulching, and custom work — tell us what your yard needs.',
+    points: ['Fertilization', 'Mulch & beds', 'By-request work'],
   },
 ]
 
-// ── Top bar ────────────────────────────────────────────────────────────────────
+const STEPS = [
+  {
+    n: '1',
+    title: 'Tell us your address',
+    desc: 'That is genuinely all we need. No forms with twelve fields, no waiting for a callback.',
+  },
+  {
+    n: '2',
+    title: 'Get your exact price',
+    desc: 'We measure your lawn using satellite and property data and text you a real price — usually in under a minute.',
+  },
+  {
+    n: '3',
+    title: 'We handle the rest',
+    desc: 'Your crew shows up on schedule and keeps your lawn sharp all season. You never think about it again.',
+  },
+]
+
+const FAQS = [
+  {
+    q: 'How does pricing work?',
+    a: 'Your price is based on the actual size of your lawn — we measure it with satellite and property data, so you get a real number up front, not an estimate that changes later. The price we text you is the price you pay.',
+  },
+  {
+    q: 'Do I have to sign a contract?',
+    a: 'No. There are no contracts and no cancellation fees. We keep customers by doing good work, not by locking people in.',
+  },
+  {
+    q: 'What is the 75% off first month deal?',
+    a: 'New customers get 75% off their entire first month of service. It is not a free trial with a catch — you simply commit to your first month, and we take 75% off it. It is how we earn your business.',
+  },
+  {
+    q: 'What areas do you serve?',
+    a: 'We are based in Kendallville and serve Noble County and the surrounding area — Albion, Avilla, Rome City, Ligonier, Auburn, Garrett, LaGrange, and more. If you are nearby, send your address and we will tell you straight.',
+  },
+  {
+    q: 'When will you mow my lawn?',
+    a: 'You will be on a consistent weekly or bi-weekly schedule with the same crew, and we let you know when we are coming. If weather pushes us, we make it up — your lawn never gets skipped.',
+  },
+  {
+    q: 'Are you insured?',
+    a: 'Yes — fully insured, and locally owned right here in Kendallville. When you text us, you are talking to the people who will actually be on your lawn.',
+  },
+]
+
+// ─── Shared: address capture form (the conversion engine) ──────────────────────
+function AddressForm({ dark = false, id }: { dark?: boolean; id?: string }) {
+  const router = useRouter()
+  const [street, setStreet] = useState('')
+
+  function go(e: React.FormEvent) {
+    e.preventDefault()
+    const q = street.trim() ? `?street=${encodeURIComponent(street.trim())}` : ''
+    router.push(`/get-a-quote${q}`)
+  }
+
+  return (
+    <form onSubmit={go} className="flex flex-col sm:flex-row gap-2.5 w-full max-w-xl">
+      <input
+        id={id}
+        type="text"
+        value={street}
+        onChange={e => setStreet(e.target.value)}
+        placeholder="Enter your street address"
+        aria-label="Street address"
+        className="flex-1 px-5 py-4 text-[15px] outline-none"
+        style={dark
+          ? { background: '#fff', color: '#181b15', border: '1px solid #fff' }
+          : { background: '#fff', color: '#181b15', border: '1px solid #d4d4c8' }}
+      />
+      <button
+        type="submit"
+        className="shrink-0 font-bold px-8 py-4 text-[15px] text-white transition-colors"
+        style={{ background: dark ? '#2f6418' : '#1e3d12' }}
+        onMouseEnter={e => (e.currentTarget.style.background = dark ? '#3c7d22' : '#2f6418')}
+        onMouseLeave={e => (e.currentTarget.style.background = dark ? '#2f6418' : '#1e3d12')}
+      >
+        See My Price
+      </button>
+    </form>
+  )
+}
+
+function Stars() {
+  return (
+    <span aria-hidden style={{ color: '#e9b949', letterSpacing: '2px' }}>★★★★★</span>
+  )
+}
+
+// ─── Top bar ───────────────────────────────────────────────────────────────────
 function TopBar() {
   return (
-    <div style={{ background: '#1e3d12' }}>
-      <div className="max-w-6xl mx-auto px-5 h-9 flex items-center justify-between text-xs text-white/85">
-        <p className="font-medium tracking-wide">
-          New customers: <span className="font-bold text-white">75% off your first month</span>
+    <div style={{ background: '#122b0a' }}>
+      <div className="max-w-6xl mx-auto px-5 h-10 flex items-center justify-between text-xs text-white/90">
+        <p className="font-semibold tracking-wide">
+          <span style={{ color: '#e9b949' }}>Limited time:</span> new customers get <span className="font-bold text-white">75% off their first month</span>
         </p>
-        <a href="mailto:graywolfworkers@gmail.com" className="hidden sm:block hover:text-white font-medium">
+        <a href="mailto:graywolfworkers@gmail.com" className="hidden sm:block hover:text-white font-medium text-white/70">
           graywolfworkers@gmail.com
         </a>
       </div>
@@ -64,44 +162,45 @@ function TopBar() {
   )
 }
 
-// ── Nav ────────────────────────────────────────────────────────────────────────
+// ─── Nav ───────────────────────────────────────────────────────────────────────
 function Nav() {
   const [open, setOpen] = useState(false)
 
   const links = [
     ['#services', 'Services'],
-    ['#about', 'About'],
+    ['#how', 'How It Works'],
     ['#work', 'Our Work'],
     ['#areas', 'Service Areas'],
+    ['#faq', 'FAQ'],
   ]
 
   return (
     <header className="sticky top-0 z-50 bg-white" style={{ borderBottom: '1px solid #e2e2d8' }}>
-      <div className="max-w-6xl mx-auto px-5 h-[68px] flex items-center justify-between">
+      <div className="max-w-6xl mx-auto px-5 h-[72px] flex items-center justify-between">
         <a href="#top" className="flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Gray Wolf Workers" className="w-10 h-10 object-contain" />
+          <img src="/logo.png" alt="Gray Wolf Workers" className="w-11 h-11 object-contain" />
           <span className="leading-tight">
-            <span className="block font-bold text-[15px]" style={{ color: '#181b15' }}>Gray Wolf Workers</span>
-            <span className="block text-[11px] font-medium tracking-wide" style={{ color: '#5b6354' }}>Lawn Care · Kendallville, IN</span>
+            <span className="block font-extrabold text-[16px] tracking-tight" style={{ color: '#181b15' }}>Gray Wolf Workers</span>
+            <span className="block text-[11px] font-semibold tracking-wide uppercase" style={{ color: '#2f6418' }}>Lawn Care · Kendallville, IN</span>
           </span>
         </a>
 
-        <nav className="hidden md:flex items-center gap-8 text-[13.5px] font-medium" style={{ color: '#5b6354' }}>
+        <nav className="hidden lg:flex items-center gap-7 text-[14px] font-semibold" style={{ color: '#41483b' }}>
           {links.map(([href, label]) => (
-            <a key={href} href={href} className="hover:text-[#181b15] transition-colors">{label}</a>
+            <a key={href} href={href} className="hover:text-[#1e3d12] transition-colors">{label}</a>
           ))}
         </nav>
 
         <Link href="/get-a-quote"
-          className="hidden md:inline-flex items-center font-semibold px-5 py-2.5 text-sm text-white transition-colors"
+          className="hidden lg:inline-flex items-center font-bold px-6 py-3 text-sm text-white transition-colors"
           style={{ background: '#1e3d12' }}
           onMouseEnter={e => (e.currentTarget.style.background = '#2f6418')}
           onMouseLeave={e => (e.currentTarget.style.background = '#1e3d12')}>
-          Get a Free Quote
+          Get My Price
         </Link>
 
-        <button onClick={() => setOpen(o => !o)} className="md:hidden p-2" aria-label="Menu" style={{ color: '#181b15' }}>
+        <button onClick={() => setOpen(o => !o)} className="lg:hidden p-2" aria-label="Menu" style={{ color: '#181b15' }}>
           <div className="space-y-1.5">
             <span className={`block w-6 h-0.5 bg-current transition-all duration-200 ${open ? 'rotate-45 translate-y-2' : ''}`} />
             <span className={`block w-6 h-0.5 bg-current transition-all duration-200 ${open ? 'opacity-0' : ''}`} />
@@ -111,17 +210,17 @@ function Nav() {
       </div>
 
       {open && (
-        <div className="md:hidden bg-white px-5 pb-5 pt-2" style={{ borderTop: '1px solid #e2e2d8' }}>
+        <div className="lg:hidden bg-white px-5 pb-5 pt-2" style={{ borderTop: '1px solid #e2e2d8' }}>
           {links.map(([href, label]) => (
             <a key={href} href={href} onClick={() => setOpen(false)}
-              className="block py-3 text-sm font-medium" style={{ color: '#5b6354', borderBottom: '1px solid #efefe8' }}>
+              className="block py-3 text-sm font-semibold" style={{ color: '#41483b', borderBottom: '1px solid #efefe8' }}>
               {label}
             </a>
           ))}
           <Link href="/get-a-quote" onClick={() => setOpen(false)}
-            className="mt-4 w-full flex items-center justify-center font-semibold py-3.5 text-sm text-white"
+            className="mt-4 w-full flex items-center justify-center font-bold py-4 text-sm text-white"
             style={{ background: '#1e3d12' }}>
-            Get a Free Quote
+            Get My Price
           </Link>
         </div>
       )}
@@ -129,178 +228,200 @@ function Nav() {
   )
 }
 
-// ── Hero ───────────────────────────────────────────────────────────────────────
-function Hero() {
+// ─── Hero — photo + address capture, the national-brand pattern ────────────────
+function Hero({ rating }: { rating: string }) {
   return (
-    <section id="top" className="bg-white">
-      <div className="max-w-6xl mx-auto px-5">
-        <div className="grid md:grid-cols-2 items-center">
-          {/* Copy */}
-          <div className="py-16 md:py-24 md:pr-14">
-            <p className="text-xs font-bold uppercase mb-6" style={{ color: '#2f6418', letterSpacing: '0.16em' }}>
-              Lawn care in Noble County, Indiana
-            </p>
-            <h1 className="text-[42px] sm:text-[52px] md:text-[58px] font-extrabold leading-[1.04] tracking-tight mb-6"
-              style={{ color: '#181b15' }}>
-              A well-kept lawn, without the work.
-            </h1>
-            <p className="text-[17px] leading-relaxed mb-9 max-w-md" style={{ color: '#5b6354' }}>
-              Gray Wolf Workers is a local crew based in Kendallville. We mow, trim, and edge on a
-              schedule you can count on — at a price you will know before we ever start.
-            </p>
+    <section id="top" className="relative">
+      {/* Real photo, solid scrim for legibility (no gradients) */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/lawn2.jpg" alt="A lawn maintained by Gray Wolf Workers in Kendallville, Indiana"
+        className="absolute inset-0 w-full h-full object-cover" />
+      <div className="absolute inset-0" style={{ background: '#122b0a', opacity: 0.78 }} />
 
-            <div className="flex flex-col sm:flex-row gap-3 mb-12">
-              <Link href="/get-a-quote"
-                className="inline-flex items-center justify-center font-semibold px-7 py-4 text-[15px] text-white transition-colors"
-                style={{ background: '#1e3d12' }}
-                onMouseEnter={e => (e.currentTarget.style.background = '#2f6418')}
-                onMouseLeave={e => (e.currentTarget.style.background = '#1e3d12')}>
-                Get a Free Quote
-              </Link>
-              <a href="#work"
-                className="inline-flex items-center justify-center font-semibold px-7 py-4 text-[15px] transition-colors"
-                style={{ color: '#181b15', border: '1px solid #d4d4c8' }}
-                onMouseEnter={e => (e.currentTarget.style.borderColor = '#181b15')}
-                onMouseLeave={e => (e.currentTarget.style.borderColor = '#d4d4c8')}>
-                See Our Work
-              </a>
-            </div>
-
-            <ul className="flex flex-wrap gap-x-7 gap-y-2 text-[13px] font-medium" style={{ color: '#5b6354' }}>
-              {['Locally owned', 'Fully insured', 'No contracts'].map(t => (
-                <li key={t} className="flex items-center gap-2">
-                  <span className="inline-block w-1.5 h-1.5" style={{ background: '#2f6418' }} />
-                  {t}
-                </li>
-              ))}
-            </ul>
+      <div className="relative max-w-6xl mx-auto px-5 py-20 md:py-32">
+        <div className="max-w-2xl">
+          <div className="flex items-center gap-2.5 mb-7 text-[13px] font-semibold text-white/85">
+            <Stars />
+            <span>Rated {rating} by homeowners across Noble County</span>
           </div>
 
-          {/* Photo — clean, no overlay */}
-          <div className="relative h-[320px] md:h-[640px] -mx-5 md:mx-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/lawn2.jpg" alt="A freshly mowed lawn by Gray Wolf Workers in Kendallville, Indiana"
-              className="absolute inset-0 w-full h-full object-cover" />
-          </div>
+          <h1 className="text-[44px] sm:text-[56px] md:text-[64px] font-extrabold text-white leading-[1.02] tracking-tight mb-6">
+            A perfect lawn.<br />Zero effort.
+          </h1>
+
+          <p className="text-[17px] md:text-[19px] leading-relaxed mb-9 max-w-lg" style={{ color: 'rgba(255,255,255,0.82)' }}>
+            Enter your address and get your exact mowing price in under a minute —
+            measured by satellite, honored all season. No contracts. No surprises.
+          </p>
+
+          <AddressForm dark id="hero-address" />
+
+          <ul className="flex flex-wrap gap-x-7 gap-y-2.5 mt-8 text-[13px] font-semibold text-white/80">
+            {['Price in under a minute', 'Locally owned & insured', 'No contracts, cancel anytime'].map(t => (
+              <li key={t} className="flex items-center gap-2">
+                <span className="inline-block w-1.5 h-1.5" style={{ background: '#8fd16f' }} />
+                {t}
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     </section>
   )
 }
 
-// ── Services ──────────────────────────────────────────────────────────────────
+// ─── Stats bar ─────────────────────────────────────────────────────────────────
+function StatsBar({ stats }: { stats: { years: string; lawns: string; rating: string } }) {
+  const items = [
+    [stats.years, 'Years serving Northeast Indiana'],
+    [stats.lawns, 'Lawns maintained'],
+    [stats.rating, 'Average customer rating'],
+    ['75%', 'Off your first month'],
+  ]
+  return (
+    <section style={{ background: '#1e3d12' }}>
+      <div className="max-w-6xl mx-auto px-5 py-10 grid grid-cols-2 md:grid-cols-4 gap-y-8 gap-x-6">
+        {items.map(([n, l]) => (
+          <div key={l}>
+            <p className="text-[32px] md:text-[38px] font-extrabold text-white leading-none mb-2">{n}</p>
+            <p className="text-[12.5px] font-medium leading-snug" style={{ color: '#9fc18d' }}>{l}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+// ─── How it works ──────────────────────────────────────────────────────────────
+function HowItWorks() {
+  return (
+    <section id="how" className="py-20 md:py-28 bg-white">
+      <div className="max-w-6xl mx-auto px-5">
+        <div className="max-w-2xl mb-14">
+          <p className="text-xs font-bold uppercase mb-4" style={{ color: '#2f6418', letterSpacing: '0.16em' }}>How it works</p>
+          <h2 className="text-4xl md:text-[46px] font-extrabold tracking-tight leading-[1.06]" style={{ color: '#181b15' }}>
+            From address to perfect lawn in three steps.
+          </h2>
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-10 md:gap-8">
+          {STEPS.map(s => (
+            <div key={s.n} className="relative pt-6" style={{ borderTop: '3px solid #1e3d12' }}>
+              <span className="absolute -top-7 left-0 text-[64px] font-extrabold leading-none select-none" style={{ color: '#eef2e9' }}>
+                {s.n}
+              </span>
+              <h3 className="relative text-xl font-bold tracking-tight mb-3" style={{ color: '#181b15' }}>{s.title}</h3>
+              <p className="relative text-[15px] leading-relaxed" style={{ color: '#5b6354' }}>{s.desc}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-14 flex flex-col sm:flex-row sm:items-center gap-5">
+          <Link href="/get-a-quote"
+            className="inline-flex items-center justify-center font-bold px-8 py-4 text-[15px] text-white transition-colors"
+            style={{ background: '#1e3d12' }}
+            onMouseEnter={e => (e.currentTarget.style.background = '#2f6418')}
+            onMouseLeave={e => (e.currentTarget.style.background = '#1e3d12')}>
+            Get My Price Now
+          </Link>
+          <p className="text-[13px] font-medium" style={{ color: '#5b6354' }}>
+            Takes under a minute. No phone calls, no salespeople.
+          </p>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─── Services — photo cards like the national brands ──────────────────────────
 function Services() {
   return (
     <section id="services" className="py-20 md:py-28" style={{ background: '#f4f4ee' }}>
       <div className="max-w-6xl mx-auto px-5">
         <div className="md:flex items-end justify-between mb-14">
           <div>
-            <p className="text-xs font-bold uppercase mb-4" style={{ color: '#2f6418', letterSpacing: '0.16em' }}>What we do</p>
-            <h2 className="text-4xl md:text-[44px] font-extrabold tracking-tight" style={{ color: '#181b15' }}>
-              Four services.<br />One standard.
+            <p className="text-xs font-bold uppercase mb-4" style={{ color: '#2f6418', letterSpacing: '0.16em' }}>Services</p>
+            <h2 className="text-4xl md:text-[46px] font-extrabold tracking-tight" style={{ color: '#181b15' }}>
+              Everything your lawn needs.
             </h2>
           </div>
           <p className="mt-5 md:mt-0 max-w-sm text-[15px] leading-relaxed" style={{ color: '#5b6354' }}>
-            Everything we offer comes with the same promise — done right, on time, no corners cut.
+            One crew, one standard, one simple price. Every photo below is our actual work.
           </p>
         </div>
 
-        <div style={{ borderTop: '1px solid #d8d8cc' }}>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {SERVICES.map(s => (
-            <div key={s.n}
-              className="grid md:grid-cols-12 gap-3 md:gap-6 py-8 md:py-10 transition-colors"
-              style={{ borderBottom: '1px solid #d8d8cc' }}
-              onMouseEnter={e => (e.currentTarget.style.background = '#eeeee5')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-              <div className="md:col-span-1 text-sm font-bold pt-1" style={{ color: '#2f6418' }}>{s.n}</div>
-              <h3 className="md:col-span-4 text-2xl font-bold tracking-tight" style={{ color: '#181b15' }}>{s.title}</h3>
-              <p className="md:col-span-7 text-[15px] leading-relaxed max-w-xl" style={{ color: '#5b6354' }}>{s.desc}</p>
+            <div key={s.title} className="bg-white flex flex-col" style={{ border: '1px solid #e2e2d8' }}>
+              <div className="aspect-[4/3] overflow-hidden">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={s.img} alt={`${s.title} by Gray Wolf Workers`} className="w-full h-full object-cover" />
+              </div>
+              <div className="p-6 flex flex-col flex-1">
+                <h3 className="text-lg font-bold tracking-tight mb-2" style={{ color: '#181b15' }}>{s.title}</h3>
+                <p className="text-[13.5px] leading-relaxed mb-4" style={{ color: '#5b6354' }}>{s.desc}</p>
+                <ul className="mt-auto space-y-1.5">
+                  {s.points.map(p => (
+                    <li key={p} className="flex items-center gap-2 text-[13px] font-medium" style={{ color: '#41483b' }}>
+                      <span className="inline-block w-1.5 h-1.5 shrink-0" style={{ background: '#2f6418' }} />
+                      {p}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           ))}
         </div>
-
-        <div className="mt-12">
-          <Link href="/get-a-quote"
-            className="inline-flex items-center font-semibold px-7 py-4 text-[15px] text-white transition-colors"
-            style={{ background: '#1e3d12' }}
-            onMouseEnter={e => (e.currentTarget.style.background = '#2f6418')}
-            onMouseLeave={e => (e.currentTarget.style.background = '#1e3d12')}>
-            Get Your Price
-          </Link>
-        </div>
       </div>
     </section>
   )
 }
 
-// ── About ──────────────────────────────────────────────────────────────────────
-function About() {
-  const [stats, setStats] = useState({ years: '3+', lawns: '30+', rating: '5★' })
-
-  useEffect(() => {
-    const supabase = createClient()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(supabase as any).from('site_settings').select('key, value').in('key', ['stat_years', 'stat_lawns', 'stat_rating'])
-      .then(({ data }: { data: Array<{ key: string; value: string }> | null }) => {
-        if (!data) return
-        const map = Object.fromEntries(data.map(r => [r.key, r.value]))
-        setStats({
-          years:  map.stat_years  ?? '3+',
-          lawns:  map.stat_lawns  ?? '30+',
-          rating: map.stat_rating ?? '5★',
-        })
-      })
-  }, [])
-
-  const statItems = [
-    [stats.years,  'Years in business'],
-    [stats.lawns,  'Lawns maintained'],
-    [stats.rating, 'Average rating'],
+// ─── Guarantee ─────────────────────────────────────────────────────────────────
+function Guarantee() {
+  const points = [
+    {
+      title: 'We make it right',
+      desc: 'Not happy with a cut? Tell us within 24 hours and we will come back and fix it. No arguing, no hassle.',
+    },
+    {
+      title: 'Your price is your price',
+      desc: 'The quote we text you is what you pay. No fuel surcharges appearing later, no "actually it took longer".',
+    },
+    {
+      title: 'No contracts, ever',
+      desc: 'Cancel any time with a text. We keep customers by doing good work, not with cancellation fees.',
+    },
   ]
-
   return (
-    <section id="about" className="py-20 md:py-28 bg-white">
+    <section className="py-20 md:py-28 bg-white">
       <div className="max-w-6xl mx-auto px-5">
         <div className="grid md:grid-cols-2 gap-12 md:gap-20 items-center">
-          {/* Photo */}
-          <div className="h-[340px] md:h-[560px]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/lawn3.jpg" alt="A residential lawn maintained by Gray Wolf Workers"
-              className="w-full h-full object-cover" />
-          </div>
-
-          {/* Text */}
           <div>
-            <p className="text-xs font-bold uppercase mb-4" style={{ color: '#2f6418', letterSpacing: '0.16em' }}>Who we are</p>
-            <h2 className="text-4xl md:text-[44px] font-extrabold tracking-tight leading-[1.08] mb-7" style={{ color: '#181b15' }}>
-              Your neighbors, not a franchise.
+            <p className="text-xs font-bold uppercase mb-4" style={{ color: '#2f6418', letterSpacing: '0.16em' }}>The Gray Wolf promise</p>
+            <h2 className="text-4xl md:text-[46px] font-extrabold tracking-tight leading-[1.06] mb-10" style={{ color: '#181b15' }}>
+              Big-company polish. Hometown accountability.
             </h2>
-            <p className="text-[15.5px] leading-relaxed mb-5" style={{ color: '#5b6354' }}>
-              Gray Wolf Workers started right here in Kendallville. There is no call center and no
-              corporate office — when you text us, you are talking to the people who will be standing
-              on your lawn.
-            </p>
-            <p className="text-[15.5px] leading-relaxed mb-10" style={{ color: '#5b6354' }}>
-              From the first cut of spring to the last cleanup of fall, we show up on time, do the job
-              right, and leave your property looking like someone cares about it. Because we do.
-            </p>
-
-            <div className="grid grid-cols-3 gap-6 mb-10">
-              {statItems.map(([n, l]) => (
-                <div key={l} className="pt-4" style={{ borderTop: '2px solid #181b15' }}>
-                  <p className="text-[28px] font-extrabold leading-none mb-1.5" style={{ color: '#181b15' }}>{n}</p>
-                  <p className="text-xs font-medium leading-snug" style={{ color: '#5b6354' }}>{l}</p>
+            <div className="space-y-8">
+              {points.map(p => (
+                <div key={p.title} className="flex gap-4">
+                  <div className="shrink-0 w-10 h-10 flex items-center justify-center" style={{ background: '#1e3d12' }}>
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-[16.5px] mb-1.5" style={{ color: '#181b15' }}>{p.title}</h3>
+                    <p className="text-[14.5px] leading-relaxed" style={{ color: '#5b6354' }}>{p.desc}</p>
+                  </div>
                 </div>
               ))}
             </div>
-
-            <Link href="/get-a-quote"
-              className="inline-flex items-center font-semibold px-7 py-4 text-[15px] text-white transition-colors"
-              style={{ background: '#1e3d12' }}
-              onMouseEnter={e => (e.currentTarget.style.background = '#2f6418')}
-              onMouseLeave={e => (e.currentTarget.style.background = '#1e3d12')}>
-              Text Us for a Free Quote
-            </Link>
+          </div>
+          <div className="h-[360px] md:h-[560px]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/lawn3.jpg" alt="A freshly maintained residential lawn in Northeast Indiana"
+              className="w-full h-full object-cover" />
           </div>
         </div>
       </div>
@@ -308,7 +429,28 @@ function About() {
   )
 }
 
-// ── Gallery ───────────────────────────────────────────────────────────────────
+// ─── Mid-page CTA (Weed Man's "stop working on your lawn" pattern) ─────────────
+function MidCTA() {
+  return (
+    <section className="py-16 md:py-20" style={{ background: '#122b0a' }}>
+      <div className="max-w-6xl mx-auto px-5 md:flex items-center justify-between gap-10">
+        <div className="mb-7 md:mb-0 max-w-lg">
+          <h2 className="text-3xl md:text-[38px] font-extrabold text-white tracking-tight leading-tight mb-3">
+            Stop spending your weekends mowing.
+          </h2>
+          <p className="text-[15px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.72)' }}>
+            Your exact price is one address away — and your first month is 75% off.
+          </p>
+        </div>
+        <div className="w-full md:max-w-xl">
+          <AddressForm dark id="mid-address" />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─── Gallery ───────────────────────────────────────────────────────────────────
 const FALLBACK_PHOTOS = ['/lawn1.jpg', '/lawn4.jpg', '/lawn2.jpg', '/lawn3.jpg']
 
 function Gallery() {
@@ -341,17 +483,17 @@ function Gallery() {
 
   return (
     <>
-      <section id="work" className="py-20 md:py-28" style={{ background: '#181b15' }}>
+      <section id="work" className="py-20 md:py-28" style={{ background: '#f4f4ee' }}>
         <div className="max-w-6xl mx-auto px-5">
           <div className="md:flex items-end justify-between mb-12">
             <div>
-              <p className="text-xs font-bold uppercase mb-4" style={{ color: '#8fc472', letterSpacing: '0.16em' }}>Our work</p>
-              <h2 className="text-4xl md:text-[44px] font-extrabold tracking-tight text-white">
+              <p className="text-xs font-bold uppercase mb-4" style={{ color: '#2f6418', letterSpacing: '0.16em' }}>Our work</p>
+              <h2 className="text-4xl md:text-[46px] font-extrabold tracking-tight" style={{ color: '#181b15' }}>
                 Real yards. Real results.
               </h2>
             </div>
-            <p className="mt-5 md:mt-0 max-w-sm text-[15px] leading-relaxed" style={{ color: '#9aa192' }}>
-              Every photo here is a property we maintain — no stock images, no staging.
+            <p className="mt-5 md:mt-0 max-w-sm text-[15px] leading-relaxed" style={{ color: '#5b6354' }}>
+              Every photo is a property we maintain — no stock images, no staging.
             </p>
           </div>
 
@@ -378,10 +520,10 @@ function Gallery() {
             <div className="text-center mt-10">
               <button
                 onClick={() => setVisible(v => v + PAGE_SIZE)}
-                className="font-semibold px-8 py-3.5 text-sm text-white transition-colors"
-                style={{ border: '1px solid #3a4033' }}
-                onMouseEnter={e => (e.currentTarget.style.borderColor = '#8fc472')}
-                onMouseLeave={e => (e.currentTarget.style.borderColor = '#3a4033')}
+                className="font-bold px-8 py-3.5 text-sm transition-colors"
+                style={{ border: '2px solid #1e3d12', color: '#1e3d12' }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#1e3d12'; e.currentTarget.style.color = '#fff' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#1e3d12' }}
               >
                 Load More Photos
               </button>
@@ -390,7 +532,6 @@ function Gallery() {
         </div>
       </section>
 
-      {/* Lightbox */}
       {lightbox && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -418,30 +559,30 @@ function Gallery() {
   )
 }
 
-// ── Service Areas ─────────────────────────────────────────────────────────────
+// ─── Service areas ─────────────────────────────────────────────────────────────
 function Areas() {
   return (
-    <section id="areas" className="py-20 md:py-28" style={{ background: '#f4f4ee' }}>
+    <section id="areas" className="py-20 md:py-28 bg-white">
       <div className="max-w-6xl mx-auto px-5">
         <div className="md:flex items-end justify-between mb-14">
           <div>
             <p className="text-xs font-bold uppercase mb-4" style={{ color: '#2f6418', letterSpacing: '0.16em' }}>Where we work</p>
-            <h2 className="text-4xl md:text-[44px] font-extrabold tracking-tight" style={{ color: '#181b15' }}>
+            <h2 className="text-4xl md:text-[46px] font-extrabold tracking-tight leading-[1.06]" style={{ color: '#181b15' }}>
               Based in Kendallville.<br />Serving Northeast Indiana.
             </h2>
           </div>
           <p className="mt-5 md:mt-0 max-w-sm text-[15px] leading-relaxed" style={{ color: '#5b6354' }}>
-            Don&apos;t see your town? Text us your address — if we can get to you, we will.
+            Don&apos;t see your town? Enter your address anyway — if we can get to you, we will.
           </p>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-10">
-          {SERVICE_AREAS.map(({ county, towns }) => (
-            <div key={county} className="pt-4" style={{ borderTop: '2px solid #181b15' }}>
+          {TOWNS_BY_COUNTY.map(({ county, towns }) => (
+            <div key={county} className="pt-4" style={{ borderTop: '3px solid #1e3d12' }}>
               <p className="font-bold text-sm mb-3.5" style={{ color: '#181b15' }}>{county}</p>
               <ul className="space-y-2 text-[14px]" style={{ color: '#5b6354' }}>
                 {towns.map(t => (
-                  <li key={t} style={t === 'Kendallville' ? { color: '#2f6418', fontWeight: 600 } : {}}>{t}</li>
+                  <li key={t} style={t === 'Kendallville' ? { color: '#2f6418', fontWeight: 700 } : {}}>{t}</li>
                 ))}
               </ul>
             </div>
@@ -452,74 +593,104 @@ function Areas() {
   )
 }
 
-// ── CTA Banner ────────────────────────────────────────────────────────────────
-function CTABanner() {
+// ─── FAQ ───────────────────────────────────────────────────────────────────────
+function Faq() {
+  const [openIdx, setOpenIdx] = useState<number | null>(0)
   return (
-    <section className="py-20 md:py-24" style={{ background: '#1e3d12' }}>
-      <div className="max-w-6xl mx-auto px-5 md:flex items-center justify-between gap-10">
-        <div className="mb-8 md:mb-0">
-          <h2 className="text-3xl md:text-[40px] font-extrabold text-white tracking-tight leading-tight mb-3">
-            Get your price in under a minute.
+    <section id="faq" className="py-20 md:py-28" style={{ background: '#f4f4ee' }}>
+      <div className="max-w-3xl mx-auto px-5">
+        <div className="mb-12">
+          <p className="text-xs font-bold uppercase mb-4" style={{ color: '#2f6418', letterSpacing: '0.16em' }}>Questions</p>
+          <h2 className="text-4xl md:text-[46px] font-extrabold tracking-tight" style={{ color: '#181b15' }}>
+            Straight answers.
           </h2>
-          <p className="text-[15.5px] max-w-lg leading-relaxed" style={{ color: 'rgba(255,255,255,0.72)' }}>
-            Text us your address and we&apos;ll send back an honest quote — no calls, no salespeople,
-            no obligation. New customers get 75% off their first month.
-          </p>
         </div>
-        <Link href="/get-a-quote"
-          className="shrink-0 inline-flex items-center justify-center font-bold px-9 py-4 text-[15px] transition-colors"
-          style={{ background: '#fff', color: '#1e3d12' }}
-          onMouseEnter={e => (e.currentTarget.style.background = '#e9f0e4')}
-          onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
-          Get a Free Quote
-        </Link>
+
+        <div style={{ borderTop: '1px solid #d8d8cc' }}>
+          {FAQS.map((f, i) => (
+            <div key={i} style={{ borderBottom: '1px solid #d8d8cc' }}>
+              <button
+                onClick={() => setOpenIdx(openIdx === i ? null : i)}
+                className="w-full flex items-center justify-between gap-4 py-5 text-left"
+              >
+                <span className="font-bold text-[16px]" style={{ color: '#181b15' }}>{f.q}</span>
+                <span className="shrink-0 text-2xl font-light leading-none" style={{ color: '#2f6418' }}>
+                  {openIdx === i ? '−' : '+'}
+                </span>
+              </button>
+              {openIdx === i && (
+                <p className="pb-6 text-[14.5px] leading-relaxed max-w-2xl" style={{ color: '#5b6354' }}>{f.a}</p>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   )
 }
 
-// ── Footer ────────────────────────────────────────────────────────────────────
+// ─── Final CTA ─────────────────────────────────────────────────────────────────
+function FinalCTA() {
+  return (
+    <section className="relative">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/lawn1.jpg" alt="" className="absolute inset-0 w-full h-full object-cover" />
+      <div className="absolute inset-0" style={{ background: '#122b0a', opacity: 0.84 }} />
+      <div className="relative max-w-6xl mx-auto px-5 py-20 md:py-28 text-center">
+        <h2 className="text-4xl md:text-[52px] font-extrabold text-white tracking-tight leading-[1.05] mb-5">
+          Your lawn could be next.
+        </h2>
+        <p className="text-[16px] md:text-[17px] mb-9 max-w-xl mx-auto leading-relaxed" style={{ color: 'rgba(255,255,255,0.8)' }}>
+          Get your exact price in under a minute — and take 75% off your first month while the offer lasts.
+        </p>
+        <div className="flex justify-center">
+          <AddressForm dark id="final-address" />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─── Footer ────────────────────────────────────────────────────────────────────
 function Footer() {
   return (
-    <footer className="pt-16 pb-8" style={{ background: '#181b15', color: '#9aa192' }}>
+    <footer className="pt-16 pb-8" style={{ background: '#0d1d07', color: '#9aa192' }}>
       <div className="max-w-6xl mx-auto px-5">
         <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-10 mb-14">
           <div className="sm:col-span-2 md:col-span-1">
             <div className="flex items-center gap-2.5 mb-4">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo.png" alt="" className="w-9 h-9 object-contain" />
+              <img src="/logo.png" alt="" className="w-10 h-10 object-contain" />
               <span className="font-bold text-white text-sm leading-tight">Gray Wolf Workers</span>
             </div>
-            <p className="text-sm leading-relaxed">
-              Professional lawn care serving Kendallville and Northeast Indiana. Local, reliable, and proud of it.
+            <p className="text-sm leading-relaxed mb-4">
+              Professional lawn care for Kendallville and Northeast Indiana. Locally owned, fully insured.
+            </p>
+            <p className="text-[13px] font-semibold" style={{ color: '#e9b949' }}>
+              ★★★★★ Rated by local homeowners
             </p>
           </div>
 
           <div>
-            <p className="text-white font-semibold text-sm mb-4">Company</p>
+            <p className="text-white font-bold text-sm mb-4">Services</p>
             <ul className="space-y-2.5 text-sm">
-              {[['#services', 'Services'], ['#about', 'About Us'], ['#work', 'Our Work'], ['#areas', 'Service Areas']].map(([h, l]) => (
-                <li key={l}><a href={h} className="hover:text-white transition-colors">{l}</a></li>
+              {SERVICES.map(s => (
+                <li key={s.title}><a href="#services" className="hover:text-white transition-colors">{s.title}</a></li>
               ))}
-              <li>
-                <Link href="/get-a-quote" className="font-semibold hover:text-white transition-colors" style={{ color: '#8fc472' }}>
-                  Get a Free Quote
-                </Link>
-              </li>
             </ul>
           </div>
 
           <div>
-            <p className="text-white font-semibold text-sm mb-4">Areas We Serve</p>
+            <p className="text-white font-bold text-sm mb-4">Areas We Serve</p>
             <ul className="space-y-2 text-sm">
               {['Kendallville', 'Albion', 'Avilla', 'Rome City', 'Auburn', 'Garrett', 'LaGrange'].map(a => (
-                <li key={a} style={a === 'Kendallville' ? { color: '#8fc472', fontWeight: 500 } : {}}>{a}</li>
+                <li key={a} style={a === 'Kendallville' ? { color: '#8fd16f', fontWeight: 600 } : {}}>{a}</li>
               ))}
             </ul>
           </div>
 
           <div>
-            <p className="text-white font-semibold text-sm mb-4">Contact</p>
+            <p className="text-white font-bold text-sm mb-4">Get Started</p>
             <ul className="space-y-3 text-sm">
               <li>Kendallville, IN 46755</li>
               <li>
@@ -529,11 +700,11 @@ function Footer() {
               </li>
               <li className="pt-2">
                 <Link href="/get-a-quote"
-                  className="inline-block font-semibold px-5 py-2.5 text-xs text-white transition-colors"
-                  style={{ background: '#1e3d12' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = '#2f6418')}
-                  onMouseLeave={e => (e.currentTarget.style.background = '#1e3d12')}>
-                  Text Us
+                  className="inline-block font-bold px-6 py-3 text-xs text-white transition-colors"
+                  style={{ background: '#2f6418' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#3c7d22')}
+                  onMouseLeave={e => (e.currentTarget.style.background = '#2f6418')}>
+                  Get My Price
                 </Link>
               </li>
             </ul>
@@ -541,7 +712,7 @@ function Footer() {
         </div>
 
         <div className="pt-7 flex flex-col sm:flex-row justify-between items-center gap-3 text-xs"
-          style={{ borderTop: '1px solid #2a2e25', color: '#6b7263' }}>
+          style={{ borderTop: '1px solid #1f3315', color: '#6b7263' }}>
           <p>© {new Date().getFullYear()} Gray Wolf Workers LLC. All rights reserved.</p>
           <p>Kendallville, Indiana · Northeast Indiana&apos;s lawn care crew</p>
         </div>
@@ -550,18 +721,39 @@ function Footer() {
   )
 }
 
-// ── Page ───────────────────────────────────────────────────────────────────────
+// ─── Page ──────────────────────────────────────────────────────────────────────
 export default function HomePage() {
+  const [stats, setStats] = useState({ years: '3+', lawns: '30+', rating: '5★' })
+
+  useEffect(() => {
+    const supabase = createClient()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(supabase as any).from('site_settings').select('key, value').in('key', ['stat_years', 'stat_lawns', 'stat_rating'])
+      .then(({ data }: { data: Array<{ key: string; value: string }> | null }) => {
+        if (!data) return
+        const map = Object.fromEntries(data.map(r => [r.key, r.value]))
+        setStats({
+          years:  map.stat_years  ?? '3+',
+          lawns:  map.stat_lawns  ?? '30+',
+          rating: map.stat_rating ?? '5★',
+        })
+      })
+  }, [])
+
   return (
     <div className="antialiased bg-white">
       <TopBar />
       <Nav />
-      <Hero />
+      <Hero rating={stats.rating} />
+      <StatsBar stats={stats} />
+      <HowItWorks />
       <Services />
-      <About />
+      <Guarantee />
+      <MidCTA />
       <Gallery />
       <Areas />
-      <CTABanner />
+      <Faq />
+      <FinalCTA />
       <Footer />
     </div>
   )

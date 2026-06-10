@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 function GrassRow() {
   return (
@@ -55,6 +55,14 @@ export default function GetAQuotePage() {
   const [street, setStreet] = useState('')
   const [city, setCity] = useState('')
   const [error, setError] = useState('')
+
+  // Prefill the street if the homepage hero passed one (?street=...).
+  useEffect(() => {
+    const fromHero = new URLSearchParams(window.location.search).get('street')
+    if (fromHero?.trim()) {
+      Promise.resolve().then(() => setStreet(fromHero.trim()))
+    }
+  }, [])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
