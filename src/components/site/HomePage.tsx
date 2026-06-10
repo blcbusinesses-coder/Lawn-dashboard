@@ -5,8 +5,6 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
-const PAGE_SIZE = 9
-
 // ─── Design system ─────────────────────────────────────────────────────────────
 // Modeled on the conversion structure of the big national lawn brands
 // (Lawn Doctor, Weed Man, Lawn Love): address capture in the hero, trust
@@ -23,12 +21,7 @@ const PAGE_SIZE = 9
 //   ink:    #181b15   headings on light
 //   muted:  #5b6354   body text on light
 
-const TOWNS_BY_COUNTY: Array<{ county: string; towns: string[] }> = [
-  { county: 'Noble County',      towns: ['Kendallville', 'Albion', 'Avilla', 'Rome City', 'Ligonier', 'Wolcottville'] },
-  { county: 'DeKalb County',     towns: ['Auburn', 'Garrett', 'Waterloo'] },
-  { county: 'LaGrange County',   towns: ['LaGrange', 'Howe'] },
-  { county: 'Whitley & Steuben', towns: ['Columbia City', 'Churubusco', 'Angola'] },
-]
+const NOBLE_TOWNS = ['Kendallville', 'Albion', 'Avilla', 'Rome City', 'Ligonier', 'Wolcottville', 'Cromwell', 'Wawaka']
 
 const SERVICES = [
   {
@@ -51,9 +44,9 @@ const SERVICES = [
   },
   {
     img: '/lawn2.jpg',
-    title: 'Add-On Services',
-    desc: 'Fertilization, mulching, and custom work — tell us what your yard needs.',
-    points: ['Fertilization', 'Mulch & beds', 'By-request work'],
+    title: 'Mulching',
+    desc: 'Fresh mulch that makes your beds pop — edged, weeded, and laid clean.',
+    points: ['Beds prepped & weeded', 'Quality mulch installed', 'Crisp finished edges'],
   },
 ]
 
@@ -90,7 +83,7 @@ const FAQS = [
   },
   {
     q: 'What areas do you serve?',
-    a: 'We are based in Kendallville and serve Noble County and the surrounding area — Albion, Avilla, Rome City, Ligonier, Auburn, Garrett, LaGrange, and more. If you are nearby, send your address and we will tell you straight.',
+    a: 'We are based in Kendallville and serve all of Noble County — Albion, Avilla, Rome City, Ligonier, Wolcottville, Cromwell, and the surrounding area. Just outside the county? Send your address and we will tell you straight.',
   },
   {
     q: 'When will you mow my lawn?',
@@ -169,7 +162,7 @@ function Nav() {
   const links = [
     ['#services', 'Services'],
     ['#how', 'How It Works'],
-    ['#work', 'Our Work'],
+    ['/portfolio', 'Portfolio'],
     ['#areas', 'Service Areas'],
     ['#faq', 'FAQ'],
   ]
@@ -279,12 +272,16 @@ function StatsBar({ stats }: { stats: { years: string; lawns: string; rating: st
     ['75%', 'Off your first month'],
   ]
   return (
-    <section style={{ background: '#1e3d12' }}>
-      <div className="max-w-6xl mx-auto px-5 py-10 grid grid-cols-2 md:grid-cols-4 gap-y-8 gap-x-6">
-        {items.map(([n, l]) => (
-          <div key={l}>
-            <p className="text-[32px] md:text-[38px] font-extrabold text-white leading-none mb-2">{n}</p>
-            <p className="text-[12.5px] font-medium leading-snug" style={{ color: '#9fc18d' }}>{l}</p>
+    <section className="bg-white" style={{ borderBottom: '1px solid #e2e2d8' }}>
+      <div className="max-w-6xl mx-auto px-5 py-12 grid grid-cols-2 md:grid-cols-4 gap-y-10">
+        {items.map(([n, l], i) => (
+          <div
+            key={l}
+            className={`px-6 text-center md:text-left ${i > 0 ? 'md:border-l' : ''}`}
+            style={{ borderColor: '#e2e2d8' }}
+          >
+            <p className="text-[36px] md:text-[42px] font-extrabold leading-none mb-2" style={{ color: '#1e3d12' }}>{n}</p>
+            <p className="text-[12px] font-bold uppercase leading-snug" style={{ color: '#8a917f', letterSpacing: '0.08em' }}>{l}</p>
           </div>
         ))}
       </div>
@@ -306,12 +303,12 @@ function HowItWorks() {
 
         <div className="grid md:grid-cols-3 gap-10 md:gap-8">
           {STEPS.map(s => (
-            <div key={s.n} className="relative pt-6" style={{ borderTop: '3px solid #1e3d12' }}>
-              <span className="absolute -top-7 left-0 text-[64px] font-extrabold leading-none select-none" style={{ color: '#eef2e9' }}>
-                {s.n}
-              </span>
-              <h3 className="relative text-xl font-bold tracking-tight mb-3" style={{ color: '#181b15' }}>{s.title}</h3>
-              <p className="relative text-[15px] leading-relaxed" style={{ color: '#5b6354' }}>{s.desc}</p>
+            <div key={s.n}>
+              <div className="w-14 h-14 flex items-center justify-center mb-5" style={{ background: '#1e3d12' }}>
+                <span className="text-[26px] font-extrabold text-white leading-none">{s.n}</span>
+              </div>
+              <h3 className="text-xl font-bold tracking-tight mb-3" style={{ color: '#181b15' }}>{s.title}</h3>
+              <p className="text-[15px] leading-relaxed" style={{ color: '#5b6354' }}>{s.desc}</p>
             </div>
           ))}
         </div>
@@ -450,143 +447,46 @@ function MidCTA() {
   )
 }
 
-// ─── Gallery ───────────────────────────────────────────────────────────────────
-const FALLBACK_PHOTOS = ['/lawn1.jpg', '/lawn4.jpg', '/lawn2.jpg', '/lawn3.jpg']
-
-function Gallery() {
-  const [photos, setPhotos] = useState<string[]>([])
-  const [visible, setVisible] = useState(PAGE_SIZE)
-  const [lightbox, setLightbox] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    const supabase = createClient()
-    supabase.storage.from('gallery')
-      .list('', { limit: 200, sortBy: { column: 'created_at', order: 'desc' } })
-      .then(({ data }) => {
-        if (cancelled) return
-        if (data && data.length > 0) {
-          const urls = data
-            .filter(f => f.name !== '.emptyFolderPlaceholder')
-            .map(f => supabase.storage.from('gallery').getPublicUrl(f.name).data.publicUrl)
-          setPhotos(urls)
-        } else {
-          setPhotos(FALLBACK_PHOTOS)
-        }
-      })
-      .catch(() => { if (!cancelled) setPhotos(FALLBACK_PHOTOS) })
-    return () => { cancelled = true }
-  }, [])
-
-  const shown = photos.slice(0, visible)
-  const hasMore = visible < photos.length
-
-  return (
-    <>
-      <section id="work" className="py-20 md:py-28" style={{ background: '#f4f4ee' }}>
-        <div className="max-w-6xl mx-auto px-5">
-          <div className="md:flex items-end justify-between mb-12">
-            <div>
-              <p className="text-xs font-bold uppercase mb-4" style={{ color: '#2f6418', letterSpacing: '0.16em' }}>Our work</p>
-              <h2 className="text-4xl md:text-[46px] font-extrabold tracking-tight" style={{ color: '#181b15' }}>
-                Real yards. Real results.
-              </h2>
-            </div>
-            <p className="mt-5 md:mt-0 max-w-sm text-[15px] leading-relaxed" style={{ color: '#5b6354' }}>
-              Every photo is a property we maintain — no stock images, no staging.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-            {shown.map((url, i) => (
-              <div
-                key={url}
-                onClick={() => setLightbox(url)}
-                className={`cursor-pointer overflow-hidden ${
-                  i === 0 ? 'col-span-2 aspect-[16/9] md:aspect-[4/3]' : 'aspect-square'
-                }`}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={url}
-                  alt={`A lawn maintained by Gray Wolf Workers — photo ${i + 1}`}
-                  className="w-full h-full object-cover transition-opacity hover:opacity-85"
-                />
-              </div>
-            ))}
-          </div>
-
-          {hasMore && (
-            <div className="text-center mt-10">
-              <button
-                onClick={() => setVisible(v => v + PAGE_SIZE)}
-                className="font-bold px-8 py-3.5 text-sm transition-colors"
-                style={{ border: '2px solid #1e3d12', color: '#1e3d12' }}
-                onMouseEnter={e => { e.currentTarget.style.background = '#1e3d12'; e.currentTarget.style.color = '#fff' }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#1e3d12' }}
-              >
-                Load More Photos
-              </button>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {lightbox && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(12,14,10,0.94)' }}
-          onClick={() => setLightbox(null)}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={lightbox}
-            alt="Full size"
-            className="max-w-full max-h-full object-contain"
-            style={{ maxHeight: '90vh', maxWidth: '90vw' }}
-            onClick={e => e.stopPropagation()}
-          />
-          <button
-            onClick={() => setLightbox(null)}
-            className="absolute top-5 right-5 text-white/70 hover:text-white text-3xl font-light leading-none transition-colors"
-            aria-label="Close"
-          >
-            ×
-          </button>
-        </div>
-      )}
-    </>
-  )
-}
-
-// ─── Service areas ─────────────────────────────────────────────────────────────
+// ─── Service areas — Noble County focus ────────────────────────────────────────
 function Areas() {
   return (
     <section id="areas" className="py-20 md:py-28 bg-white">
       <div className="max-w-6xl mx-auto px-5">
-        <div className="md:flex items-end justify-between mb-14">
+        <div className="grid md:grid-cols-2 gap-12 md:gap-20 items-center">
           <div>
             <p className="text-xs font-bold uppercase mb-4" style={{ color: '#2f6418', letterSpacing: '0.16em' }}>Where we work</p>
-            <h2 className="text-4xl md:text-[46px] font-extrabold tracking-tight leading-[1.06]" style={{ color: '#181b15' }}>
-              Based in Kendallville.<br />Serving Northeast Indiana.
+            <h2 className="text-4xl md:text-[46px] font-extrabold tracking-tight leading-[1.06] mb-6" style={{ color: '#181b15' }}>
+              Proudly serving Noble County.
             </h2>
+            <p className="text-[15.5px] leading-relaxed mb-4" style={{ color: '#5b6354' }}>
+              We are based in Kendallville and serve homeowners across Noble County. Staying local
+              is the point — it is how we keep schedules tight, prices honest, and quality high.
+            </p>
+            <p className="text-[15.5px] leading-relaxed mb-8" style={{ color: '#5b6354' }}>
+              Just outside the county line? Enter your address anyway — if we can get to you, we will.
+            </p>
+            <Link href="/get-a-quote"
+              className="inline-flex items-center font-bold px-8 py-4 text-[15px] text-white transition-colors"
+              style={{ background: '#1e3d12' }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#2f6418')}
+              onMouseLeave={e => (e.currentTarget.style.background = '#1e3d12')}>
+              Check My Address
+            </Link>
           </div>
-          <p className="mt-5 md:mt-0 max-w-sm text-[15px] leading-relaxed" style={{ color: '#5b6354' }}>
-            Don&apos;t see your town? Enter your address anyway — if we can get to you, we will.
-          </p>
-        </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-10">
-          {TOWNS_BY_COUNTY.map(({ county, towns }) => (
-            <div key={county} className="pt-4" style={{ borderTop: '3px solid #1e3d12' }}>
-              <p className="font-bold text-sm mb-3.5" style={{ color: '#181b15' }}>{county}</p>
-              <ul className="space-y-2 text-[14px]" style={{ color: '#5b6354' }}>
-                {towns.map(t => (
-                  <li key={t} style={t === 'Kendallville' ? { color: '#2f6418', fontWeight: 700 } : {}}>{t}</li>
-                ))}
-              </ul>
-            </div>
-          ))}
+          <div className="grid grid-cols-2 gap-3">
+            {NOBLE_TOWNS.map(t => (
+              <div key={t} className="flex items-center gap-3 px-5 py-4"
+                style={t === 'Kendallville'
+                  ? { background: '#1e3d12' }
+                  : { background: '#f4f4ee', border: '1px solid #e2e2d8' }}>
+                <span className="inline-block w-2 h-2 shrink-0" style={{ background: t === 'Kendallville' ? '#8fd16f' : '#2f6418' }} />
+                <span className="font-bold text-[14.5px]" style={{ color: t === 'Kendallville' ? '#fff' : '#181b15' }}>
+                  {t}{t === 'Kendallville' ? ' — Home base' : ''}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </section>
@@ -677,13 +577,18 @@ function Footer() {
               {SERVICES.map(s => (
                 <li key={s.title}><a href="#services" className="hover:text-white transition-colors">{s.title}</a></li>
               ))}
+              <li>
+                <Link href="/portfolio" className="font-semibold hover:text-white transition-colors" style={{ color: '#8fd16f' }}>
+                  See Our Portfolio
+                </Link>
+              </li>
             </ul>
           </div>
 
           <div>
-            <p className="text-white font-bold text-sm mb-4">Areas We Serve</p>
+            <p className="text-white font-bold text-sm mb-4">Serving Noble County</p>
             <ul className="space-y-2 text-sm">
-              {['Kendallville', 'Albion', 'Avilla', 'Rome City', 'Auburn', 'Garrett', 'LaGrange'].map(a => (
+              {NOBLE_TOWNS.slice(0, 7).map(a => (
                 <li key={a} style={a === 'Kendallville' ? { color: '#8fd16f', fontWeight: 600 } : {}}>{a}</li>
               ))}
             </ul>
@@ -750,7 +655,6 @@ export default function HomePage() {
       <Services />
       <Guarantee />
       <MidCTA />
-      <Gallery />
       <Areas />
       <Faq />
       <FinalCTA />
