@@ -19,7 +19,7 @@ Rules:
 - Exactly 3 short paragraphs:
   1. My heartfelt story and why I do this (no selling yet).
   2. Turn to THEIR place: reference their street by name and any property details when given, and weave in their price naturally as something I noticed. Put the token ${'`[[QUOTE]]`'} EXACTLY where the price belongs — never write a dollar figure yourself. Shape it like: "That's why I wanted to reach out about your place over on Maple Street — I figured your lawn would run about [[QUOTE]]."
-  3. Lightly mention that new customers get 25% off their first month, and warmly invite them to get started.
+  3. Lightly mention that new customers get 25% off their first month, then point them to the QR CODE at the bottom of the letter as the easiest way to start: tell them to scan it to lock in their price and pick their first day right there. End on the scan. (They can still call or text me, but the QR is the main call to action — lead with it, and never end the letter telling them only to call or text.)
 - Use the token [[QUOTE]] EXACTLY ONCE. Never write a "$" amount yourself.
 - Do NOT use the homeowner's NAME in the body (the greeting already has it). DO use their street name.
 - Warm and sincere but never corporate, salesy, or gushing. No buzzwords, no emojis, no exclamation-point spam.
@@ -55,7 +55,7 @@ export interface LetterContent {
   letter_type: LetterType
 }
 
-const FALLBACK_COPY = `Four years ago, when I was just twelve, I started Gray Wolf Workers with one mower and a couple of yards — mostly because I love this work, and there's nothing like the look of a lawn that's been cut and edged right. Since then it's grown into a four-person crew taking care of around 30 lawns across the Kendallville area, and we're finally ready to take on more.\n\nThat's why I wanted to reach out about your place. I had a look and figured your lawn would run about [[QUOTE]] a mow. I keep things simple — no contracts, no hassle, just a sharp lawn you can be proud of and a crew that actually shows up.\n\nNew customers get 25% off their first month, and I'd genuinely love the chance to earn your business. Scan the code below or give me a call and I'll get you on the schedule.`
+const FALLBACK_COPY = `Four years ago, when I was just twelve, I started Gray Wolf Workers with one mower and a couple of yards — mostly because I love this work, and there's nothing like the look of a lawn that's been cut and edged right. Since then it's grown into a four-person crew taking care of around 30 lawns across the Kendallville area, and we're finally ready to take on more.\n\nThat's why I wanted to reach out about your place. I had a look and figured your lawn would run about [[QUOTE]] a mow. I keep things simple — no contracts, no hassle, just a sharp lawn you can be proud of and a crew that actually shows up.\n\nNew customers get 25% off their first month, and I'd genuinely love the chance to earn your business. The easiest way to start is to scan the code below — it pulls up your price and lets you pick your first day right there. You're welcome to call or text me too, but a quick scan is all it takes.`
 
 /**
  * Pure quote computation from lot/living sqft + automation_settings.
