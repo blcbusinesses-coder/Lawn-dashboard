@@ -8,7 +8,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://graywolfworkers.co
 export const metadata: Metadata = {
   title: 'Lawn Mowing & Lawn Care in Kendallville, IN | Gray Wolf Workers',
   description:
-    'Professional lawn mowing, trimming, and yard cleanup in Kendallville and across Noble County, Indiana. Enter your address and get your exact price in under a minute. New customers get 75% off their first month.',
+    'Professional lawn mowing, trimming, and yard cleanup in Kendallville and across Noble County, Indiana. Enter your address and get your exact price in under a minute. New customers get their first mow free.',
   alternates: { canonical: SITE_URL },
   openGraph: {
     title: 'Lawn Mowing & Lawn Care in Kendallville, IN | Gray Wolf Workers',

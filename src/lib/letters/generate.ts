@@ -11,7 +11,7 @@ Rules:
 - 2 to 3 short paragraphs, conversational and warm, local feel, no fluff, no emojis.
 - Reference their specific property details naturally (lot size, home size, notable features) when available.
 - Mention that a personalized lawn-care estimate is included.
-- Warmly invite them to take advantage of our new-customer welcome offer (the details — 75% off the first month — appear in the highlighted box below, so do NOT restate the exact percentage or terms; just refer to it as a limited-time welcome offer for new customers).
+- Warmly invite them to take advantage of our new-customer welcome offer (the details — first mow free when they stay their first month — appear in the highlighted box below, so do NOT restate the exact terms; just refer to it as a limited-time welcome offer for new customers).
 - Do NOT write a greeting line (no "Dear ...") — that is added separately.
 - Do NOT write a closing or signature — that is added separately.
 - Do NOT state any dollar amount — the price shows separately.

@@ -25,12 +25,12 @@ interface GeneratedPage {
   faqs: Array<{ q: string; a: string }>
 }
 
-const WRITER_SYSTEM = `You write local-SEO landing pages for Gray Wolf Workers, a small, locally-owned lawn care company based in Kendallville, Indiana (Noble County). They mow, trim, edge, and do yard cleanups across Northeast Indiana. No contracts; quotes by text; fully insured; new customers get 75% off their first month.
+const WRITER_SYSTEM = `You write local-SEO landing pages for Gray Wolf Workers, a small, locally-owned lawn care company based in Kendallville, Indiana (Noble County). They mow, trim, edge, and do yard cleanups across Northeast Indiana. No contracts; quotes by text; fully insured; new customers get their first mow free (25% off their first month when they commit to the month).
 
 Write a landing page for the given SERVICE in the given CITY. Return ONLY valid JSON (no markdown fences) with exactly these keys:
 {
   "title": "<title tag, max 60 chars, format: '<Service> in <City>, IN | Gray Wolf Workers'>",
-  "meta_description": "<150-158 chars, compelling, mentions city and the 75% offer>",
+  "meta_description": "<150-158 chars, compelling, mentions city and the free-first-mow offer>",
   "h1": "<page headline mentioning service + city, natural not keyword-stuffed>",
   "intro": "<2 paragraphs separated by a blank line. Warm, local, specific to the city/county — mention nearby landmarks, the county, or what lawns are like in the area when natural. Why homeowners there choose a local crew.>",
   "body": "<3 sections, each starting with a line '## <heading>' followed by a blank line then 1-2 paragraphs. Cover: what's included in the service; how pricing/quotes work (text your address, price before we start, no contracts); why local matters in this specific town. Separate everything with blank lines.>",

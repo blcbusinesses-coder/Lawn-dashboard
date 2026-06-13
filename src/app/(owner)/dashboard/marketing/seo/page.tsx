@@ -66,7 +66,7 @@ const CHECKLIST: Array<{ key: string; label: string; why: string; link?: string;
   {
     key: 'gbp_weekly',
     label: 'Post on GBP weekly',
-    why: 'Weekly posts (before/after photos, the 75% offer, seasonal tips) signal an active business. Set a phone reminder — 5 minutes a week.',
+    why: 'Weekly posts (before/after photos, the free-first-mow offer, seasonal tips) signal an active business. Set a phone reminder — 5 minutes a week.',
   },
   {
     key: 'citations',
