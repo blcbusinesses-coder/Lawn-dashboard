@@ -155,7 +155,7 @@ export default async function LocalSeoPage(
       <div style={{ background: '#1e3d12' }}>
         <div className="max-w-4xl mx-auto px-5 h-9 flex items-center justify-between text-xs text-white/85">
           <p className="font-medium tracking-wide">
-            New customers: <span className="font-bold text-white">your first mow is free</span>
+            New customers: <span className="font-bold text-white">25% off your first month</span>
           </p>
           <a href="mailto:graywolfworkers@gmail.com" className="hidden sm:block hover:text-white font-medium">
             graywolfworkers@gmail.com
@@ -203,7 +203,7 @@ export default async function LocalSeoPage(
           </h2>
           <p className="text-[14.5px] leading-relaxed mb-5 max-w-lg" style={{ color: '#5b6354' }}>
             Text us your address and we&apos;ll send back an honest price — no calls, no salespeople.
-            New customers get their first mow free.
+            New customers get 25% off their first month.
           </p>
           <Link href="/get-a-quote"
             className="inline-flex items-center font-semibold px-7 py-3.5 text-[15px] text-white"

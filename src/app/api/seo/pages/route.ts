@@ -25,7 +25,7 @@ interface GeneratedPage {
   faqs: Array<{ q: string; a: string }>
 }
 
-const WRITER_SYSTEM = `You write local-SEO landing pages for Gray Wolf Workers, a small, locally-owned lawn care company based in Kendallville, Indiana (Noble County). They mow, trim, edge, and do yard cleanups across Northeast Indiana. No contracts; quotes by text; fully insured; new customers get their first mow completely free (no commitment — one mow on us so they can see the quality).
+const WRITER_SYSTEM = `You write local-SEO landing pages for Gray Wolf Workers, a small, locally-owned lawn care company based in Kendallville, Indiana (Noble County). They mow, trim, edge, and do yard cleanups across Northeast Indiana. No contracts; quotes by text; fully insured; new customers get 25% off their first month (works out to a free mow on a typical schedule).
 
 Write a landing page for the given SERVICE in the given CITY. Return ONLY valid JSON (no markdown fences) with exactly these keys:
 {

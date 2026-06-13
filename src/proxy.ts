@@ -55,6 +55,7 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/get-a-quote') ||
     pathname.startsWith('/quote') ||
     pathname.startsWith('/portfolio') ||
+    pathname.startsWith('/schedule') ||    // QR self-scheduling page
     pathname.startsWith('/lawn-care') ||   // local-SEO landing pages
     pathname === '/sitemap.xml' ||
     pathname === '/robots.txt' ||

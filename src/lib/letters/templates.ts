@@ -37,11 +37,9 @@ export interface LetterParams {
   qrDataUri?: string | null
 }
 
-/** Default new-customer offer: the first mow is genuinely free — no
- * commitment. One mow on us so they can see the quality before deciding. */
-export const DEFAULT_OFFER_HEADLINE = 'Your first mow is free — no commitment'
-export const DEFAULT_OFFER_DETAIL =
-  'We mow your lawn once, on us, so you can see the quality before you decide anything. New customers only. No strings.'
+/** Default new-customer offer: 25% off the first month. */
+export const DEFAULT_OFFER_HEADLINE = '25% off your first month'
+export const DEFAULT_OFFER_DETAIL = 'New customers only — that works out to a free mow on us.'
 
 /** "June 30"-style deadline: end of this month, or end of next month when
  * fewer than 14 days remain (a 2-day deadline reads as fake urgency). */
@@ -119,33 +117,28 @@ export function buildLetterHtml(p: LetterParams): string {
       ${bodyHtml}
     </div>
 
-    <!-- Estimate + offer + action: one three-tier box -->
-    <div style="margin:16px 0;border:1px solid #d5dfd2;">
+    <!-- Estimate + offer + QR: one box -->
+    <div style="margin:16px 0;padding:13px 16px;border:1px solid #d5dfd2;border-left:4px solid #0d2e1a;background:#f3f8f4;display:flex;align-items:center;justify-content:space-between;gap:16px;">
 
-      <!-- Tier 1: price, the hero -->
-      <div style="padding:12px 16px 11px;background:#f3f8f4;">
+      <div style="min-width:0;">
         <div style="font-family:Arial,Helvetica,sans-serif;font-size:8.5px;text-transform:uppercase;letter-spacing:1.5px;color:#41663f;margin-bottom:3px;">Your Custom Estimate</div>
         <div style="font-family:Arial,Helvetica,sans-serif;font-size:27px;font-weight:800;color:#0d2e1a;line-height:1;">${escapeHtml(p.quote)}</div>
         <div style="font-size:9.5px;color:#6a6a6a;margin-top:4px;">No contract &bull; Cancel anytime &bull; Locally owned &amp; fully insured</div>
-      </div>
 
-      <!-- Tier 2: offer, quiet cream -->
-      <div style="padding:9px 16px;background:#faf6ea;border-top:1px solid #e8e0c8;">
-        <div style="font-family:Arial,Helvetica,sans-serif;font-size:8.5px;text-transform:uppercase;letter-spacing:1.5px;color:#96761f;margin-bottom:2px;">Welcome offer</div>
-        <div style="font-family:Arial,Helvetica,sans-serif;font-size:12.5px;font-weight:700;color:#0d2e1a;line-height:1.2;">${escapeHtml(offerHeadline)}</div>
-        <div style="font-size:9.5px;line-height:1.45;color:#5f5a48;margin-top:2px;">${escapeHtml(offerDetail)}</div>
-      </div>
-
-      <!-- Tier 3: action bar -->
-      <div style="padding:10px 16px;background:#0d2e1a;color:#ffffff;display:flex;align-items:center;justify-content:space-between;gap:12px;">
-        <div>
-          <div style="font-family:Arial,Helvetica,sans-serif;font-size:13.5px;font-weight:800;line-height:1.2;">Text your address to ${escapeHtml(p.phone)}</div>
-          <div style="font-size:9.5px;color:#c8d6c4;margin-top:3px;">or call &bull; Offer good through ${escapeHtml(offerDeadline)}</div>
+        <div style="margin-top:9px;padding-top:8px;border-top:1px solid #d9e3d5;">
+          <div style="font-family:Arial,Helvetica,sans-serif;font-size:12.5px;font-weight:800;color:#0d2e1a;line-height:1.2;">
+            <span style="font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#96761f;margin-right:7px;">Welcome offer</span>${escapeHtml(offerHeadline)}
+          </div>
+          <div style="font-size:9.5px;line-height:1.45;color:#5f6353;margin-top:2px;">${escapeHtml(offerDetail)} Offer good through ${escapeHtml(offerDeadline)}.</div>
         </div>
-        ${p.qrDataUri
-          ? `<img src="${p.qrDataUri}" alt="Scan for an instant quote" width="52" height="52" style="display:block;width:52px;height:52px;background:#ffffff;padding:3px;flex-shrink:0;" />`
-          : ''}
       </div>
+
+      ${p.qrDataUri
+        ? `<div style="flex-shrink:0;text-align:center;">
+        <img src="${p.qrDataUri}" alt="Scan to schedule your mow" width="68" height="68" style="display:block;width:68px;height:68px;background:#ffffff;padding:4px;border:1px solid #d5dfd2;margin:0 auto;" />
+        <div style="font-family:Arial,Helvetica,sans-serif;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#41663f;margin-top:4px;">Scan to schedule</div>
+      </div>`
+        : ''}
 
     </div>
 

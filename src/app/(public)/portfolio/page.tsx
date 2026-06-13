@@ -45,7 +45,7 @@ export default function PortfolioPage() {
       <div style={{ background: '#122b0a' }}>
         <div className="max-w-6xl mx-auto px-5 h-10 flex items-center justify-between text-xs text-white/90">
           <p className="font-semibold tracking-wide">
-            <span style={{ color: '#e9b949' }}>Limited time:</span> new customers get <span className="font-bold text-white">their first mow free</span>
+            <span style={{ color: '#e9b949' }}>Limited time:</span> new customers get <span className="font-bold text-white">25% off their first month</span>
           </p>
           <a href="mailto:graywolfworkers@gmail.com" className="hidden sm:block hover:text-white font-medium text-white/70">
             graywolfworkers@gmail.com
@@ -140,7 +140,7 @@ export default function PortfolioPage() {
               Want your lawn in this gallery?
             </h2>
             <p className="text-[15px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.72)' }}>
-              Get your exact price in under a minute — and your first mow is free.
+              Get your exact price in under a minute — and 25% off your first month.
             </p>
           </div>
           <Link href="/get-a-quote"

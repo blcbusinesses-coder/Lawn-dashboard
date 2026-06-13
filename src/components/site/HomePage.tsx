@@ -78,8 +78,8 @@ const FAQS = [
     a: 'No. There are no contracts and no cancellation fees. We keep customers by doing good work, not by locking people in.',
   },
   {
-    q: 'How does the free first mow work?',
-    a: 'Exactly how it sounds: we mow your lawn once, on us, so you can see the quality before you decide anything. No commitment, no strings, new customers only. If you like the work — and we think you will — we put you on the schedule.',
+    q: 'How does the 25% off first month deal work?',
+    a: 'New customers get 25% off their entire first month of service — on a typical weekly schedule, that works out to a free mow. No coupon codes, no hoops; the discount is applied automatically when you start.',
   },
   {
     q: 'What areas do you serve?',
@@ -145,7 +145,7 @@ function TopBar() {
     <div style={{ background: '#122b0a' }}>
       <div className="max-w-6xl mx-auto px-5 h-10 flex items-center justify-between text-xs text-white/90">
         <p className="font-semibold tracking-wide">
-          <span style={{ color: '#e9b949' }}>Limited time:</span> new customers get <span className="font-bold text-white">their first mow free</span>
+          <span style={{ color: '#e9b949' }}>Limited time:</span> new customers get <span className="font-bold text-white">25% off their first month</span>
         </p>
         <a href="mailto:graywolfworkers@gmail.com" className="hidden sm:block hover:text-white font-medium text-white/70">
           graywolfworkers@gmail.com
@@ -269,7 +269,7 @@ function StatsBar({ stats }: { stats: { years: string; lawns: string; rating: st
     [stats.years, 'Years serving Northeast Indiana'],
     [stats.lawns, 'Lawns maintained'],
     [stats.rating, 'Average customer rating'],
-    ['Free', 'First mow for new customers'],
+    ['25%', 'Off your first month'],
   ]
   return (
     <section className="bg-white" style={{ borderBottom: '1px solid #e2e2d8' }}>
@@ -436,7 +436,7 @@ function MidCTA() {
             Stop spending your weekends mowing.
           </h2>
           <p className="text-[15px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.72)' }}>
-            Your exact price is one address away — and your first mow is free.
+            Your exact price is one address away — and your first month is 25% off.
           </p>
         </div>
         <div className="w-full md:max-w-xl">
@@ -541,7 +541,7 @@ function FinalCTA() {
           Your lawn could be next.
         </h2>
         <p className="text-[16px] md:text-[17px] mb-9 max-w-xl mx-auto leading-relaxed" style={{ color: 'rgba(255,255,255,0.8)' }}>
-          Get your exact price in under a minute — and your first mow is free while the offer lasts.
+          Get your exact price in under a minute — and take 25% off your first month while the offer lasts.
         </p>
         <div className="flex justify-center">
           <AddressForm dark id="final-address" />

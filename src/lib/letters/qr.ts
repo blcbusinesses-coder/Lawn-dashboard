@@ -4,11 +4,11 @@
 
 import QRCode from 'qrcode'
 
-const QUOTE_URL = `${process.env.NEXT_PUBLIC_SITE_URL ?? 'https://graywolfworkers.com'}/get-a-quote`
+const QUOTE_URL = `${process.env.NEXT_PUBLIC_SITE_URL ?? 'https://graywolfworkers.com'}/schedule`
 
 let cached: string | null = null
 
-/** Data-URI QR code pointing at the instant-quote page. Cached per process. */
+/** Data-URI QR code pointing at the self-scheduling page. Cached per process. */
 export async function getQuoteQrDataUri(): Promise<string | null> {
   if (cached) return cached
   try {
