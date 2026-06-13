@@ -3,26 +3,26 @@ import { lookupProperty } from '@/lib/property/lookup'
 import { createServiceClient } from '@/lib/supabase/server'
 import type { LetterType } from '@/lib/letters/templates'
 
-// Letter copywriter prompts. The body is 2-3 short paragraphs — the template
-// adds the "Dear {name}," greeting, the quote callout, and the signature, so
-// the AI must NOT include those.
-const BASE_RULES = `Write the BODY of a short outreach letter for Gray Wolf Workers, a lawn care company in Kendallville, IN.
+// Letter copywriter prompts. This is a PERSONAL letter from the founder —
+// first person, warm, human. The template adds the "Dear {name}," greeting and
+// the signature, so the AI must NOT include those.
+const BASE_RULES = `You are the founder of Gray Wolf Workers, a small, locally-owned lawn-care company in Kendallville, Indiana. Write the BODY of a short, personal letter to ONE homeowner, in FIRST PERSON ("I", "me", "my"), as if you sat down and wrote it yourself.
 Rules:
-- 2 to 3 short paragraphs, conversational and warm, local feel, no fluff, no emojis.
-- Reference their specific property details naturally (lot size, home size, notable features) when available.
-- Mention that a personalized lawn-care estimate is included.
-- Warmly invite them to take advantage of our new-customer welcome offer (the details — 25% off their first month — appear in the highlighted box below, so do NOT restate the exact terms; just refer to it as a limited-time welcome offer for new customers).
-- Write in plain, natural English a homeowner would say out loud. Read every sentence back — no awkward or mixed-up constructions (e.g. "swing by our estimate" does not parse).
-- Do NOT write a greeting line (no "Dear ...") — that is added separately.
-- Do NOT write a closing or signature — that is added separately.
-- Do NOT state any dollar amount — the price shows separately.
-- Do NOT use the homeowner's name in the body.
-- Separate paragraphs with a blank line. Keep the whole thing under 110 words.`
+- Warm, genuine, human — like a handwritten note from a neighbor, NOT an ad or a flyer. No corporate or salesy language, no buzzwords, no emojis, no exclamation-point spam.
+- Exactly 3 short paragraphs:
+  1. A warm, personal opening: why I started Gray Wolf Workers, that I genuinely love taking care of lawns, and a local/neighborly note. Make it feel real, not templated.
+  2. A natural mention of THEIR place: reference their street by name and any property details (lot/home size) when given, and weave in their price as something I noticed. Put the token ${'`[[QUOTE]]`'} EXACTLY where the price belongs — do NOT write a dollar figure yourself. Shape it like: "I had a look at your lawn over on Maple Street and figured it would run about [[QUOTE]]."
+  3. Mention once, lightly, that new customers get 25% off their first month, and warmly invite them to get started.
+- Use the token [[QUOTE]] EXACTLY ONCE. Never write a "$" amount yourself.
+- Do NOT use the homeowner's NAME in the body (the greeting already has it). DO use their street name.
+- Plain, natural spoken English — read every sentence back so nothing is awkward or mixed up.
+- Do NOT write a greeting ("Dear ...") or any sign-off/signature — those are added separately.
+- Separate paragraphs with a blank line. Keep the whole thing under 140 words.`
 
 export const SYSTEM_BY_TYPE: Record<LetterType, string> = {
-  general: `${BASE_RULES}\nTone: friendly neighborhood lawn pro reaching out to offer service.`,
-  new_homeowner: `${BASE_RULES}\nContext: this person recently bought this home. Open by warmly congratulating them on their new home and welcoming them to the area, then offer to take lawn care off their plate while they settle in.`,
-  violation: `${BASE_RULES}\nContext: this property may have received a city notice about tall grass / weeds. Be tactful and helpful (never judgmental). Frame it as: we can get the lawn back in great shape quickly and keep it compliant and looking sharp going forward.`,
+  general: `${BASE_RULES}\nTone: a real local lawn-care owner writing to a neighbor he'd like to work for.`,
+  new_homeowner: `${BASE_RULES}\nContext: this person recently bought this home. Open by warmly congratulating them on the new home and welcoming them to the area, then offer to take lawn care off their plate while they get settled.`,
+  violation: `${BASE_RULES}\nContext: this property may have gotten a city notice about tall grass or weeds. Be tactful and kind, never judgmental — frame it as: I'd be glad to get the lawn back in great shape fast and keep it looking sharp and compliant going forward.`,
 }
 
 interface PricingTier      { max_sqft: number; price: number; label: string }
@@ -47,7 +47,7 @@ export interface LetterContent {
   letter_type: LetterType
 }
 
-const FALLBACK_COPY = `We provide professional lawn care across Kendallville and the surrounding area, and we'd love to take care of your lawn this season.\n\nWe keep things simple — no contracts, no hassle, just a sharp, well-kept lawn you can be proud of. A personalized estimate for your property is included below, along with a limited-time welcome offer for new customers.`
+const FALLBACK_COPY = `I started Gray Wolf Workers right here in Kendallville because I genuinely love taking care of lawns and looking out for my neighbors. There's nothing like the look of a yard that's been mowed and edged right.\n\nI had a look at your property and figured your lawn would run about [[QUOTE]] a mow. I keep things simple — no contracts, no hassle, just a sharp lawn you can be proud of.\n\nNew customers get 25% off their first month, and I'd love the chance to earn your business. Scan the code below or give me a call and I'll get you on the schedule.`
 
 /**
  * Pure quote computation from lot/living sqft + automation_settings.
@@ -100,14 +100,17 @@ export async function generateAiCopy(opts: {
   name?: string
   letterType: LetterType
 }): Promise<string> {
+  // Street name (first address segment) for the personal property reference.
+  const street = opts.address.split(',')[0]?.replace(/^\s*\d+\s*/, '').trim() || ''
+
   try {
     const msg = await anthropic.messages.create({
       model: 'claude-haiku-4-5',
-      max_tokens: 320,
+      max_tokens: 360,
       system: SYSTEM_BY_TYPE[opts.letterType],
       messages: [{
         role: 'user',
-        content: `Property details: ${opts.featuresText}. Address: ${opts.address.trim()}.${opts.name ? ` Homeowner: ${opts.name}.` : ''} Write the letter body now.`,
+        content: `Their street: ${street || 'unknown'}. Property details: ${opts.featuresText}. Full address: ${opts.address.trim()}. Remember: weave in their street name, put [[QUOTE]] where the price goes, and write it as a personal note from me. Write the letter body now.`,
       }],
     })
     const block = msg.content[0]

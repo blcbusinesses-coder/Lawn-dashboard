@@ -1,7 +1,8 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { buildLetterHtml, formatQuote, type LetterType } from '@/lib/letters/templates'
-import { getQuoteQrDataUri } from '@/lib/letters/qr'
+import { getScheduleQrDataUri } from '@/lib/letters/qr'
+import { getFounderName } from '@/lib/letters/branding'
 
 interface RecipientPayload {
   id: string
@@ -59,13 +60,21 @@ export async function POST(request: NextRequest) {
       }
 
       // ── Build inline letter HTML (no external assets) ───────────────────────
+      const street = (recipient.address || '').split(',')[0]?.replace(/^\s*\d+\s*/, '').trim() || ''
       const fileHtml = buildLetterHtml({
         name: recipient.name || 'Neighbor',
         aiCopy: recipient.ai_copy || '',
         quote: formatQuote(recipient.quote_amount || 35),
         phone: campaignPhone,
         letterType,
-        qrDataUri: await getQuoteQrDataUri(),
+        founderName: await getFounderName(),
+        qrDataUri: await getScheduleQrDataUri({
+          quote: recipient.quote_amount,
+          name: recipient.name,
+          street,
+          city: recipient.city,
+          zip: recipient.zip,
+        }),
       })
       debug.htmlChars = fileHtml.length
 

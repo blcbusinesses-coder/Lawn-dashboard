@@ -1,7 +1,8 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { generateLetterContent } from '@/lib/letters/generate'
 import { buildLetterHtml, formatQuote, type LetterType } from '@/lib/letters/templates'
-import { getQuoteQrDataUri } from '@/lib/letters/qr'
+import { getScheduleQrDataUri } from '@/lib/letters/qr'
+import { getFounderName } from '@/lib/letters/branding'
 
 // ── Geo helpers ───────────────────────────────────────────────────────────────
 
@@ -230,13 +231,21 @@ export async function sendLetterToLob(
   if (!lobKey) throw new Error('LOB_API_KEY not configured')
   if (!recipient.zip?.trim()) throw new Error('Missing ZIP code — Lob requires address_zip')
 
+  const street = (recipient.address || '').split(',')[0]?.replace(/^\s*\d+\s*/, '').trim() || ''
   const fileHtml = buildLetterHtml({
     name: recipient.name || 'Neighbor',
     aiCopy: recipient.ai_copy || '',
     quote: formatQuote(recipient.quote_amount || 35),
     phone: opts.phone,
     letterType: opts.letterType,
-    qrDataUri: await getQuoteQrDataUri(),
+    founderName: await getFounderName(),
+    qrDataUri: await getScheduleQrDataUri({
+      quote: recipient.quote_amount,
+      name: recipient.name,
+      street,
+      city: recipient.city,
+      zip: recipient.zip,
+    }),
   })
 
   const res = await fetch('https://api.lob.com/v1/letters', {

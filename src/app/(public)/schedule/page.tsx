@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
 // Self-scheduling page — the QR code on outreach letters lands here.
@@ -29,8 +29,24 @@ export default function SchedulePage() {
   const [phone, setPhone] = useState('')
   const [street, setStreet] = useState('')
   const [city, setCity] = useState('Kendallville')
+  const [zip, setZip] = useState('')
   const [date, setDate] = useState('')
+  const [quote, setQuote] = useState<number | null>(null)
   const [error, setError] = useState('')
+
+  // Pre-load from the letter QR link (?quote=&name=&street=&city=&zip=).
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search)
+    const next: () => void = () => {
+      const q = parseInt(p.get('quote') || '')
+      if (!Number.isNaN(q) && q > 0) setQuote(q)
+      const n = p.get('name'); if (n?.trim()) setName(n.trim())
+      const s = p.get('street'); if (s?.trim()) setStreet(s.trim())
+      const c = p.get('city'); if (c?.trim() && NOBLE_TOWNS.includes(c.trim())) setCity(c.trim())
+      const z = p.get('zip'); if (z?.trim()) setZip(z.trim())
+    }
+    Promise.resolve().then(next)
+  }, [])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -47,7 +63,7 @@ export default function SchedulePage() {
         body: JSON.stringify({
           name: name.trim(),
           phone: phone.trim(),
-          address: `${street.trim()}, ${city === 'Other' ? '' : city + ', '}IN`,
+          address: `${street.trim()}, ${city === 'Other' ? '' : city + ', '}IN${zip ? ' ' + zip : ''}`,
           preferred_date: date || null,
           source: 'website',
         }),
@@ -122,10 +138,23 @@ export default function SchedulePage() {
                   Pick your day.<br />We handle the rest.
                 </h1>
                 <p className="text-[14.5px] leading-relaxed" style={{ color: '#5b6354' }}>
-                  Tell us where and when — we&apos;ll text you your exact price and confirm your spot.
-                  New customers get <strong style={{ color: '#1e3d12' }}>25% off their first month</strong>.
+                  {quote
+                    ? <>Your spot is just a few details away — and your first month is <strong style={{ color: '#1e3d12' }}>25% off</strong>.</>
+                    : <>Tell us where and when — we&apos;ll text you your exact price and confirm your spot. New customers get <strong style={{ color: '#1e3d12' }}>25% off their first month</strong>.</>}
                 </p>
               </div>
+
+              {quote != null && (
+                <div className="mb-6 px-5 py-4 flex items-center justify-between" style={{ background: '#1e3d12' }}>
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: '#9fc18d' }}>Your custom quote</p>
+                    <p className="text-[26px] font-extrabold text-white leading-none mt-1">${quote}<span className="text-[15px] font-bold">/mow</span></p>
+                  </div>
+                  <p className="text-[12px] font-semibold text-right" style={{ color: '#cfe0c6' }}>
+                    25% off your<br />first month applied
+                  </p>
+                </div>
+              )}
 
               <form onSubmit={submit} className="bg-white p-6 md:p-8 space-y-5" style={{ border: '1px solid #e2e2d8', borderTop: '4px solid #1e3d12' }}>
                 <div>
