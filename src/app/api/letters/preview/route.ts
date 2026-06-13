@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { buildLetterHtml, formatQuote, type LetterType } from '@/lib/letters/templates'
+import { getQuoteQrDataUri } from '@/lib/letters/qr'
 
 // GET /api/letters/preview
 // Returns { html: string } — rendered letter HTML, no Lob call.
@@ -24,6 +25,7 @@ export async function GET(request: NextRequest) {
     quote: formatQuote(quoteAmount),
     phone,
     letterType,
+    qrDataUri: await getQuoteQrDataUri(),
   })
 
   return NextResponse.json({ html })

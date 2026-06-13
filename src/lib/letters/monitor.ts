@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { generateLetterContent } from '@/lib/letters/generate'
 import { buildLetterHtml, formatQuote, type LetterType } from '@/lib/letters/templates'
+import { getQuoteQrDataUri } from '@/lib/letters/qr'
 
 // ── Geo helpers ───────────────────────────────────────────────────────────────
 
@@ -235,6 +236,7 @@ export async function sendLetterToLob(
     quote: formatQuote(recipient.quote_amount || 35),
     phone: opts.phone,
     letterType: opts.letterType,
+    qrDataUri: await getQuoteQrDataUri(),
   })
 
   const res = await fetch('https://api.lob.com/v1/letters', {

@@ -79,7 +79,7 @@ const FAQS = [
   },
   {
     q: 'How does the free first mow work?',
-    a: 'New customers get their first mow free — you commit to your first month of service, and we take one full mow off the bill (25% off the month). It is not a trial with a catch; it is how we earn your business.',
+    a: 'Exactly how it sounds: we mow your lawn once, on us, so you can see the quality before you decide anything. No commitment, no strings, new customers only. If you like the work — and we think you will — we put you on the schedule.',
   },
   {
     q: 'What areas do you serve?',

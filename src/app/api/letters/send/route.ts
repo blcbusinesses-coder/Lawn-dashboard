@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { buildLetterHtml, formatQuote, type LetterType } from '@/lib/letters/templates'
+import { getQuoteQrDataUri } from '@/lib/letters/qr'
 
 interface RecipientPayload {
   id: string
@@ -64,6 +65,7 @@ export async function POST(request: NextRequest) {
         quote: formatQuote(recipient.quote_amount || 35),
         phone: campaignPhone,
         letterType,
+        qrDataUri: await getQuoteQrDataUri(),
       })
       debug.htmlChars = fileHtml.length
 

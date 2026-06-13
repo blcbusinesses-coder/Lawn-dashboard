@@ -30,13 +30,27 @@ export interface LetterParams {
   offerHeadline?: string
   /** Fine print explaining the offer terms. */
   offerDetail?: string
+  /** Offer deadline, e.g. "June 30". Defaults to end of this month (or next
+   *  month when fewer than 14 days remain, so the deadline is never absurd). */
+  offerDeadline?: string
+  /** Data-URI QR code for the action bar (links to the instant-quote page). */
+  qrDataUri?: string | null
 }
 
-/** Default new-customer offer: first mow free — mechanically 25% off the
- * first month when they commit to it (NOT a free trial). */
-export const DEFAULT_OFFER_HEADLINE = 'Your first mow is free'
+/** Default new-customer offer: the first mow is genuinely free — no
+ * commitment. One mow on us so they can see the quality before deciding. */
+export const DEFAULT_OFFER_HEADLINE = 'Your first mow is free — no commitment'
 export const DEFAULT_OFFER_DETAIL =
-  'New customers only. Stay with us for your first month and we take one full mow off the bill — 25% off the month. Not a trial; just our way of earning your business.'
+  'We mow your lawn once, on us, so you can see the quality before you decide anything. New customers only. No strings.'
+
+/** "June 30"-style deadline: end of this month, or end of next month when
+ * fewer than 14 days remain (a 2-day deadline reads as fake urgency). */
+export function defaultOfferDeadline(now = new Date()): string {
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+  const daysLeft = Math.ceil((endOfMonth.getTime() - now.getTime()) / 86_400_000)
+  const target = daysLeft < 14 ? new Date(now.getFullYear(), now.getMonth() + 2, 0) : endOfMonth
+  return target.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+}
 
 const TAGLINE: Record<LetterType, string> = {
   general: 'A note about your lawn',
@@ -52,6 +66,7 @@ export function buildLetterHtml(p: LetterParams): string {
   const letterType: LetterType = p.letterType ?? 'general'
   const offerHeadline = p.offerHeadline ?? DEFAULT_OFFER_HEADLINE
   const offerDetail   = p.offerDetail   ?? DEFAULT_OFFER_DETAIL
+  const offerDeadline = p.offerDeadline ?? defaultOfferDeadline()
 
   const paragraphs = (p.aiCopy || '')
     .split(/\n{2,}|\n/)
@@ -104,20 +119,34 @@ export function buildLetterHtml(p: LetterParams): string {
       ${bodyHtml}
     </div>
 
-    <!-- Quote callout — compact, subtle -->
-    <div style="margin:16px 0 0;padding:9px 15px;border-left:3px solid #0d2e1a;background:#f3f8f4;">
-      <div style="font-family:Arial,Helvetica,sans-serif;font-size:8.5px;text-transform:uppercase;letter-spacing:1.5px;color:#41663f;margin-bottom:2px;">Your Custom Estimate</div>
-      <div style="font-family:Arial,Helvetica,sans-serif;font-size:18px;font-weight:800;color:#0d2e1a;line-height:1.1;">${escapeHtml(p.quote)}
-        <span style="font-size:9.5px;font-weight:400;color:#6a6a6a;margin-left:8px;">No contract &bull; Cancel anytime &bull; Locally owned &amp; fully insured</span>
-      </div>
-    </div>
+    <!-- Estimate + offer + action: one three-tier box -->
+    <div style="margin:16px 0;border:1px solid #d5dfd2;">
 
-    <!-- New-customer offer — colored but quiet -->
-    <div style="margin:0 0 16px;padding:8px 15px;border-left:3px solid #b8932e;background:#faf6ea;">
-      <div style="font-family:Arial,Helvetica,sans-serif;font-size:11.5px;font-weight:700;color:#0d2e1a;line-height:1.2;">
-        <span style="font-size:8.5px;text-transform:uppercase;letter-spacing:1.5px;color:#96761f;margin-right:8px;">Welcome offer</span>${escapeHtml(offerHeadline)}
+      <!-- Tier 1: price, the hero -->
+      <div style="padding:12px 16px 11px;background:#f3f8f4;">
+        <div style="font-family:Arial,Helvetica,sans-serif;font-size:8.5px;text-transform:uppercase;letter-spacing:1.5px;color:#41663f;margin-bottom:3px;">Your Custom Estimate</div>
+        <div style="font-family:Arial,Helvetica,sans-serif;font-size:27px;font-weight:800;color:#0d2e1a;line-height:1;">${escapeHtml(p.quote)}</div>
+        <div style="font-size:9.5px;color:#6a6a6a;margin-top:4px;">No contract &bull; Cancel anytime &bull; Locally owned &amp; fully insured</div>
       </div>
-      <div style="font-size:9.5px;line-height:1.45;color:#5f5a48;margin-top:2px;">${escapeHtml(offerDetail)}</div>
+
+      <!-- Tier 2: offer, quiet cream -->
+      <div style="padding:9px 16px;background:#faf6ea;border-top:1px solid #e8e0c8;">
+        <div style="font-family:Arial,Helvetica,sans-serif;font-size:8.5px;text-transform:uppercase;letter-spacing:1.5px;color:#96761f;margin-bottom:2px;">Welcome offer</div>
+        <div style="font-family:Arial,Helvetica,sans-serif;font-size:12.5px;font-weight:700;color:#0d2e1a;line-height:1.2;">${escapeHtml(offerHeadline)}</div>
+        <div style="font-size:9.5px;line-height:1.45;color:#5f5a48;margin-top:2px;">${escapeHtml(offerDetail)}</div>
+      </div>
+
+      <!-- Tier 3: action bar -->
+      <div style="padding:10px 16px;background:#0d2e1a;color:#ffffff;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <div>
+          <div style="font-family:Arial,Helvetica,sans-serif;font-size:13.5px;font-weight:800;line-height:1.2;">Text your address to ${escapeHtml(p.phone)}</div>
+          <div style="font-size:9.5px;color:#c8d6c4;margin-top:3px;">or call &bull; Offer good through ${escapeHtml(offerDeadline)}</div>
+        </div>
+        ${p.qrDataUri
+          ? `<img src="${p.qrDataUri}" alt="Scan for an instant quote" width="52" height="52" style="display:block;width:52px;height:52px;background:#ffffff;padding:3px;flex-shrink:0;" />`
+          : ''}
+      </div>
+
     </div>
 
     <!-- Close -->
