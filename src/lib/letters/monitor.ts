@@ -213,6 +213,7 @@ const FROM_ADDRESS = {
 }
 
 export interface SendableRecipient {
+  id?: string | null
   name: string | null
   address: string | null
   city: string | null
@@ -240,6 +241,7 @@ export async function sendLetterToLob(
     letterType: opts.letterType,
     founderName: await getFounderName(),
     qrDataUri: await getScheduleQrDataUri({
+      recipientId: recipient.id,
       quote: recipient.quote_amount,
       name: recipient.name,
       street,

@@ -80,9 +80,10 @@ export default function SchedulePage() {
       const street = p.get('street')?.trim()
       const city = p.get('city')?.trim()
       const zip = p.get('zip')?.trim()
+      const rid = p.get('rid')?.trim()
       if (name && street) {
         setSelected({
-          recipient_id: '',
+          recipient_id: rid || '',
           name,
           address: street,
           city: city ?? null,

@@ -16,6 +16,8 @@ export interface ScheduleQrParams {
   street?: string | null
   city?: string | null
   zip?: string | null
+  /** letter_recipients row id, so a QR booking ties back to this exact record. */
+  recipientId?: string | null
 }
 
 // Cache by encoded URL so identical recipients don't re-render.
@@ -23,6 +25,7 @@ const cache = new Map<string, string>()
 
 function buildScheduleUrl(p: ScheduleQrParams): string {
   const qs = new URLSearchParams()
+  if (p.recipientId?.trim()) qs.set('rid', p.recipientId.trim())
   if (p.quote != null && p.quote > 0) qs.set('quote', String(Math.round(p.quote)))
   if (p.name?.trim())   qs.set('name', p.name.trim())
   if (p.street?.trim()) qs.set('street', p.street.trim())

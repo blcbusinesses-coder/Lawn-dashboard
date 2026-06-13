@@ -69,6 +69,7 @@ export async function POST(request: NextRequest) {
         letterType,
         founderName: await getFounderName(),
         qrDataUri: await getScheduleQrDataUri({
+          recipientId: recipient.id,
           quote: recipient.quote_amount,
           name: recipient.name,
           street,

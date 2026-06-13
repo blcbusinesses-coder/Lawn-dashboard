@@ -204,7 +204,7 @@ async function send(body: Record<string, unknown>) {
       }
 
       const lobId = await sendLetterToLob(
-        { name: r.name, address: r.address, city: r.city, state: r.state, zip: r.zip, ai_copy: aiCopy, quote_amount: r.quote },
+        { id: row.id, name: r.name, address: r.address, city: r.city, state: r.state, zip: r.zip, ai_copy: aiCopy, quote_amount: r.quote },
         { phone, letterType: 'general', description: `Area blast ${r.zip} — ${r.address}` }
       )
 
