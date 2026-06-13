@@ -9,12 +9,13 @@ import type { LetterType } from '@/lib/letters/templates'
 const BASE_RULES = `You are the founder of Gray Wolf Workers, a small, locally-owned lawn-care company in Kendallville, Indiana. Write the BODY of a heartfelt, personal letter to ONE homeowner, in FIRST PERSON ("I", "me", "my"), as if you sat down at the kitchen table and wrote it by hand.
 
 These facts about me are true — use them and do not invent different numbers:
-- I started Gray Wolf Workers about four years ago, basically with one mower and a couple of yards.
-- Today I take care of around 30 lawns across the Kendallville area.
+- Four years ago, when I was just twelve years old, I started Gray Wolf Workers with one mower and a couple of yards.
+- Since then it's grown into a four-person crew, and we now take care of around 30 lawns across the Kendallville area.
+- We're finally at the point where we're ready to take on more work — that's why I'm reaching out.
 - I genuinely love this work — there is nothing like the look of a freshly cut, edged yard, and I take real pride in it.
 
 Rules:
-- Lead with HEART, not a pitch. The first paragraph should be warm and human — my story (four years ago, building it to ~30 lawns), why I love taking care of lawns, and a local/neighborly feeling. Make it feel like a real person wrote it. Do NOT mention price or offers in the first paragraph.
+- Lead with HEART, not a pitch. The first paragraph should be warm and human — my story (starting at twelve four years ago, building it into a four-person crew on ~30 lawns, finally ready to take on more), why I love taking care of lawns, and a local/neighborly feeling. Make it feel like a real person wrote it. Do NOT mention price or offers in the first paragraph.
 - Exactly 3 short paragraphs:
   1. My heartfelt story and why I do this (no selling yet).
   2. Turn to THEIR place: reference their street by name and any property details when given, and weave in their price naturally as something I noticed. Put the token ${'`[[QUOTE]]`'} EXACTLY where the price belongs — never write a dollar figure yourself. Shape it like: "That's why I wanted to reach out about your place over on Maple Street — I figured your lawn would run about [[QUOTE]]."
@@ -54,7 +55,7 @@ export interface LetterContent {
   letter_type: LetterType
 }
 
-const FALLBACK_COPY = `About four years ago I started Gray Wolf Workers with one mower and a couple of yards, mostly because I love this work — there's nothing like the look of a lawn that's been cut and edged right. Since then I've grown it to around 30 lawns I care for across the Kendallville area, and I still take pride in every single one.\n\nThat's why I wanted to reach out about your place. I had a look and figured your lawn would run about [[QUOTE]] a mow. I keep things simple — no contracts, no hassle, just a sharp lawn you can be proud of and someone who actually shows up.\n\nNew customers get 25% off their first month, and I'd genuinely love the chance to earn your business. Scan the code below or give me a call and I'll get you on the schedule.`
+const FALLBACK_COPY = `Four years ago, when I was just twelve, I started Gray Wolf Workers with one mower and a couple of yards — mostly because I love this work, and there's nothing like the look of a lawn that's been cut and edged right. Since then it's grown into a four-person crew taking care of around 30 lawns across the Kendallville area, and we're finally ready to take on more.\n\nThat's why I wanted to reach out about your place. I had a look and figured your lawn would run about [[QUOTE]] a mow. I keep things simple — no contracts, no hassle, just a sharp lawn you can be proud of and a crew that actually shows up.\n\nNew customers get 25% off their first month, and I'd genuinely love the chance to earn your business. Scan the code below or give me a call and I'll get you on the schedule.`
 
 /**
  * Pure quote computation from lot/living sqft + automation_settings.
