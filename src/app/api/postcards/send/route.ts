@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
   const serviceClient = createServiceClient() // true service-role, for Storage uploads (bypasses RLS)
   const lobKey = process.env.LOB_API_KEY
   const gmapsKey = process.env.GOOGLE_MAPS_API_KEY
-  const campaignPhone = phone ?? '(260) 000-0000'
+  const campaignPhone = phone ?? '(260) 599-4253'
 
   if (!lobKey) return NextResponse.json({ error: 'LOB_API_KEY not configured' }, { status: 500 })
 

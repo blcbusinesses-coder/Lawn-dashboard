@@ -89,7 +89,7 @@ export default function LetterMonitor({ sourceKey }: { sourceKey: SourceKey }) {
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [phone, setPhone] = useState('(260) 000-0000')
+  const [phone, setPhone] = useState('(260) 599-4253')
   const [sending, setSending] = useState(false)
   const [genProgress, setGenProgress] = useState<{ done: number; total: number } | null>(null)
 

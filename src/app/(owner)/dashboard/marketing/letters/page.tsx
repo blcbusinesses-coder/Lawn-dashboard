@@ -136,7 +136,7 @@ export default function LettersPage() {
     letter_type: 'general',
     send_date: 'ASAP',
     budget_cap: 100,
-    phone: '(260) 000-0000',
+    phone: '(260) 599-4253',
   })
   const [activeView, setActiveView]   = useState<ActiveView>('setup')
   const [analyzing, setAnalyzing]     = useState(false)
@@ -393,7 +393,7 @@ export default function LettersPage() {
         body: JSON.stringify({
           name: `${c.name} (Resend)`, description: c.description,
           letter_type: c.letter_type ?? 'general', send_date: 'ASAP',
-          budget_cap: c.budget_cap, phone: data.phone ?? '(260) 000-0000',
+          budget_cap: c.budget_cap, phone: data.phone ?? '(260) 599-4253',
         }),
       })
       if (!newCampaignRes.ok) throw new Error('Failed to create resend campaign')
@@ -404,7 +404,7 @@ export default function LettersPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           campaign_id: newCampaign.id,
-          phone: data.phone ?? '(260) 000-0000',
+          phone: data.phone ?? '(260) 599-4253',
           letter_type: c.letter_type ?? 'general',
           recipients: recipients.map((r) => ({
             id: (r.id as string) ?? crypto.randomUUID(),
@@ -437,7 +437,7 @@ export default function LettersPage() {
     const params = new URLSearchParams({
       name:         sample?.name         ?? 'Alex Johnson',
       quote_amount: String(sample?.quote_amount ?? 45),
-      phone:        campaign.phone       ?? '(260) 000-0000',
+      phone:        campaign.phone       ?? '(260) 599-4253',
       ai_copy:      sample?.ai_copy      ?? '',
       letter_type:  campaign.letter_type,
     })
@@ -673,7 +673,7 @@ export default function LettersPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Phone Number</Label>
-                  <Input placeholder="(260) 000-0000" value={campaign.phone} onChange={e => setCampaign(p => ({ ...p, phone: e.target.value }))} />
+                  <Input placeholder="(260) 599-4253" value={campaign.phone} onChange={e => setCampaign(p => ({ ...p, phone: e.target.value }))} />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Description</Label>

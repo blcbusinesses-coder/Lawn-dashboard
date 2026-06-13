@@ -146,7 +146,7 @@ async function preview(body: Record<string, unknown>) {
 // ── Send ──────────────────────────────────────────────────────────────────────
 
 async function send(body: Record<string, unknown>) {
-  const phone = String(body.phone ?? '').trim() || '(260) 000-0000'
+  const phone = String(body.phone ?? '').trim() || '(260) 599-4253'
   const recipients = (body.recipients ?? []) as BlastCandidate[]
   if (!Array.isArray(recipients) || recipients.length === 0) {
     return NextResponse.json({ error: 'recipients are required' }, { status: 400 })

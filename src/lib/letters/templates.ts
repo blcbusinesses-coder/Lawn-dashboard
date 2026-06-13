@@ -147,13 +147,13 @@ export function buildLetterHtml(p: LetterParams): string {
     </div>
 
     <!-- QR + offer (no box) -->
-    <div style="margin-top:26px;padding-top:15px;border-top:1px solid #dcdcd2;display:flex;align-items:center;gap:18px;">
+    <div style="margin-top:28px;padding-top:16px;border-top:1px solid #dcdcd2;display:flex;align-items:center;gap:26px;">
       ${p.qrDataUri
         ? `<img src="${p.qrDataUri}" alt="Scan to schedule your first mow" width="84" height="84" style="display:block;width:84px;height:84px;flex-shrink:0;" />`
         : ''}
       <div>
-        <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:800;color:#0d2e1a;line-height:1.25;">Scan to schedule &mdash; ${escapeHtml(offerHeadline)}</div>
-        <div style="font-size:11.5px;color:#5a5a5a;margin-top:5px;line-height:1.55;">
+        <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:800;color:#0d2e1a;line-height:1.3;">Scan to schedule &mdash; ${escapeHtml(offerHeadline)}</div>
+        <div style="font-size:11.5px;color:#5a5a5a;margin-top:7px;line-height:1.65;">
           Your price is already loaded in &mdash; just pick a day that works.<br>
           Prefer to talk? Call or text me at <strong style="color:#0d2e1a;">${escapeHtml(p.phone)}</strong>. Offer good through ${escapeHtml(offerDeadline)}.
         </div>

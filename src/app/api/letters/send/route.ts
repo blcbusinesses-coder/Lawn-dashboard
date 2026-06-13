@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
 
   const adminClient = createServiceClient()
   const lobKey = process.env.LOB_API_KEY
-  const campaignPhone = phone ?? '(260) 000-0000'
+  const campaignPhone = phone ?? '(260) 599-4253'
   const letterType: LetterType =
     letter_type === 'new_homeowner' || letter_type === 'violation' ? letter_type : 'general'
 

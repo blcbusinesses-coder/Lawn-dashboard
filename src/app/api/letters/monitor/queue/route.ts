@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
     .in('id', ids)
     .eq('status', 'review')
 
-  const campaignPhone = phone ?? '(260) 000-0000'
+  const campaignPhone = phone ?? '(260) 599-4253'
   const results: Array<{ id: string; success: boolean; lob_id?: string; error?: string }> = []
 
   for (const row of (rows ?? []) as Array<Record<string, unknown>>) {

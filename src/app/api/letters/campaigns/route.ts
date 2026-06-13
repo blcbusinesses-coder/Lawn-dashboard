@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       letter_type: letter_type ?? 'general',
       send_date: send_date ?? 'ASAP',
       budget_cap: budget_cap ?? 100,
-      phone: phone ?? '(260) 000-0000',
+      phone: phone ?? '(260) 599-4253',
     })
     .select()
     .single()

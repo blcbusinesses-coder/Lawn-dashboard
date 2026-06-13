@@ -145,7 +145,7 @@ export default function PostcardsPage() {
     tags: '',
     send_date: 'ASAP',
     budget_cap: 100,
-    phone: '(260) 000-0000',
+    phone: '(260) 599-4253',
   })
   const [activeView, setActiveView]   = useState<ActiveView>('setup')
   const [analyzing, setAnalyzing]     = useState(false)
@@ -455,7 +455,7 @@ export default function PostcardsPage() {
           description: c.description,
           send_date: 'ASAP',
           budget_cap: c.budget_cap,
-          phone: data.phone ?? '(260) 000-0000',
+          phone: data.phone ?? '(260) 599-4253',
         }),
       })
       if (!newCampaignRes.ok) throw new Error('Failed to create resend campaign')
@@ -467,7 +467,7 @@ export default function PostcardsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           campaign_id: newCampaign.id,
-          phone: data.phone ?? '(260) 000-0000',
+          phone: data.phone ?? '(260) 599-4253',
           recipients: recipients.map((r) => ({
             id: (r.id as string) ?? crypto.randomUUID(),
             name: r.name ?? 'Homeowner',
@@ -510,7 +510,7 @@ export default function PostcardsPage() {
       address:       sample?.address       ?? '456 Oak Street',
       quote_amount:  String(sample?.quote_amount  ?? 45),
       nearby_count:  String(sample?.nearby_count  ?? 4),
-      phone:         campaign.phone        ?? '(260) 000-0000',
+      phone:         campaign.phone        ?? '(260) 599-4253',
       ai_copy:       sample?.ai_copy       ?? '',
     })
 
@@ -778,7 +778,7 @@ export default function PostcardsPage() {
                 <div className="space-y-1.5">
                   <Label>Phone Number</Label>
                   <Input
-                    placeholder="(260) 000-0000"
+                    placeholder="(260) 599-4253"
                     value={campaign.phone}
                     onChange={e => setCampaign(p => ({ ...p, phone: e.target.value }))}
                   />

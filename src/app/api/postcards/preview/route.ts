@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   const address      = searchParams.get('address')      || '456 Oak Street'
   const quoteAmount  = parseInt(searchParams.get('quote_amount')  || '45')
   const nearbyCount  = parseInt(searchParams.get('nearby_count')  || '4')
-  const phone        = searchParams.get('phone')        || '(260) 000-0000'
+  const phone        = searchParams.get('phone')        || '(260) 599-4253'
   const aiCopy       = searchParams.get('ai_copy')      ||
     'Your property looks like a great fit for our lawn service. We mow lawns all across Kendallville and would love to keep yours looking sharp all season.'
 

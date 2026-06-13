@@ -39,7 +39,7 @@ export default function AreaBlastPage() {
   const [count, setCount] = useState('25')
   const [targetQuote, setTargetQuote] = useState('50')
   const [band, setBand] = useState('10')
-  const [phone, setPhone] = useState('(260) 000-0000')
+  const [phone, setPhone] = useState('(260) 599-4253')
 
   const [previewing, setPreviewing] = useState(false)
   const [sending, setSending] = useState(false)

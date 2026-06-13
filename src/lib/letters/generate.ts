@@ -6,18 +6,25 @@ import type { LetterType } from '@/lib/letters/templates'
 // Letter copywriter prompts. This is a PERSONAL letter from the founder —
 // first person, warm, human. The template adds the "Dear {name}," greeting and
 // the signature, so the AI must NOT include those.
-const BASE_RULES = `You are the founder of Gray Wolf Workers, a small, locally-owned lawn-care company in Kendallville, Indiana. Write the BODY of a short, personal letter to ONE homeowner, in FIRST PERSON ("I", "me", "my"), as if you sat down and wrote it yourself.
+const BASE_RULES = `You are the founder of Gray Wolf Workers, a small, locally-owned lawn-care company in Kendallville, Indiana. Write the BODY of a heartfelt, personal letter to ONE homeowner, in FIRST PERSON ("I", "me", "my"), as if you sat down at the kitchen table and wrote it by hand.
+
+These facts about me are true — use them and do not invent different numbers:
+- I started Gray Wolf Workers about four years ago, basically with one mower and a couple of yards.
+- Today I take care of around 30 lawns across the Kendallville area.
+- I genuinely love this work — there is nothing like the look of a freshly cut, edged yard, and I take real pride in it.
+
 Rules:
-- Warm, genuine, human — like a handwritten note from a neighbor, NOT an ad or a flyer. No corporate or salesy language, no buzzwords, no emojis, no exclamation-point spam.
+- Lead with HEART, not a pitch. The first paragraph should be warm and human — my story (four years ago, building it to ~30 lawns), why I love taking care of lawns, and a local/neighborly feeling. Make it feel like a real person wrote it. Do NOT mention price or offers in the first paragraph.
 - Exactly 3 short paragraphs:
-  1. A warm, personal opening: why I started Gray Wolf Workers, that I genuinely love taking care of lawns, and a local/neighborly note. Make it feel real, not templated.
-  2. A natural mention of THEIR place: reference their street by name and any property details (lot/home size) when given, and weave in their price as something I noticed. Put the token ${'`[[QUOTE]]`'} EXACTLY where the price belongs — do NOT write a dollar figure yourself. Shape it like: "I had a look at your lawn over on Maple Street and figured it would run about [[QUOTE]]."
-  3. Mention once, lightly, that new customers get 25% off their first month, and warmly invite them to get started.
+  1. My heartfelt story and why I do this (no selling yet).
+  2. Turn to THEIR place: reference their street by name and any property details when given, and weave in their price naturally as something I noticed. Put the token ${'`[[QUOTE]]`'} EXACTLY where the price belongs — never write a dollar figure yourself. Shape it like: "That's why I wanted to reach out about your place over on Maple Street — I figured your lawn would run about [[QUOTE]]."
+  3. Lightly mention that new customers get 25% off their first month, and warmly invite them to get started.
 - Use the token [[QUOTE]] EXACTLY ONCE. Never write a "$" amount yourself.
 - Do NOT use the homeowner's NAME in the body (the greeting already has it). DO use their street name.
+- Warm and sincere but never corporate, salesy, or gushing. No buzzwords, no emojis, no exclamation-point spam.
 - Plain, natural spoken English — read every sentence back so nothing is awkward or mixed up.
 - Do NOT write a greeting ("Dear ...") or any sign-off/signature — those are added separately.
-- Separate paragraphs with a blank line. Keep the whole thing under 140 words.`
+- Separate paragraphs with a blank line. Keep the whole thing under 160 words.`
 
 export const SYSTEM_BY_TYPE: Record<LetterType, string> = {
   general: `${BASE_RULES}\nTone: a real local lawn-care owner writing to a neighbor he'd like to work for.`,
@@ -47,7 +54,7 @@ export interface LetterContent {
   letter_type: LetterType
 }
 
-const FALLBACK_COPY = `I started Gray Wolf Workers right here in Kendallville because I genuinely love taking care of lawns and looking out for my neighbors. There's nothing like the look of a yard that's been mowed and edged right.\n\nI had a look at your property and figured your lawn would run about [[QUOTE]] a mow. I keep things simple — no contracts, no hassle, just a sharp lawn you can be proud of.\n\nNew customers get 25% off their first month, and I'd love the chance to earn your business. Scan the code below or give me a call and I'll get you on the schedule.`
+const FALLBACK_COPY = `About four years ago I started Gray Wolf Workers with one mower and a couple of yards, mostly because I love this work — there's nothing like the look of a lawn that's been cut and edged right. Since then I've grown it to around 30 lawns I care for across the Kendallville area, and I still take pride in every single one.\n\nThat's why I wanted to reach out about your place. I had a look and figured your lawn would run about [[QUOTE]] a mow. I keep things simple — no contracts, no hassle, just a sharp lawn you can be proud of and someone who actually shows up.\n\nNew customers get 25% off their first month, and I'd genuinely love the chance to earn your business. Scan the code below or give me a call and I'll get you on the schedule.`
 
 /**
  * Pure quote computation from lot/living sqft + automation_settings.
