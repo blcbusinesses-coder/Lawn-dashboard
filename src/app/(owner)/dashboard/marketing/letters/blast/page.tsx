@@ -35,7 +35,10 @@ interface CandidateRow extends Candidate {
 }
 
 export default function AreaBlastPage() {
+  const [mode, setMode] = useState<'zip' | 'area'>('zip')
   const [zip, setZip] = useState('46755')
+  const [center, setCenter] = useState('')
+  const [radius, setRadius] = useState('0.5')
   const [count, setCount] = useState('25')
   const [targetQuote, setTargetQuote] = useState('50')
   const [band, setBand] = useState('10')
@@ -60,7 +63,10 @@ export default function AreaBlastPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'preview',
+          mode,
           zip: zip.trim(),
+          center: center.trim(),
+          radius: Number(radius) || 0.5,
           count: Number(count) || 25,
           target_quote: Number(targetQuote) || 50,
           min_quote: (Number(targetQuote) || 50) - (Number(band) || 10),
@@ -76,7 +82,7 @@ export default function AreaBlastPage() {
       setRows(candidates.map(c => ({ ...c, selected: true, sendState: 'idle' as SendState })))
       setStats({ scanned: data.scanned ?? 0, in_band: data.in_band ?? 0 })
       if (candidates.length === 0) {
-        toast.info('No new homes in that quote range — try widening the band or another ZIP.')
+        toast.info('No new homes in that quote range — try widening the band, radius, or area.')
       } else {
         toast.success(`Found ${candidates.length} homes in your range`)
       }
@@ -184,11 +190,39 @@ export default function AreaBlastPage() {
 
       {/* Controls */}
       <div className="border rounded-xl p-5 bg-white space-y-4">
+        {/* Mode toggle */}
+        <div className="inline-flex rounded-lg border border-zinc-200 p-0.5 bg-zinc-50">
+          {([['zip', 'By ZIP code'], ['area', 'By neighborhood']] as const).map(([m, label]) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              className={`px-3.5 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                mode === m ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-500 hover:text-zinc-700'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div>
-            <Label htmlFor="zip">ZIP code</Label>
-            <Input id="zip" value={zip} onChange={e => setZip(e.target.value)} placeholder="46755" maxLength={5} />
-          </div>
+          {mode === 'zip' ? (
+            <div>
+              <Label htmlFor="zip">ZIP code</Label>
+              <Input id="zip" value={zip} onChange={e => setZip(e.target.value)} placeholder="46755" maxLength={5} />
+            </div>
+          ) : (
+            <>
+              <div className="col-span-2">
+                <Label htmlFor="center">Center on (street or address)</Label>
+                <Input id="center" value={center} onChange={e => setCenter(e.target.value)} placeholder="e.g. Riverview Dr, Kendallville" />
+              </div>
+              <div>
+                <Label htmlFor="radius">Radius (miles)</Label>
+                <Input id="radius" type="number" min={0.1} max={3} step={0.1} value={radius} onChange={e => setRadius(e.target.value)} />
+              </div>
+            </>
+          )}
           <div>
             <Label htmlFor="count"># of homes</Label>
             <Input id="count" type="number" min={1} max={200} value={count} onChange={e => setCount(e.target.value)} />
@@ -212,8 +246,9 @@ export default function AreaBlastPage() {
             {previewing ? 'Scanning…' : 'Find homes'}
           </Button>
           <span className="text-xs text-zinc-500">
+            {mode === 'area' && 'Pulls homes within the radius of that spot · '}
             Quotes {formatCurrency((Number(targetQuote) || 50) - (Number(band) || 10))}–{formatCurrency((Number(targetQuote) || 50) + (Number(band) || 10))}
-            {' '}· homes already contacted are excluded automatically
+            {' '}· already-contacted homes excluded
           </span>
         </div>
       </div>
@@ -221,7 +256,7 @@ export default function AreaBlastPage() {
       {/* Results */}
       {stats && (
         <div className="text-sm text-zinc-600">
-          Scanned <strong>{stats.scanned}</strong> homes in {zip} · <strong>{stats.in_band}</strong> priced in range ·
+          Scanned <strong>{stats.scanned}</strong> homes {mode === 'area' ? `near ${center.trim()}` : `in ${zip}`} · <strong>{stats.in_band}</strong> priced in range ·
           showing <strong>{rows.length}</strong> not yet contacted
         </div>
       )}

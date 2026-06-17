@@ -51,32 +51,71 @@ async function loadSettings(): Promise<SettingsMap> {
   return settings
 }
 
+/** Geocode a center point (address, street, or landmark) via Nominatim. Biased
+ *  to the Kendallville area so a bare street name resolves locally. */
+async function geocodeCenter(q: string): Promise<{ lat: number; lng: number } | null> {
+  const query = /kendallville|indiana|\bin\b|\d{5}/i.test(q) ? q : `${q}, Kendallville, IN`
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&countrycodes=us`
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'GrayWolfWorkers/1.0', 'Accept-Language': 'en-US' },
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (!res.ok) return null
+    const data = (await res.json()) as Array<{ lat: string; lon: string }>
+    if (!data.length) return null
+    return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }
+  } catch {
+    return null
+  }
+}
+
 // ── Preview ───────────────────────────────────────────────────────────────────
 
 async function preview(body: Record<string, unknown>) {
+  const mode = body.mode === 'area' ? 'area' : 'zip'
   const zip = String(body.zip ?? '').trim().slice(0, 5)
   const count = Math.min(Math.max(Number(body.count) || 25, 1), 200)
   const targetQuote = Number(body.target_quote) || 50
   const minQuote = Number(body.min_quote) || targetQuote - 10
   const maxQuote = Number(body.max_quote) || targetQuote + 10
 
-  if (!/^\d{5}$/.test(zip)) {
-    return NextResponse.json({ error: 'A 5-digit ZIP code is required' }, { status: 400 })
-  }
-
   const apiKey = process.env.RENTCAST_API_KEY
   if (!apiKey) {
     return NextResponse.json({ error: 'RENTCAST_API_KEY is not configured' }, { status: 500 })
   }
 
+  // Build the RentCast query: a ZIP pull, or a radius pull around a point the
+  // owner anchors on (a street/address in the neighborhood they want).
+  // Single-family only — we don't want apartments or empty parcels.
+  let url: string
+  let centerLabel = ''
+  if (mode === 'area') {
+    const center = String(body.center ?? '').trim()
+    const radius = Math.min(Math.max(Number(body.radius) || 0.5, 0.1), 3)
+    if (center.length < 3) {
+      return NextResponse.json({ error: 'Enter a street or address to center the area on' }, { status: 400 })
+    }
+    const geo = await geocodeCenter(center)
+    if (!geo) {
+      return NextResponse.json({ error: `Couldn't find "${center}". Try a full street address.` }, { status: 400 })
+    }
+    centerLabel = center
+    url =
+      `https://api.rentcast.io/v1/properties?latitude=${geo.lat}&longitude=${geo.lng}&radius=${radius}` +
+      `&propertyType=${encodeURIComponent('Single Family')}&limit=500`
+  } else {
+    if (!/^\d{5}$/.test(zip)) {
+      return NextResponse.json({ error: 'A 5-digit ZIP code is required' }, { status: 400 })
+    }
+    url =
+      `https://api.rentcast.io/v1/properties?zipCode=${zip}` +
+      `&propertyType=${encodeURIComponent('Single Family')}&limit=500`
+  }
+
   const settings = await loadSettings()
   const admin = createServiceClient()
 
-  // One bulk pull per ZIP (max 500/request). Single-family only — we don't
-  // want to mail apartment buildings or empty parcels.
-  const url =
-    `https://api.rentcast.io/v1/properties?zipCode=${zip}` +
-    `&propertyType=${encodeURIComponent('Single Family')}&limit=500`
   const res = await fetch(url, {
     headers: { 'X-Api-Key': apiKey, Accept: 'application/json' },
     signal: AbortSignal.timeout(30_000),
@@ -87,7 +126,7 @@ async function preview(body: Record<string, unknown>) {
   }
   const records = (await res.json()) as RentCastRecord[]
   if (!Array.isArray(records) || records.length === 0) {
-    return NextResponse.json({ candidates: [], scanned: 0, in_band: 0 })
+    return NextResponse.json({ candidates: [], scanned: 0, in_band: 0, center: centerLabel })
   }
 
   // Price every record locally and keep the in-band ones.
@@ -97,12 +136,14 @@ async function preview(body: Record<string, unknown>) {
     const city = (r.city ?? '').trim()
     if (!street) continue
 
+    const recZip = (r.zipCode ?? zip ?? '').trim().slice(0, 5)
+
     const lotSqft = typeof r.lotSize === 'number' && r.lotSize > 0 ? r.lotSize : null
     const livingSqft = typeof r.squareFootage === 'number' && r.squareFootage > 0 ? r.squareFootage : null
     // No lot size on record → can't price it honestly; skip rather than guess.
     if (!lotSqft) continue
 
-    const fullAddress = `${street}, ${city}, ${r.state ?? 'IN'} ${zip}`
+    const fullAddress = `${street}, ${city}, ${r.state ?? 'IN'} ${recZip}`
     const { quoteAmount } = computeQuote(lotSqft, livingSqft, fullAddress, settings)
     if (quoteAmount < minQuote || quoteAmount > maxQuote) continue
 
@@ -114,7 +155,7 @@ async function preview(body: Record<string, unknown>) {
       address: street,
       city,
       state: (r.state ?? 'IN').trim() || 'IN',
-      zip,
+      zip: recZip,
       lot_sqft: lotSqft,
       living_sqft: livingSqft,
       quote: quoteAmount,
@@ -137,6 +178,7 @@ async function preview(body: Record<string, unknown>) {
     candidates,
     scanned: records.length,
     in_band: inBand.length,
+    center: centerLabel,
     already_contacted: inBand.length - candidates.length > 0
       ? inBand.filter(c => seen.has(normalizeAddress(c.address, c.zip))).length
       : 0,
