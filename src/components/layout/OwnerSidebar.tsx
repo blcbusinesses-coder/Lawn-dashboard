@@ -45,6 +45,7 @@ const NAV_GROUPS: NavGroup[] = [
           { href: '/dashboard/marketing/letters/blast',         label: 'Area Blast',       Icon: Crosshair },
           { href: '/dashboard/marketing/letters/new-homeowner', label: 'New Homeowner',   Icon: Home },
           { href: '/dashboard/marketing/letters/violations',    label: 'Grass Violations', Icon: ListChecks },
+          { href: '/dashboard/marketing/letters/analytics',     label: 'Analytics',        Icon: BarChart2 },
         ],
       },
     ],

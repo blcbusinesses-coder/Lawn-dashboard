@@ -81,6 +81,17 @@ export default function SchedulePage() {
       const city = p.get('city')?.trim()
       const zip = p.get('zip')?.trim()
       const rid = p.get('rid')?.trim()
+
+      // Log the QR scan once per page load (a QR link always carries rid+quote).
+      if ((rid || (name && street)) && !sessionStorage.getItem('gw_scan_logged')) {
+        sessionStorage.setItem('gw_scan_logged', '1')
+        fetch('/api/schedule/track-scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rid: rid || undefined }),
+        }).catch(() => {})
+      }
+
       if (name && street) {
         setSelected({
           recipient_id: rid || '',
