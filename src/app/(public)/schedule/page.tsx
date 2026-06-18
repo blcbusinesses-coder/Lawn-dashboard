@@ -129,7 +129,8 @@ export default function SchedulePage() {
     setError('')
     if (!selected) return
     if (!phone.trim()) { setError('Please enter your phone number so we can confirm.'); return }
-    if (!day) { setError('Please pick a day.'); return }
+    // A day is required only when we actually offer day options.
+    if (dayOptions.length > 0 && !day) { setError('Please pick a day.'); return }
     setSubmitting(true)
     try {
       const full = [selected.address, selected.city, selected.state, selected.zip].filter(Boolean).join(', ')
@@ -142,8 +143,8 @@ export default function SchedulePage() {
           phone: phone.trim(),
           address: full,
           quote: selected.quote,
-          chosen_day: `${day.weekday} (${day.label})`,
-          preferred_date: day.iso,
+          chosen_day: day ? `${day.weekday} (${day.label})` : 'Flexible — please text me',
+          preferred_date: day?.iso ?? null,
         }),
       })
       if (!res.ok) throw new Error()
@@ -268,8 +269,11 @@ export default function SchedulePage() {
           {step === 'book' && selected && (
             <>
               <div className="mb-6">
-                <button onClick={() => { setStep('find'); setDay(null) }} className="text-[13px] font-semibold mb-4" style={{ color: '#2f6418' }}>← Not your home?</button>
-                <p className="text-xs font-bold uppercase mb-3" style={{ color: '#2f6418', letterSpacing: '0.16em' }}>Almost done</p>
+                <button onClick={() => { setStep('find'); setDay(null); setError('') }} className="text-[13px] font-semibold mb-4" style={{ color: '#2f6418' }}>← Not your home?</button>
+                <div className="inline-flex items-center gap-1.5 mb-3 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide" style={{ background: '#e7f0e1', color: '#2f6418' }}>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                  We found your home
+                </div>
                 <h1 className="text-3xl font-extrabold tracking-tight leading-[1.08]" style={{ color: '#181b15' }}>Pick your first day.</h1>
               </div>
 

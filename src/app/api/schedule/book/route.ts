@@ -29,6 +29,15 @@ export async function POST(request: NextRequest) {
 
   const admin = await createAdminClient()
 
+  // chosen_start_day is a DATE column in the live schema, so only an ISO date
+  // is safe there. Keep the human-readable choice (incl. "Flexible") in notes.
+  const isoDate = preferred_date && /^\d{4}-\d{2}-\d{2}$/.test(preferred_date) ? preferred_date : null
+  const noteParts = [
+    'Self-scheduled (QR/website).',
+    `Preferred: ${chosen_day.trim()}.`,
+    typeof quote === 'number' && quote > 0 ? `Quote $${quote}/mow.` : '',
+  ].filter(Boolean)
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (admin.from('leads') as any)
     .insert({
@@ -37,9 +46,10 @@ export async function POST(request: NextRequest) {
       address: address.trim(),
       status: 'new',
       quoted_amount: typeof quote === 'number' && quote > 0 ? quote : null,
-      chosen_start_day: chosen_day.trim(),
-      preferred_date: preferred_date || null,
+      chosen_start_day: isoDate,
+      preferred_date: isoDate,
       quote_source: 'self_schedule',
+      notes: noteParts.join(' '),
     })
     .select()
     .single()
