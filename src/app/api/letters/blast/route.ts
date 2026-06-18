@@ -203,7 +203,25 @@ async function send(body: Record<string, unknown>) {
 
   for (const r of recipients) {
     const fullAddress = `${r.address}, ${r.city}, ${r.state} ${r.zip}`
+    const dedupKey = normalizeAddress(r.address, r.zip)
     try {
+      // Safeguard: never mail someone who has already been mailed or is already
+      // queued — ANY source (letters, monitors, a prior blast), not just this
+      // one. This closes the cross-source / stale-preview gap. 'failed' rows are
+      // not counted (they were never actually mailed). A future multi-letter
+      // sequence is a separate, deliberate flow, so these records still persist
+      // and can be re-targeted there.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: prior } = await (admin.from('letter_recipients') as any)
+        .select('id')
+        .eq('dedup_key', dedupKey)
+        .in('status', ['sent', 'scheduled', 'pending', 'review'])
+        .limit(1)
+      if (prior && prior.length > 0) {
+        results.push({ address: r.address, success: false, error: 'Already contacted — skipped' })
+        continue
+      }
+
       const featureParts: string[] = []
       if (r.lot_sqft)    featureParts.push(`${Math.round(r.lot_sqft).toLocaleString()} sq ft lot`)
       if (r.living_sqft) featureParts.push(`${Math.round(r.living_sqft).toLocaleString()} sq ft home`)
@@ -227,7 +245,7 @@ async function send(body: Record<string, unknown>) {
           state: r.state,
           zip: r.zip,
           source: 'area_blast',
-          dedup_key: normalizeAddress(r.address, r.zip),
+          dedup_key: dedupKey,
           status: 'pending',
           lot_size: r.lot_sqft ? `${Math.round(r.lot_sqft).toLocaleString()} sq ft` : null,
           sq_footage: r.living_sqft ? `${Math.round(r.living_sqft).toLocaleString()} sq ft` : null,

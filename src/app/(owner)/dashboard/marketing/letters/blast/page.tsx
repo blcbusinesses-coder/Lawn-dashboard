@@ -47,7 +47,7 @@ export default function AreaBlastPage() {
   const [previewing, setPreviewing] = useState(false)
   const [sending, setSending] = useState(false)
   const [rows, setRows] = useState<CandidateRow[]>([])
-  const [stats, setStats] = useState<{ scanned: number; in_band: number } | null>(null)
+  const [stats, setStats] = useState<{ scanned: number; in_band: number; already_contacted: number } | null>(null)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
 
   const selectedRows = rows.filter(r => r.selected && r.sendState !== 'sent')
@@ -80,7 +80,7 @@ export default function AreaBlastPage() {
       }
       const candidates: Candidate[] = data.candidates ?? []
       setRows(candidates.map(c => ({ ...c, selected: true, sendState: 'idle' as SendState })))
-      setStats({ scanned: data.scanned ?? 0, in_band: data.in_band ?? 0 })
+      setStats({ scanned: data.scanned ?? 0, in_band: data.in_band ?? 0, already_contacted: data.already_contacted ?? 0 })
       if (candidates.length === 0) {
         toast.info('No new homes in that quote range — try widening the band, radius, or area.')
       } else {
@@ -256,8 +256,9 @@ export default function AreaBlastPage() {
       {/* Results */}
       {stats && (
         <div className="text-sm text-zinc-600">
-          Scanned <strong>{stats.scanned}</strong> homes {mode === 'area' ? `near ${center.trim()}` : `in ${zip}`} · <strong>{stats.in_band}</strong> priced in range ·
-          showing <strong>{rows.length}</strong> not yet contacted
+          Scanned <strong>{stats.scanned}</strong> homes {mode === 'area' ? `near ${center.trim()}` : `in ${zip}`} · <strong>{stats.in_band}</strong> priced in range
+          {stats.already_contacted > 0 && <> · <strong>{stats.already_contacted}</strong> already contacted (skipped)</>} ·
+          showing <strong>{rows.length}</strong> new
         </div>
       )}
 
