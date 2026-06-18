@@ -82,14 +82,20 @@ export default function SchedulePage() {
       const zip = p.get('zip')?.trim()
       const rid = p.get('rid')?.trim()
 
-      // Log the QR scan once per page load (a QR link always carries rid+quote).
-      if ((rid || (name && street)) && !sessionStorage.getItem('gw_scan_logged')) {
-        sessionStorage.setItem('gw_scan_logged', '1')
-        fetch('/api/schedule/track-scan', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ rid: rid || undefined }),
-        }).catch(() => {})
+      // Log the QR scan (a QR link always carries rid + quote). Dedupe per
+      // letter within a browser session so a refresh / double-mount doesn't
+      // inflate the count, while a DIFFERENT letter still registers.
+      const scanKey = rid || (street ? `${name ?? ''}|${street}` : '')
+      if (scanKey) {
+        const k = `gw_scan_${scanKey}`
+        if (!sessionStorage.getItem(k)) {
+          sessionStorage.setItem(k, '1')
+          fetch('/api/schedule/track-scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rid: rid || undefined }),
+          }).catch(() => {})
+        }
       }
 
       if (name && street) {
