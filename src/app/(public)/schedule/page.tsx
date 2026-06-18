@@ -82,12 +82,13 @@ export default function SchedulePage() {
       const zip = p.get('zip')?.trim()
       const rid = p.get('rid')?.trim()
 
-      // Log the QR scan (a QR link always carries rid + quote). Dedupe per
-      // letter within a browser session so a refresh / double-mount doesn't
-      // inflate the count, while a DIFFERENT letter still registers.
-      const scanKey = rid || (street ? `${name ?? ''}|${street}` : '')
-      if (scanKey) {
-        const k = `gw_scan_${scanKey}`
+      // Log the QR scan. /schedule is only reached from a letter QR (the site's
+      // own CTAs point to /get-a-quote), and every QR link carries query params,
+      // so ANY landing here with params is treated as a scan. Dedupe per letter
+      // within a browser session so a refresh / double-mount doesn't inflate it.
+      const search = window.location.search
+      if (search.length > 1) {
+        const k = `gw_scan_${rid || search}`
         if (!sessionStorage.getItem(k)) {
           sessionStorage.setItem(k, '1')
           fetch('/api/schedule/track-scan', {

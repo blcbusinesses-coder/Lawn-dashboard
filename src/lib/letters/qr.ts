@@ -25,6 +25,7 @@ const cache = new Map<string, string>()
 
 function buildScheduleUrl(p: ScheduleQrParams): string {
   const qs = new URLSearchParams()
+  qs.set('qr', '1') // explicit marker so the page always counts a QR scan
   if (p.recipientId?.trim()) qs.set('rid', p.recipientId.trim())
   if (p.quote != null && p.quote > 0) qs.set('quote', String(Math.round(p.quote)))
   if (p.name?.trim())   qs.set('name', p.name.trim())
