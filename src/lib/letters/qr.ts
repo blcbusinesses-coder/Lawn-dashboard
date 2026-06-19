@@ -26,11 +26,11 @@ export interface ScheduleQrParams {
 const cache = new Map<string, string>()
 
 function buildScanUrl(p: ScheduleQrParams): string {
-  // Real letter: short link, endpoint resolves details from the record.
-  if (p.recipientId?.trim()) {
-    return `${SITE}/api/qr/${p.recipientId.trim()}`
-  }
-  // No recipient id (preview): carry the data through to the redirect.
+  // Always point at /api/qr/<rid> (logs the scan, then redirects to the booking
+  // page). We ALSO carry the property details as query params so the booking
+  // page pre-loads even when the id can't be resolved from the record — that
+  // makes tracking + pre-load robust across every send path.
+  const rid = p.recipientId?.trim() || 'x'
   const qs = new URLSearchParams()
   if (p.quote != null && p.quote > 0) qs.set('quote', String(Math.round(p.quote)))
   if (p.name?.trim())   qs.set('name', p.name.trim())
@@ -38,7 +38,7 @@ function buildScanUrl(p: ScheduleQrParams): string {
   if (p.city?.trim())   qs.set('city', p.city.trim())
   if (p.zip?.trim())    qs.set('zip', p.zip.trim())
   const q = qs.toString()
-  return q ? `${SITE}/api/qr/x?${q}` : `${SITE}/api/qr/x`
+  return q ? `${SITE}/api/qr/${rid}?${q}` : `${SITE}/api/qr/${rid}`
 }
 
 /** Data-URI QR code to the scheduling page, pre-loaded with this recipient's

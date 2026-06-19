@@ -28,6 +28,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   let quote = qp.get('quote') ?? ''
 
   // Authoritative data from the recipient record when we have a real id.
+  // `found` gates whether we can safely tie the scan to that record (FK).
+  let found = false
   if (recipientId) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -36,6 +38,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         .eq('id', recipientId)
         .single()
       if (data) {
+        found = true
         name = data.name ?? name
         street = data.address ?? street
         city = data.city ?? city
@@ -45,10 +48,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     } catch { /* fall back to query params */ }
   }
 
-  // Log the scan — best-effort, must never block the redirect.
+  // Log the scan — best-effort, must never block the redirect. Only attach the
+  // recipient id when it's a REAL record (otherwise the FK rejects it and the
+  // scan would be lost); a scan with no record still counts.
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (svc.from('letter_qr_scans') as any).insert({ recipient_id: recipientId })
+    await (svc.from('letter_qr_scans') as any).insert({ recipient_id: found ? recipientId : null })
   } catch { /* ignore */ }
 
   // Redirect to the booking page with the property pre-loaded. Build it on the
