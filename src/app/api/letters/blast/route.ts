@@ -17,7 +17,8 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { computeQuote, generateAiCopy, type SettingsMap } from '@/lib/letters/generate'
 import { normalizeAddress, sendLetterToLob } from '@/lib/letters/monitor'
 import { tidyName, looksLikeCompany } from '@/lib/property/owner'
-import { qualifyBatch, type QualInput } from '@/lib/letters/qualify'
+import { qualifyBatch, priorityForScore, INCOME_ABOVE_POINTS, type QualInput } from '@/lib/letters/qualify'
+import { incomeBandsBatch } from '@/lib/letters/census'
 
 export const maxDuration = 60
 
@@ -34,6 +35,8 @@ interface RentCastRecord {
   lastSaleDate?: string
   lastSalePrice?: number
   taxAssessments?: Record<string, { value?: number }>
+  latitude?: number
+  longitude?: number
 }
 
 export interface BlastCandidate {
@@ -53,6 +56,7 @@ export interface BlastCandidate {
   is_absentee?: boolean
   last_sold?: string | null
   home_value?: number | null
+  income_band?: string
 }
 
 /** Latest assessed value from RentCast tax assessments, else last sale price. */
@@ -200,15 +204,17 @@ async function preview(body: Record<string, unknown>) {
         propertyLine: street,
         homeValue: recordValue(r),
         lastSaleDate: r.lastSaleDate ?? null,
+        lat: typeof r.latitude === 'number' ? r.latitude : null,
+        lng: typeof r.longitude === 'number' ? r.longitude : null,
       },
     })
   }
 
-  // Apply gates + scoring (best-first). Without smart targeting, keep the
-  // original order and no scores.
-  let ordered: BlastCandidate[]
+  // Apply gates + base scoring (best-first). Keep the {cand, qual, score…}
+  // bundle so we can enrich after deduping. Without smart targeting, no scores.
+  type Item = { cand: BlastCandidate; qual: QualInput; lead_score?: number }
+  let items: Item[]
   let gateDropped = 0
-  const priority = { first: 0, second: 0, skip: 0 }
   if (smart) {
     const scored = qualifyBatch(inBand)        // gate-passers, sorted best-first
     gateDropped = inBand.length - scored.length
@@ -219,23 +225,51 @@ async function preview(body: Record<string, unknown>) {
       s.cand.is_absentee = s.is_absentee
       s.cand.last_sold = s.last_sold
       s.cand.home_value = s.home_value
-      priority[s.mail_priority]++
     }
-    ordered = scored.map(s => s.cand)
+    items = scored
   } else {
-    ordered = inBand.map(x => x.cand)
+    items = inBand
   }
 
   // Drop anything we've ever queued/mailed before (any source).
-  const dedupKeys = ordered.map(c => normalizeAddress(c.address, c.zip))
+  const dedupKeys = items.map(it => normalizeAddress(it.cand.address, it.cand.zip))
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: existing } = await (admin.from('letter_recipients') as any)
     .select('dedup_key')
     .in('dedup_key', dedupKeys)
   const seen = new Set((existing ?? []).map((r: { dedup_key: string }) => r.dedup_key))
 
-  const notContacted = ordered.filter(c => !seen.has(normalizeAddress(c.address, c.zip)))
-  const candidates = notContacted.slice(0, count)
+  let notContacted = items.filter(it => !seen.has(normalizeAddress(it.cand.address, it.cand.zip)))
+  const alreadyContacted = items.length - notContacted.length
+
+  // ── S6: enrich the top prospects with Census block-group income, add points
+  // for above-median blocks, then re-sort. Bounded so we don't blow the time
+  // limit — we only need it on the homes we'd actually consider mailing.
+  if (smart) {
+    const ENRICH_CAP = 60
+    const head = notContacted.slice(0, ENRICH_CAP)
+    try {
+      const bands = await incomeBandsBatch(head.map(it => ({ lat: it.qual.lat ?? null, lng: it.qual.lng ?? null })))
+      head.forEach((it, i) => {
+        const band = bands[i]
+        it.cand.income_band = band
+        if (band === 'above') {
+          it.cand.lead_score = (it.cand.lead_score ?? 0) + INCOME_ABOVE_POINTS
+          it.cand.mail_priority = priorityForScore(it.cand.lead_score)
+        }
+      })
+      // Re-sort by the updated score so above-median blocks rise.
+      notContacted = [...notContacted].sort((a, b) => (b.cand.lead_score ?? 0) - (a.cand.lead_score ?? 0))
+    } catch { /* income optional — leave base scores */ }
+  }
+
+  const candidates = notContacted.slice(0, count).map(it => it.cand)
+
+  const priority = { first: 0, second: 0, skip: 0 }
+  for (const it of notContacted) {
+    const p = it.cand.mail_priority as 'first' | 'second' | 'skip' | undefined
+    if (p) priority[p]++
+  }
 
   return NextResponse.json({
     candidates,
@@ -245,7 +279,7 @@ async function preview(body: Record<string, unknown>) {
     smart,
     gate_dropped: gateDropped,
     priority,
-    already_contacted: ordered.length - notContacted.length,
+    already_contacted: alreadyContacted,
   })
 }
 
@@ -297,6 +331,7 @@ async function send(body: Record<string, unknown>) {
         r.segment ? `segment=${r.segment}` : '',
         r.lead_score != null ? `score=${r.lead_score}` : '',
         r.mail_priority ? `wave=${r.mail_priority}` : '',
+        r.income_band && r.income_band !== 'unknown' ? `income=${r.income_band}` : '',
       ].filter(Boolean).join(' ')
       const propertyFeatures = cohort ? `${featuresText} | ${cohort}` : featuresText
 

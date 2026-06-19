@@ -30,6 +30,7 @@ interface Candidate {
   is_absentee?: boolean
   last_sold?: string | null
   home_value?: number | null
+  income_band?: 'above' | 'at' | 'below' | 'unknown'
 }
 
 const SEGMENT_LABEL: Record<string, string> = {
@@ -158,6 +159,7 @@ export default function AreaBlastPage() {
               segment: row.segment,
               lead_score: row.lead_score,
               mail_priority: row.mail_priority,
+              income_band: row.income_band,
             })),
           }),
         })
@@ -337,6 +339,7 @@ export default function AreaBlastPage() {
                         <span className="text-[11px] leading-tight text-zinc-500">
                           {r.mail_priority === 'first' ? '1st wave' : r.mail_priority === 'second' ? '2nd wave' : 'low'}
                           {r.segment && r.segment !== 'general' && <><br />{SEGMENT_LABEL[r.segment] ?? r.segment}</>}
+                          {r.income_band === 'above' && <><br /><span className="text-green-700 font-semibold">↑ higher-income block</span></>}
                         </span>
                       </div>
                     </td>

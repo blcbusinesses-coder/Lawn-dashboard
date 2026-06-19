@@ -8,6 +8,7 @@
 // be raised later by filling them in.
 
 import { normalizeAddress } from '@/lib/letters/monitor'
+import type { IncomeBand } from '@/lib/letters/census'
 
 export type Segment = 'aging_homeowner' | 'time_poor_family' | 'absentee_new_owner' | 'general'
 export type MailPriority = 'first' | 'second' | 'skip'
@@ -26,6 +27,9 @@ export interface QualInput {
   homeValue: number | null
   /** ISO date of last sale, for the new-mover signal */
   lastSaleDate: string | null
+  /** coordinates — carried for later Census income enrichment (S6) */
+  lat?: number | null
+  lng?: number | null
 }
 
 /** The scoring/segment output merged onto a candidate. */
@@ -37,6 +41,8 @@ export interface QualResult {
   last_sold: string | null
   home_value: number | null
   lot_acres: number | null
+  /** neighborhood income vs county median (S6 — filled in by enrichment) */
+  block_group_income_vs_county: IncomeBand
   /** per-factor breakdown, for tuning + display */
   factors: Record<string, number>
   /** gate failures (empty = passed all gates) */
@@ -45,6 +51,14 @@ export interface QualResult {
 
 const FIRST_WAVE_MIN = 8
 const SECOND_WAVE_MIN = 4
+
+/** Points granted for an above-median income block group (S6). */
+export const INCOME_ABOVE_POINTS = 2
+
+/** Map a final lead score to a mail-priority wave. */
+export function priorityForScore(score: number): MailPriority {
+  return score >= FIRST_WAVE_MIN ? 'first' : score >= SECOND_WAVE_MIN ? 'second' : 'skip'
+}
 
 // Gate G3 / auto-exclude: lot size window (acres).
 const LOT_MIN_ACRES = 0.15
@@ -114,7 +128,7 @@ export function qualifyBatch<T extends { qual: QualInput }>(
       // Dropped — still surface it so the UI can report gate counts.
       out.push({ ...it, lead_score: 0, segment: 'general', mail_priority: 'skip',
         is_absentee: false, last_sold: q.lastSaleDate, home_value: q.homeValue,
-        lot_acres: lot, factors: {}, gate_fails: gateFails })
+        lot_acres: lot, block_group_income_vs_county: 'unknown', factors: {}, gate_fails: gateFails })
       continue
     }
 
@@ -139,11 +153,11 @@ export function qualifyBatch<T extends { qual: QualInput }>(
     if (isAbsentee || newMover) segment = 'absentee_new_owner'
     // aging_homeowner / time_poor_family require age + Street View cues (future).
 
-    const mail_priority: MailPriority =
-      lead_score >= FIRST_WAVE_MIN ? 'first' : lead_score >= SECOND_WAVE_MIN ? 'second' : 'skip'
+    const mail_priority = priorityForScore(lead_score)
 
     out.push({ ...it, lead_score, segment, mail_priority, is_absentee: isAbsentee,
-      last_sold: q.lastSaleDate, home_value: q.homeValue, lot_acres: lot, factors, gate_fails: [] })
+      last_sold: q.lastSaleDate, home_value: q.homeValue, lot_acres: lot,
+      block_group_income_vs_county: 'unknown', factors, gate_fails: [] })
   }
 
   // Mailable = cleared gates; sort best-first.
