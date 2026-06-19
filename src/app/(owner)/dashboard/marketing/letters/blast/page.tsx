@@ -24,6 +24,19 @@ interface Candidate {
   lot_sqft: number | null
   living_sqft: number | null
   quote: number
+  lead_score?: number
+  segment?: string
+  mail_priority?: 'first' | 'second' | 'skip'
+  is_absentee?: boolean
+  last_sold?: string | null
+  home_value?: number | null
+}
+
+const SEGMENT_LABEL: Record<string, string> = {
+  absentee_new_owner: 'New / absentee owner',
+  aging_homeowner: 'Aging homeowner',
+  time_poor_family: 'Busy family',
+  general: 'General',
 }
 
 type SendState = 'idle' | 'sending' | 'sent' | 'failed'
@@ -43,11 +56,12 @@ export default function AreaBlastPage() {
   const [targetQuote, setTargetQuote] = useState('50')
   const [band, setBand] = useState('10')
   const [phone, setPhone] = useState('(260) 599-4253')
+  const [smart, setSmart] = useState(true)
 
   const [previewing, setPreviewing] = useState(false)
   const [sending, setSending] = useState(false)
   const [rows, setRows] = useState<CandidateRow[]>([])
-  const [stats, setStats] = useState<{ scanned: number; in_band: number; already_contacted: number } | null>(null)
+  const [stats, setStats] = useState<{ scanned: number; in_band: number; already_contacted: number; gate_dropped?: number; priority?: { first: number; second: number; skip: number } } | null>(null)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
 
   const selectedRows = rows.filter(r => r.selected && r.sendState !== 'sent')
@@ -71,6 +85,7 @@ export default function AreaBlastPage() {
           target_quote: Number(targetQuote) || 50,
           min_quote: (Number(targetQuote) || 50) - (Number(band) || 10),
           max_quote: (Number(targetQuote) || 50) + (Number(band) || 10),
+          smart,
         }),
       })
       const data = await res.json()
@@ -80,7 +95,7 @@ export default function AreaBlastPage() {
       }
       const candidates: Candidate[] = data.candidates ?? []
       setRows(candidates.map(c => ({ ...c, selected: true, sendState: 'idle' as SendState })))
-      setStats({ scanned: data.scanned ?? 0, in_band: data.in_band ?? 0, already_contacted: data.already_contacted ?? 0 })
+      setStats({ scanned: data.scanned ?? 0, in_band: data.in_band ?? 0, already_contacted: data.already_contacted ?? 0, gate_dropped: data.gate_dropped, priority: data.priority })
       if (candidates.length === 0) {
         toast.info('No new homes in that quote range — try widening the band, radius, or area.')
       } else {
@@ -140,6 +155,9 @@ export default function AreaBlastPage() {
               lot_sqft: row.lot_sqft,
               living_sqft: row.living_sqft,
               quote: row.quote,
+              segment: row.segment,
+              lead_score: row.lead_score,
+              mail_priority: row.mail_priority,
             })),
           }),
         })
@@ -240,6 +258,14 @@ export default function AreaBlastPage() {
             <Input id="phone" value={phone} onChange={e => setPhone(e.target.value)} />
           </div>
         </div>
+        <label className="flex items-start gap-2.5 cursor-pointer select-none rounded-lg border border-zinc-200 bg-zinc-50 px-3.5 py-2.5">
+          <input type="checkbox" checked={smart} onChange={e => setSmart(e.target.checked)} className="mt-0.5" />
+          <span className="text-sm">
+            <span className="font-semibold text-zinc-800">Smart targeting</span>
+            <span className="text-zinc-500"> — qualify &amp; score each home (lot size, owner-occupied, absentee, new mover, value band) and list the best prospects first. Turn off for a plain quote-band list.</span>
+          </span>
+        </label>
+
         <div className="flex items-center gap-3">
           <Button onClick={runPreview} disabled={previewing || sending}>
             {previewing ? <Loader2 size={15} className="animate-spin mr-1.5" /> : <Search size={15} className="mr-1.5" />}
@@ -259,6 +285,15 @@ export default function AreaBlastPage() {
           Scanned <strong>{stats.scanned}</strong> homes {mode === 'area' ? `near ${center.trim()}` : `in ${zip}`} · <strong>{stats.in_band}</strong> priced in range
           {stats.already_contacted > 0 && <> · <strong>{stats.already_contacted}</strong> already contacted (skipped)</>} ·
           showing <strong>{rows.length}</strong> new
+          {smart && stats.priority && (
+            <span className="block mt-1 text-xs text-zinc-500">
+              Best-first by lead score
+              {stats.gate_dropped ? ` · ${stats.gate_dropped} dropped by gates` : ''}
+              {' '}· <strong className="text-green-700">{stats.priority.first}</strong> first-wave
+              {' '}· <strong>{stats.priority.second}</strong> second-wave
+              {stats.priority.skip ? ` · ${stats.priority.skip} low-priority` : ''}
+            </span>
+          )}
         </div>
       )}
 
@@ -272,6 +307,7 @@ export default function AreaBlastPage() {
                 </th>
                 <th className="px-4 py-2.5">Homeowner</th>
                 <th className="px-4 py-2.5">Address</th>
+                {smart && <th className="px-4 py-2.5">Target</th>}
                 <th className="px-4 py-2.5">Lot</th>
                 <th className="px-4 py-2.5">Quote</th>
                 <th className="px-4 py-2.5">Status</th>
@@ -290,6 +326,21 @@ export default function AreaBlastPage() {
                   </td>
                   <td className="px-4 py-2.5 font-medium">{r.name}</td>
                   <td className="px-4 py-2.5 text-zinc-600">{r.address}, {r.city}</td>
+                  {smart && (
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${
+                          (r.lead_score ?? 0) >= 8 ? 'bg-green-100 text-green-800'
+                            : (r.lead_score ?? 0) >= 4 ? 'bg-amber-100 text-amber-800'
+                            : 'bg-zinc-100 text-zinc-500'
+                        }`}>{r.lead_score ?? 0}</span>
+                        <span className="text-[11px] leading-tight text-zinc-500">
+                          {r.mail_priority === 'first' ? '1st wave' : r.mail_priority === 'second' ? '2nd wave' : 'low'}
+                          {r.segment && r.segment !== 'general' && <><br />{SEGMENT_LABEL[r.segment] ?? r.segment}</>}
+                        </span>
+                      </div>
+                    </td>
+                  )}
                   <td className="px-4 py-2.5 text-zinc-500">{r.lot_sqft ? `${r.lot_sqft.toLocaleString()} sqft` : '—'}</td>
                   <td className="px-4 py-2.5 font-semibold text-green-700">{formatCurrency(r.quote)}</td>
                   <td className="px-4 py-2.5">

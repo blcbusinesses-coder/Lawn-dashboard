@@ -17,6 +17,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { computeQuote, generateAiCopy, type SettingsMap } from '@/lib/letters/generate'
 import { normalizeAddress, sendLetterToLob } from '@/lib/letters/monitor'
 import { tidyName, looksLikeCompany } from '@/lib/property/owner'
+import { qualifyBatch, type QualInput } from '@/lib/letters/qualify'
 
 export const maxDuration = 60
 
@@ -28,8 +29,11 @@ interface RentCastRecord {
   propertyType?: string
   lotSize?: number
   squareFootage?: number
-  owner?: { names?: string[] }
+  owner?: { names?: string[]; mailingAddress?: { addressLine1?: string } }
   ownerOccupied?: boolean
+  lastSaleDate?: string
+  lastSalePrice?: number
+  taxAssessments?: Record<string, { value?: number }>
 }
 
 export interface BlastCandidate {
@@ -41,6 +45,27 @@ export interface BlastCandidate {
   lot_sqft: number | null
   living_sqft: number | null
   quote: number
+  // Targeting (added by the qualification engine; optional so older callers
+  // and the send path keep working unchanged).
+  lead_score?: number
+  segment?: string
+  mail_priority?: string
+  is_absentee?: boolean
+  last_sold?: string | null
+  home_value?: number | null
+}
+
+/** Latest assessed value from RentCast tax assessments, else last sale price. */
+function recordValue(r: RentCastRecord): number | null {
+  const ta = r.taxAssessments
+  if (ta && typeof ta === 'object') {
+    const years = Object.keys(ta).sort().reverse()
+    for (const y of years) {
+      const v = ta[y]?.value
+      if (typeof v === 'number' && v > 0) return v
+    }
+  }
+  return typeof r.lastSalePrice === 'number' && r.lastSalePrice > 0 ? r.lastSalePrice : null
 }
 
 async function loadSettings(): Promise<SettingsMap> {
@@ -129,8 +154,13 @@ async function preview(body: Record<string, unknown>) {
     return NextResponse.json({ candidates: [], scanned: 0, in_band: 0, center: centerLabel })
   }
 
-  // Price every record locally and keep the in-band ones.
-  const inBand: BlastCandidate[] = []
+  // Smart targeting (gates + lead scoring + best-first) is on by default; the
+  // client can send smart:false for the original quote-band-only behavior.
+  const smart = body.smart !== false
+
+  // Price every record locally and keep the in-band ones (carrying the data the
+  // qualification engine needs — all from this same RentCast response).
+  const inBand: Array<{ cand: BlastCandidate; qual: QualInput }> = []
   for (const r of records) {
     const street = (r.addressLine1 ?? '').trim()
     const city = (r.city ?? '').trim()
@@ -151,37 +181,71 @@ async function preview(body: Record<string, unknown>) {
     const name = rawName && !looksLikeCompany(rawName) ? tidyName(rawName) : 'Neighbor'
 
     inBand.push({
-      name,
-      address: street,
-      city,
-      state: (r.state ?? 'IN').trim() || 'IN',
-      zip: recZip,
-      lot_sqft: lotSqft,
-      living_sqft: livingSqft,
-      quote: quoteAmount,
+      cand: {
+        name,
+        address: street,
+        city,
+        state: (r.state ?? 'IN').trim() || 'IN',
+        zip: recZip,
+        lot_sqft: lotSqft,
+        living_sqft: livingSqft,
+        quote: quoteAmount,
+      },
+      qual: {
+        lotSqft,
+        zip: recZip,
+        quote: quoteAmount,
+        ownerOccupied: typeof r.ownerOccupied === 'boolean' ? r.ownerOccupied : null,
+        ownerMailingLine: r.owner?.mailingAddress?.addressLine1 ?? null,
+        propertyLine: street,
+        homeValue: recordValue(r),
+        lastSaleDate: r.lastSaleDate ?? null,
+      },
     })
   }
 
+  // Apply gates + scoring (best-first). Without smart targeting, keep the
+  // original order and no scores.
+  let ordered: BlastCandidate[]
+  let gateDropped = 0
+  const priority = { first: 0, second: 0, skip: 0 }
+  if (smart) {
+    const scored = qualifyBatch(inBand)        // gate-passers, sorted best-first
+    gateDropped = inBand.length - scored.length
+    for (const s of scored) {
+      s.cand.lead_score = s.lead_score
+      s.cand.segment = s.segment
+      s.cand.mail_priority = s.mail_priority
+      s.cand.is_absentee = s.is_absentee
+      s.cand.last_sold = s.last_sold
+      s.cand.home_value = s.home_value
+      priority[s.mail_priority]++
+    }
+    ordered = scored.map(s => s.cand)
+  } else {
+    ordered = inBand.map(x => x.cand)
+  }
+
   // Drop anything we've ever queued/mailed before (any source).
-  const dedupKeys = inBand.map(c => normalizeAddress(c.address, c.zip))
+  const dedupKeys = ordered.map(c => normalizeAddress(c.address, c.zip))
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: existing } = await (admin.from('letter_recipients') as any)
     .select('dedup_key')
     .in('dedup_key', dedupKeys)
   const seen = new Set((existing ?? []).map((r: { dedup_key: string }) => r.dedup_key))
 
-  const candidates = inBand
-    .filter(c => !seen.has(normalizeAddress(c.address, c.zip)))
-    .slice(0, count)
+  const notContacted = ordered.filter(c => !seen.has(normalizeAddress(c.address, c.zip)))
+  const candidates = notContacted.slice(0, count)
 
   return NextResponse.json({
     candidates,
     scanned: records.length,
     in_band: inBand.length,
     center: centerLabel,
-    already_contacted: inBand.length - candidates.length > 0
-      ? inBand.filter(c => seen.has(normalizeAddress(c.address, c.zip))).length
-      : 0,
+    smart,
+    gate_dropped: gateDropped,
+    priority,
+    already_contacted: ordered.length - notContacted.length,
   })
 }
 
@@ -227,6 +291,15 @@ async function send(body: Record<string, unknown>) {
       if (r.living_sqft) featureParts.push(`${Math.round(r.living_sqft).toLocaleString()} sq ft home`)
       const featuresText = featureParts.join(', ') || 'typical residential lot'
 
+      // Log the targeting cohort on the record so response rate is measurable
+      // per segment/score band (no schema change needed — kept in features).
+      const cohort = [
+        r.segment ? `segment=${r.segment}` : '',
+        r.lead_score != null ? `score=${r.lead_score}` : '',
+        r.mail_priority ? `wave=${r.mail_priority}` : '',
+      ].filter(Boolean).join(' ')
+      const propertyFeatures = cohort ? `${featuresText} | ${cohort}` : featuresText
+
       const aiCopy = await generateAiCopy({
         featuresText,
         address: fullAddress,
@@ -249,7 +322,7 @@ async function send(body: Record<string, unknown>) {
           status: 'pending',
           lot_size: r.lot_sqft ? `${Math.round(r.lot_sqft).toLocaleString()} sq ft` : null,
           sq_footage: r.living_sqft ? `${Math.round(r.living_sqft).toLocaleString()} sq ft` : null,
-          property_features: featuresText,
+          property_features: propertyFeatures,
           ai_copy: aiCopy,
           quote_amount: r.quote,
         })
