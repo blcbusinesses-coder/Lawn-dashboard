@@ -64,5 +64,39 @@ export async function POST(request: NextRequest) {
       .eq('id', recipient_id)
   }
 
+  // Auto-add to operations: create a customer + a property so the booking shows
+  // up in Properties and on the Jobs route for the chosen weekday. Best-effort —
+  // a failure here must never fail the booking itself.
+  try {
+    const weekday = isoDate
+      ? new Date(`${isoDate}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long' })
+      : (chosen_day.trim().split(/[\s(]/)[0] || null)
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: customer } = await (admin.from('customers') as any)
+      .insert({
+        full_name: name.trim(),
+        phone: phone.trim(),
+        address: address.trim(),
+        notes: `Self-scheduled via letter on ${new Date().toISOString().split('T')[0]}. ${noteParts.join(' ')} 25% off first month.`,
+      })
+      .select()
+      .single()
+
+    if (customer?.id) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (admin.from('properties') as any).insert({
+        customer_id: customer.id,
+        address: address.trim(),
+        price_per_mow: typeof quote === 'number' && quote > 0 ? quote : 0,
+        scheduled_days: weekday ? [weekday] : null,
+        notes: `New self-scheduled booking — first mow ${chosen_day.trim()}. 25% off first month.`,
+        is_active: true,
+      })
+    }
+  } catch (err) {
+    console.error('[schedule/book] auto-create customer/property failed:', err)
+  }
+
   return NextResponse.json({ success: true, lead_id: data.id }, { status: 201 })
 }

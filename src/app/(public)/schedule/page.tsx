@@ -332,6 +332,9 @@ export default function SchedulePage() {
                 <p className="text-center text-[12px]" style={{ color: '#8a917f' }}>
                   No contract &bull; Cancel anytime &bull; We&apos;ll text to confirm before we come out
                 </p>
+                <p className="text-center text-[12px] font-medium" style={{ color: '#5b6354' }}>
+                  Billing is simple: we bill once a month, at the end of the month — for the mows we did.
+                </p>
               </div>
             </>
           )}
