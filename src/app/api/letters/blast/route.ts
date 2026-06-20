@@ -57,6 +57,12 @@ export interface BlastCandidate {
   last_sold?: string | null
   home_value?: number | null
   income_band?: string
+  factors?: Record<string, number>
+}
+
+/** Normalized street name (drops the house number) for exact-street matching. */
+function streetKey(line: string): string {
+  return normalizeAddress((line || '').replace(/^\s*\d+\s*/, '').trim())
 }
 
 /** Latest assessed value from RentCast tax assessments, else last sale price. */
@@ -108,6 +114,10 @@ async function preview(body: Record<string, unknown>) {
   const targetQuote = Number(body.target_quote) || 50
   const minQuote = Number(body.min_quote) || targetQuote - 10
   const maxQuote = Number(body.max_quote) || targetQuote + 10
+  // "Any quote" ignores the price band; "Exact street" keeps only homes on the
+  // street you centered on (area mode).
+  const anyQuote = body.any_quote === true
+  const exactStreet = body.exact_street === true
 
   const apiKey = process.env.RENTCAST_API_KEY
   if (!apiKey) {
@@ -142,6 +152,11 @@ async function preview(body: Record<string, unknown>) {
       `&propertyType=${encodeURIComponent('Single Family')}&limit=500`
   }
 
+  // Exact-street filter key (area mode only — the center IS the street).
+  const exactStreetKey = exactStreet && mode === 'area'
+    ? streetKey(String(body.center ?? '').split(',')[0])
+    : null
+
   const settings = await loadSettings()
   const admin = createServiceClient()
 
@@ -170,6 +185,9 @@ async function preview(body: Record<string, unknown>) {
     const city = (r.city ?? '').trim()
     if (!street) continue
 
+    // Exact-street: keep only homes whose street matches the one centered on.
+    if (exactStreetKey && streetKey(street) !== exactStreetKey) continue
+
     const recZip = (r.zipCode ?? zip ?? '').trim().slice(0, 5)
 
     const lotSqft = typeof r.lotSize === 'number' && r.lotSize > 0 ? r.lotSize : null
@@ -179,7 +197,8 @@ async function preview(body: Record<string, unknown>) {
 
     const fullAddress = `${street}, ${city}, ${r.state ?? 'IN'} ${recZip}`
     const { quoteAmount } = computeQuote(lotSqft, livingSqft, fullAddress, settings)
-    if (quoteAmount < minQuote || quoteAmount > maxQuote) continue
+    // Price band — unless "Any quote" is on.
+    if (!anyQuote && (quoteAmount < minQuote || quoteAmount > maxQuote)) continue
 
     const rawName = (r.owner?.names?.[0] ?? '').trim()
     const name = rawName && !looksLikeCompany(rawName) ? tidyName(rawName) : 'Neighbor'
@@ -215,9 +234,11 @@ async function preview(body: Record<string, unknown>) {
   type Item = { cand: BlastCandidate; qual: QualInput; lead_score?: number }
   let items: Item[]
   let gateDropped = 0
+  let gateBreakdown: Record<string, number> = {}
   if (smart) {
-    const scored = qualifyBatch(inBand)        // gate-passers, sorted best-first
+    const { mailable: scored, gate_breakdown } = qualifyBatch(inBand)  // best-first
     gateDropped = inBand.length - scored.length
+    gateBreakdown = gate_breakdown
     for (const s of scored) {
       s.cand.lead_score = s.lead_score
       s.cand.segment = s.segment
@@ -225,6 +246,7 @@ async function preview(body: Record<string, unknown>) {
       s.cand.is_absentee = s.is_absentee
       s.cand.last_sold = s.last_sold
       s.cand.home_value = s.home_value
+      s.cand.factors = s.factors
     }
     items = scored
   } else {
@@ -278,6 +300,7 @@ async function preview(body: Record<string, unknown>) {
     center: centerLabel,
     smart,
     gate_dropped: gateDropped,
+    gate_breakdown: gateBreakdown,
     priority,
     already_contacted: alreadyContacted,
   })

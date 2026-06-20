@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import {
   ArrowLeft, Crosshair, Loader2, Search, Send,
-  CheckCircle2, XCircle,
+  CheckCircle2, XCircle, Megaphone,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -31,6 +31,7 @@ interface Candidate {
   last_sold?: string | null
   home_value?: number | null
   income_band?: 'above' | 'at' | 'below' | 'unknown'
+  factors?: Record<string, number>
 }
 
 const SEGMENT_LABEL: Record<string, string> = {
@@ -38,6 +39,26 @@ const SEGMENT_LABEL: Record<string, string> = {
   aging_homeowner: 'Aging homeowner',
   time_poor_family: 'Busy family',
   general: 'General',
+}
+
+const GATE_LABEL: Record<string, string> = {
+  lot_size: 'lot size out of range (0.15–1.5 ac)',
+  value_band: 'home value outside the ZIP band',
+}
+
+const FACTOR_LABEL: Record<string, string> = {
+  lot_mid: 'ideal lot size (0.2–0.6 ac)',
+  owner_occupied: 'owner-occupied',
+  absentee: 'absentee owner',
+  new_mover: 'recently sold (new mover)',
+  income_above: 'higher-income block',
+}
+
+function whyText(factors?: Record<string, number>): string {
+  if (!factors || Object.keys(factors).length === 0) return 'No scoring factors matched (score 0).'
+  return Object.entries(factors)
+    .map(([k, v]) => `+${v} ${FACTOR_LABEL[k] ?? k}`)
+    .join('  ·  ')
 }
 
 type SendState = 'idle' | 'sending' | 'sent' | 'failed'
@@ -58,12 +79,26 @@ export default function AreaBlastPage() {
   const [band, setBand] = useState('10')
   const [phone, setPhone] = useState('(260) 599-4253')
   const [smart, setSmart] = useState(true)
+  const [exactStreet, setExactStreet] = useState(false)
+  const [anyQuote, setAnyQuote] = useState(false)
 
   const [previewing, setPreviewing] = useState(false)
   const [sending, setSending] = useState(false)
   const [rows, setRows] = useState<CandidateRow[]>([])
-  const [stats, setStats] = useState<{ scanned: number; in_band: number; already_contacted: number; gate_dropped?: number; priority?: { first: number; second: number; skip: number } } | null>(null)
+  const [stats, setStats] = useState<{ scanned: number; in_band: number; already_contacted: number; gate_dropped?: number; gate_breakdown?: Record<string, number>; priority?: { first: number; second: number; skip: number } } | null>(null)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
+
+  // Campaigns
+  const [campaigns, setCampaigns] = useState<Array<{ id: string; name: string }>>([])
+  const [campaignChoice, setCampaignChoice] = useState('')   // '' = none, '__new__' = new, else id
+  const [newCampaignName, setNewCampaignName] = useState('')
+  const [addingToCampaign, setAddingToCampaign] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/letters/campaigns').then(r => r.json()).then((d) => {
+      if (Array.isArray(d)) setCampaigns(d.map((c: { id: string; name: string }) => ({ id: c.id, name: c.name })))
+    }).catch(() => {})
+  }, [])
 
   const selectedRows = rows.filter(r => r.selected && r.sendState !== 'sent')
   const estCost = selectedRows.length * PRICE_PER_PIECE
@@ -87,6 +122,8 @@ export default function AreaBlastPage() {
           min_quote: (Number(targetQuote) || 50) - (Number(band) || 10),
           max_quote: (Number(targetQuote) || 50) + (Number(band) || 10),
           smart,
+          exact_street: exactStreet,
+          any_quote: anyQuote,
         }),
       })
       const data = await res.json()
@@ -96,7 +133,7 @@ export default function AreaBlastPage() {
       }
       const candidates: Candidate[] = data.candidates ?? []
       setRows(candidates.map(c => ({ ...c, selected: true, sendState: 'idle' as SendState })))
-      setStats({ scanned: data.scanned ?? 0, in_band: data.in_band ?? 0, already_contacted: data.already_contacted ?? 0, gate_dropped: data.gate_dropped, priority: data.priority })
+      setStats({ scanned: data.scanned ?? 0, in_band: data.in_band ?? 0, already_contacted: data.already_contacted ?? 0, gate_dropped: data.gate_dropped, gate_breakdown: data.gate_breakdown, priority: data.priority })
       if (candidates.length === 0) {
         toast.info('No new homes in that quote range — try widening the band, radius, or area.')
       } else {
@@ -106,6 +143,48 @@ export default function AreaBlastPage() {
       toast.error('Preview failed')
     } finally {
       setPreviewing(false)
+    }
+  }
+
+  async function addToCampaign() {
+    const chosen = rows.filter(r => r.selected && r.sendState !== 'sent')
+    if (chosen.length === 0) { toast.info('Select some homes first.'); return }
+    if (!campaignChoice) { toast.error('Pick a campaign (or create one).'); return }
+    setAddingToCampaign(true)
+    try {
+      let campaignId = campaignChoice
+      if (campaignChoice === '__new__') {
+        if (!newCampaignName.trim()) { toast.error('Name your new campaign.'); return }
+        const cRes = await fetch('/api/letters/campaigns', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: newCampaignName.trim(), phone }),
+        })
+        const c = await cRes.json()
+        if (!cRes.ok) { toast.error(c.error ?? 'Could not create campaign'); return }
+        campaignId = c.id
+        setCampaigns(prev => [{ id: c.id, name: c.name }, ...prev])
+      }
+      const res = await fetch(`/api/letters/campaigns/${campaignId}/recipients`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipients: chosen.map(r => ({
+            name: r.name, address: r.address, city: r.city, state: r.state, zip: r.zip,
+            quote: r.quote, lot_sqft: r.lot_sqft, living_sqft: r.living_sqft,
+            segment: r.segment, lead_score: r.lead_score, mail_priority: r.mail_priority, income_band: r.income_band,
+          })),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error ?? 'Could not add to campaign'); return }
+      toast.success(`Added ${data.added} to campaign${data.skipped ? ` (${data.skipped} skipped — already queued)` : ''}`)
+      // Remove the added rows from the list so they aren't double-added.
+      const addedKeys = new Set(chosen.map(r => `${r.address}-${r.zip}`))
+      setRows(prev => prev.filter(r => !addedKeys.has(`${r.address}-${r.zip}`)))
+      setNewCampaignName('')
+    } catch {
+      toast.error('Could not add to campaign')
+    } finally {
+      setAddingToCampaign(false)
     }
   }
 
@@ -264,9 +343,22 @@ export default function AreaBlastPage() {
           <input type="checkbox" checked={smart} onChange={e => setSmart(e.target.checked)} className="mt-0.5" />
           <span className="text-sm">
             <span className="font-semibold text-zinc-800">Smart targeting</span>
-            <span className="text-zinc-500"> — qualify &amp; score each home (lot size, owner-occupied, absentee, new mover, value band) and list the best prospects first. Turn off for a plain quote-band list.</span>
+            <span className="text-zinc-500"> — qualify &amp; score each home (lot size, owner-occupied, absentee, new mover, value band, income) and list the best prospects first. Turn off for a plain quote-band list.</span>
           </span>
         </label>
+
+        <div className="flex flex-wrap gap-x-6 gap-y-2">
+          {mode === 'area' && (
+            <label className="flex items-center gap-2 cursor-pointer select-none text-sm">
+              <input type="checkbox" checked={exactStreet} onChange={e => setExactStreet(e.target.checked)} />
+              <span><span className="font-medium text-zinc-800">Exact street only</span> <span className="text-zinc-500">— just homes on the street you centered on</span></span>
+            </label>
+          )}
+          <label className="flex items-center gap-2 cursor-pointer select-none text-sm">
+            <input type="checkbox" checked={anyQuote} onChange={e => setAnyQuote(e.target.checked)} />
+            <span><span className="font-medium text-zinc-800">Any quote</span> <span className="text-zinc-500">— ignore the price band, just grab the homes</span></span>
+          </label>
+        </div>
 
         <div className="flex items-center gap-3">
           <Button onClick={runPreview} disabled={previewing || sending}>
@@ -290,12 +382,19 @@ export default function AreaBlastPage() {
           {smart && stats.priority && (
             <span className="block mt-1 text-xs text-zinc-500">
               Best-first by lead score
-              {stats.gate_dropped ? ` · ${stats.gate_dropped} dropped by gates` : ''}
               {' '}· <strong className="text-green-700">{stats.priority.first}</strong> first-wave
               {' '}· <strong>{stats.priority.second}</strong> second-wave
               {stats.priority.skip ? ` · ${stats.priority.skip} low-priority` : ''}
             </span>
           )}
+          {smart && stats.gate_dropped ? (
+            <span className="block mt-1 text-xs text-zinc-500">
+              <strong>{stats.gate_dropped}</strong> dropped by gates
+              {stats.gate_breakdown && Object.keys(stats.gate_breakdown).length > 0 && (
+                <>: {Object.entries(stats.gate_breakdown).map(([k, v]) => `${v} — ${GATE_LABEL[k] ?? k}`).join(' · ')}</>
+              )}
+            </span>
+          ) : null}
         </div>
       )}
 
@@ -329,7 +428,7 @@ export default function AreaBlastPage() {
                   <td className="px-4 py-2.5 font-medium">{r.name}</td>
                   <td className="px-4 py-2.5 text-zinc-600">{r.address}, {r.city}</td>
                   {smart && (
-                    <td className="px-4 py-2.5">
+                    <td className="px-4 py-2.5" title={whyText(r.factors)}>
                       <div className="flex items-center gap-2">
                         <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${
                           (r.lead_score ?? 0) >= 8 ? 'bg-green-100 text-green-800'
@@ -369,23 +468,45 @@ export default function AreaBlastPage() {
             </tbody>
           </table>
 
-          {/* Send bar */}
-          <div className="flex items-center justify-between px-4 py-3 bg-zinc-50 border-t">
+          {/* Send / campaign bar */}
+          <div className="px-4 py-3 bg-zinc-50 border-t space-y-3">
             <div className="text-sm text-zinc-600">
               <strong>{selectedRows.length}</strong> selected · est. cost{' '}
               <strong>{formatCurrency(estCost)}</strong>
               {progress && (
-                <span className="ml-3 text-amber-600">
-                  Sending {progress.done}/{progress.total}…
-                </span>
+                <span className="ml-3 text-amber-600">Sending {progress.done}/{progress.total}…</span>
               )}
             </div>
-            <Button onClick={sendAll} disabled={sending || selectedRows.length === 0}>
-              {sending
-                ? <Loader2 size={15} className="animate-spin mr-1.5" />
-                : <Send size={15} className="mr-1.5" />}
-              {sending ? 'Sending…' : `Draft & send ${selectedRows.length} letters`}
-            </Button>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Add to campaign */}
+              <select
+                value={campaignChoice}
+                onChange={e => setCampaignChoice(e.target.value)}
+                className="h-9 rounded-md border border-zinc-200 bg-white px-3 text-sm"
+              >
+                <option value="">Add to campaign…</option>
+                <option value="__new__">+ New campaign</option>
+                {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              {campaignChoice === '__new__' && (
+                <Input value={newCampaignName} onChange={e => setNewCampaignName(e.target.value)} placeholder="Campaign name" className="w-48 h-9" />
+              )}
+              <Button variant="outline" onClick={addToCampaign} disabled={addingToCampaign || !campaignChoice || selectedRows.length === 0}>
+                {addingToCampaign ? <Loader2 size={15} className="animate-spin mr-1.5" /> : <Megaphone size={15} className="mr-1.5" />}
+                Add {selectedRows.length} to campaign
+              </Button>
+
+              <span className="text-zinc-300 mx-1">|</span>
+
+              <Button onClick={sendAll} disabled={sending || selectedRows.length === 0}>
+                {sending ? <Loader2 size={15} className="animate-spin mr-1.5" /> : <Send size={15} className="mr-1.5" />}
+                {sending ? 'Sending…' : `Send ${selectedRows.length} now`}
+              </Button>
+            </div>
+            <p className="text-xs text-zinc-400">
+              Add to a campaign to review &amp; send later from the Campaigns tab, or send now.
+            </p>
           </div>
         </div>
       )}

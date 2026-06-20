@@ -81,15 +81,24 @@ function percentile(sorted: number[], p: number): number {
   return sorted[idx]
 }
 
+export interface QualifyOutput<T> {
+  mailable: Array<T & QualResult>
+  dropped: Array<T & QualResult>
+  /** how many were dropped by each gate (a record can fail more than one) */
+  gate_breakdown: Record<string, number>
+}
+
 /**
- * Gate + score a batch. Records that fail a hard gate are dropped. Survivors
- * get a lead_score, segment, and mail_priority, and are returned sorted
- * best-first. Value-band gate (G5) is computed per-ZIP across the batch.
+ * Gate + score a batch. Returns gate-passers (sorted best-first), the dropped
+ * records (with their gate reasons), and a per-gate drop breakdown so the UI
+ * can show exactly why things were filtered. Value-band gate (G5) is computed
+ * per-ZIP across the batch — deliberately gentle (10th–95th percentile) so it
+ * only trims the very cheapest and estate-tier, not half the list.
  */
 export function qualifyBatch<T extends { qual: QualInput }>(
   items: T[],
-): Array<T & QualResult> {
-  // ── Value-band thresholds per ZIP (G5: 40th–90th percentile) ───────────────
+): QualifyOutput<T> {
+  // ── Value-band thresholds per ZIP (G5) ─────────────────────────────────────
   const valuesByZip = new Map<string, number[]>()
   for (const it of items) {
     const v = it.qual.homeValue
@@ -101,9 +110,9 @@ export function qualifyBatch<T extends { qual: QualInput }>(
   }
   const bandByZip = new Map<string, { lo: number; hi: number }>()
   for (const [zip, arr] of valuesByZip) {
-    if (arr.length < 8) continue // too few to trust percentiles — skip the gate
+    if (arr.length < 12) continue // too few to trust percentiles — skip the gate
     const sorted = [...arr].sort((a, b) => a - b)
-    bandByZip.set(zip, { lo: percentile(sorted, 40), hi: percentile(sorted, 90) })
+    bandByZip.set(zip, { lo: percentile(sorted, 10), hi: percentile(sorted, 95) })
   }
 
   const out: Array<T & QualResult> = []
@@ -160,8 +169,15 @@ export function qualifyBatch<T extends { qual: QualInput }>(
       block_group_income_vs_county: 'unknown', factors, gate_fails: [] })
   }
 
-  // Mailable = cleared gates; sort best-first.
-  return out
+  const mailable = out
     .filter(r => r.gate_fails.length === 0)
     .sort((a, b) => b.lead_score - a.lead_score)
+  const dropped = out.filter(r => r.gate_fails.length > 0)
+
+  const gate_breakdown: Record<string, number> = {}
+  for (const r of dropped) {
+    for (const reason of r.gate_fails) gate_breakdown[reason] = (gate_breakdown[reason] ?? 0) + 1
+  }
+
+  return { mailable, dropped, gate_breakdown }
 }
