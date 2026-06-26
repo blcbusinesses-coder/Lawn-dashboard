@@ -69,8 +69,16 @@ interface CandidateRow extends Candidate {
   error?: string
 }
 
+interface StreetRow {
+  street: string
+  homes: number
+  avg_income: number | null
+  income_band: string
+  avg_value: number | null
+}
+
 export default function AreaBlastPage() {
-  const [mode, setMode] = useState<'zip' | 'area'>('zip')
+  const [mode, setMode] = useState<'zip' | 'area' | 'streets'>('zip')
   const [zip, setZip] = useState('46755')
   const [center, setCenter] = useState('')
   const [radius, setRadius] = useState('0.5')
@@ -81,6 +89,13 @@ export default function AreaBlastPage() {
   const [smart, setSmart] = useState(true)
   const [exactStreet, setExactStreet] = useState(false)
   const [anyQuote, setAnyQuote] = useState(false)
+
+  // Street Finder
+  const [streetRadius, setStreetRadius] = useState('0.75')
+  const [streets, setStreets] = useState<StreetRow[]>([])
+  const [pickedStreets, setPickedStreets] = useState<Set<string>>(new Set())
+  const [findingStreets, setFindingStreets] = useState(false)
+  const [streetsMeta, setStreetsMeta] = useState<{ scanned: number; income_available: boolean } | null>(null)
 
   const [previewing, setPreviewing] = useState(false)
   const [sending, setSending] = useState(false)
@@ -103,7 +118,39 @@ export default function AreaBlastPage() {
   const selectedRows = rows.filter(r => r.selected && r.sendState !== 'sent')
   const estCost = selectedRows.length * PRICE_PER_PIECE
 
+  async function runFindStreets() {
+    if (center.trim().length < 3) { toast.error('Enter a street or address to search around.'); return }
+    setFindingStreets(true)
+    setStreets([])
+    setPickedStreets(new Set())
+    setStreetsMeta(null)
+    try {
+      const res = await fetch('/api/letters/blast', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'streets', center: center.trim(), radius: Number(streetRadius) || 0.75 }),
+      })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error ?? 'Street search failed'); return }
+      setStreets(data.streets ?? [])
+      setStreetsMeta({ scanned: data.scanned ?? 0, income_available: !!data.income_available })
+      if (!data.income_available) toast.info('No income data (set CENSUS_API_KEY) — streets ranked by home value instead.')
+    } catch {
+      toast.error('Street search failed')
+    } finally {
+      setFindingStreets(false)
+    }
+  }
+
+  function toggleStreet(name: string) {
+    setPickedStreets(prev => {
+      const next = new Set(prev)
+      next.has(name) ? next.delete(name) : next.add(name)
+      return next
+    })
+  }
+
   async function runPreview() {
+    if (mode === 'streets' && pickedStreets.size === 0) { toast.error('Pick at least one street first.'); return }
     setPreviewing(true)
     setRows([])
     setStats(null)
@@ -113,10 +160,13 @@ export default function AreaBlastPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'preview',
-          mode,
+          // Street Finder pulls a radius around the center, filtered to the
+          // chosen streets.
+          mode: mode === 'streets' ? 'area' : mode,
           zip: zip.trim(),
           center: center.trim(),
-          radius: Number(radius) || 0.5,
+          radius: mode === 'streets' ? (Number(streetRadius) || 0.75) : (Number(radius) || 0.5),
+          streets: mode === 'streets' ? [...pickedStreets] : undefined,
           count: Number(count) || 25,
           target_quote: Number(targetQuote) || 50,
           min_quote: (Number(targetQuote) || 50) - (Number(band) || 10),
@@ -291,7 +341,7 @@ export default function AreaBlastPage() {
       <div className="border rounded-xl p-5 bg-white space-y-4">
         {/* Mode toggle */}
         <div className="inline-flex rounded-lg border border-zinc-200 p-0.5 bg-zinc-50">
-          {([['zip', 'By ZIP code'], ['area', 'By neighborhood']] as const).map(([m, label]) => (
+          {([['zip', 'By ZIP code'], ['area', 'By neighborhood'], ['streets', 'By top streets']] as const).map(([m, label]) => (
             <button
               key={m}
               onClick={() => setMode(m)}
@@ -304,8 +354,54 @@ export default function AreaBlastPage() {
           ))}
         </div>
 
+        {/* ── Street Finder (step 1: rank streets by income) ── */}
+        {mode === 'streets' && (
+          <div className="rounded-lg border border-zinc-200 bg-zinc-50/60 p-4 space-y-3">
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="flex-1 min-w-[220px]">
+                <Label htmlFor="scenter">Search around (street or address)</Label>
+                <Input id="scenter" value={center} onChange={e => setCenter(e.target.value)} placeholder="e.g. Mitchell St, Kendallville" />
+              </div>
+              <div className="w-28">
+                <Label htmlFor="sradius">Radius (mi)</Label>
+                <Input id="sradius" type="number" min={0.1} max={3} step={0.05} value={streetRadius} onChange={e => setStreetRadius(e.target.value)} />
+              </div>
+              <Button variant="outline" onClick={runFindStreets} disabled={findingStreets}>
+                {findingStreets ? <Loader2 size={15} className="animate-spin mr-1.5" /> : <Search size={15} className="mr-1.5" />}
+                {findingStreets ? 'Ranking…' : 'Find streets'}
+              </Button>
+            </div>
+
+            {streetsMeta && (
+              <p className="text-xs text-zinc-500">
+                {streets.length} streets in {streetsMeta.scanned} homes ·{' '}
+                {streetsMeta.income_available ? 'ranked by neighborhood income' : 'ranked by home value (no income key)'} ·
+                {' '}<strong>{pickedStreets.size}</strong> picked
+              </p>
+            )}
+
+            {streets.length > 0 && (
+              <div className="max-h-72 overflow-y-auto rounded-md border border-zinc-200 bg-white divide-y">
+                {streets.map(s => (
+                  <label key={s.street} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-zinc-50">
+                    <input type="checkbox" checked={pickedStreets.has(s.street)} onChange={() => toggleStreet(s.street)} />
+                    <span className="flex-1 min-w-0">
+                      <span className="font-medium text-sm">{s.street}</span>
+                      <span className="text-xs text-zinc-500"> · {s.homes} home{s.homes === 1 ? '' : 's'}</span>
+                    </span>
+                    {s.income_band === 'above' && <span className="text-[11px] font-semibold text-green-700">↑ higher income</span>}
+                    {s.avg_income != null && <span className="text-xs text-zinc-500 w-24 text-right">~{formatCurrency(s.avg_income)} inc</span>}
+                    {s.avg_income == null && s.avg_value != null && <span className="text-xs text-zinc-500 w-24 text-right">~{formatCurrency(s.avg_value)} value</span>}
+                  </label>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-zinc-400">Pick the streets you want, then set the count + target quote below and hit &ldquo;Find best lawns.&rdquo;</p>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          {mode === 'zip' ? (
+          {mode === 'streets' ? null : mode === 'zip' ? (
             <div>
               <Label htmlFor="zip">ZIP code</Label>
               <Input id="zip" value={zip} onChange={e => setZip(e.target.value)} placeholder="46755" maxLength={5} />
@@ -361,13 +457,14 @@ export default function AreaBlastPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <Button onClick={runPreview} disabled={previewing || sending}>
+          <Button onClick={runPreview} disabled={previewing || sending || (mode === 'streets' && pickedStreets.size === 0)}>
             {previewing ? <Loader2 size={15} className="animate-spin mr-1.5" /> : <Search size={15} className="mr-1.5" />}
-            {previewing ? 'Scanning…' : 'Find homes'}
+            {previewing ? 'Scanning…' : mode === 'streets' ? `Find best lawns${pickedStreets.size ? ` on ${pickedStreets.size} street${pickedStreets.size === 1 ? '' : 's'}` : ''}` : 'Find homes'}
           </Button>
           <span className="text-xs text-zinc-500">
             {mode === 'area' && 'Pulls homes within the radius of that spot · '}
-            Quotes {formatCurrency((Number(targetQuote) || 50) - (Number(band) || 10))}–{formatCurrency((Number(targetQuote) || 50) + (Number(band) || 10))}
+            {mode === 'streets' && 'Pulls the best lawns on your picked streets · '}
+            {anyQuote ? 'Any quote' : `Quotes ${formatCurrency((Number(targetQuote) || 50) - (Number(band) || 10))}–${formatCurrency((Number(targetQuote) || 50) + (Number(band) || 10))}`}
             {' '}· already-contacted homes excluded
           </span>
         </div>
@@ -376,7 +473,7 @@ export default function AreaBlastPage() {
       {/* Results */}
       {stats && (
         <div className="text-sm text-zinc-600">
-          Scanned <strong>{stats.scanned}</strong> homes {mode === 'area' ? `near ${center.trim()}` : `in ${zip}`} · <strong>{stats.in_band}</strong> priced in range
+          Scanned <strong>{stats.scanned}</strong> homes {mode === 'zip' ? `in ${zip}` : `near ${center.trim()}`} · <strong>{stats.in_band}</strong> {anyQuote ? 'found' : 'priced in range'}
           {stats.already_contacted > 0 && <> · <strong>{stats.already_contacted}</strong> already contacted (skipped)</>} ·
           showing <strong>{rows.length}</strong> new
           {smart && stats.priority && (

@@ -18,7 +18,7 @@ import { computeQuote, generateAiCopy, type SettingsMap } from '@/lib/letters/ge
 import { normalizeAddress, sendLetterToLob } from '@/lib/letters/monitor'
 import { tidyName, looksLikeCompany } from '@/lib/property/owner'
 import { qualifyBatch, priorityForScore, INCOME_ABOVE_POINTS, type QualInput } from '@/lib/letters/qualify'
-import { incomeBandsBatch } from '@/lib/letters/census'
+import { incomeBandsBatch, incomeDetailsBatch } from '@/lib/letters/census'
 
 export const maxDuration = 60
 
@@ -157,6 +157,10 @@ async function preview(body: Record<string, unknown>) {
     ? streetKey(String(body.center ?? '').split(',')[0])
     : null
 
+  // Multi-street filter (from the Street Finder: pull only these streets).
+  const streetList = Array.isArray(body.streets) ? (body.streets as string[]) : []
+  const streetSet = streetList.length ? new Set(streetList.map(s => streetKey(String(s).split(',')[0]))) : null
+
   const settings = await loadSettings()
   const admin = createServiceClient()
 
@@ -187,6 +191,8 @@ async function preview(body: Record<string, unknown>) {
 
     // Exact-street: keep only homes whose street matches the one centered on.
     if (exactStreetKey && streetKey(street) !== exactStreetKey) continue
+    // Street Finder: keep only homes on the chosen streets.
+    if (streetSet && !streetSet.has(streetKey(street))) continue
 
     const recZip = (r.zipCode ?? zip ?? '').trim().slice(0, 5)
 
@@ -303,6 +309,96 @@ async function preview(body: Record<string, unknown>) {
     gate_breakdown: gateBreakdown,
     priority,
     already_contacted: alreadyContacted,
+  })
+}
+
+// ── Street Finder ───────────────────────────────────────────────────────────
+// Pull every home within a radius, score each street by its block-group income,
+// and return the streets ranked highest-income first so the owner can pick which
+// streets to mail. One RentCast call; income is free (FCC + Census).
+
+interface StreetRow {
+  street: string
+  homes: number
+  avg_income: number | null
+  income_band: string
+  avg_value: number | null
+}
+
+async function findStreets(body: Record<string, unknown>) {
+  const center = String(body.center ?? '').trim()
+  const radius = Math.min(Math.max(Number(body.radius) || 0.75, 0.1), 3)
+  if (center.length < 3) {
+    return NextResponse.json({ error: 'Enter a street or address to search around' }, { status: 400 })
+  }
+  const apiKey = process.env.RENTCAST_API_KEY
+  if (!apiKey) return NextResponse.json({ error: 'RENTCAST_API_KEY is not configured' }, { status: 500 })
+
+  const geo = await geocodeCenter(center)
+  if (!geo) return NextResponse.json({ error: `Couldn't find "${center}". Try a full street address.` }, { status: 400 })
+
+  const url =
+    `https://api.rentcast.io/v1/properties?latitude=${geo.lat}&longitude=${geo.lng}&radius=${radius}` +
+    `&propertyType=${encodeURIComponent('Single Family')}&limit=500`
+  const res = await fetch(url, { headers: { 'X-Api-Key': apiKey, Accept: 'application/json' }, signal: AbortSignal.timeout(30_000) })
+  if (!res.ok) {
+    const text = (await res.text()).slice(0, 200)
+    return NextResponse.json({ error: `RentCast error ${res.status}: ${text}` }, { status: 502 })
+  }
+  const records = ((await res.json()) as RentCastRecord[]).filter(r => (r.addressLine1 ?? '').trim())
+  if (records.length === 0) return NextResponse.json({ streets: [], scanned: 0, income_available: false })
+
+  // Income per home (bounded). FCC + Census are free; cache makes repeats cheap.
+  const capped = records.slice(0, 400)
+  const details = await incomeDetailsBatch(capped.map(r => ({
+    lat: typeof r.latitude === 'number' ? r.latitude : null,
+    lng: typeof r.longitude === 'number' ? r.longitude : null,
+  })))
+  const countyMedian = details.find(d => d.countyMedian != null)?.countyMedian ?? null
+
+  // Group by street.
+  const groups = new Map<string, { display: string; incomes: number[]; values: number[]; homes: number }>()
+  capped.forEach((r, i) => {
+    const line = (r.addressLine1 ?? '').trim()
+    const key = streetKey(line)
+    if (!key) return
+    const display = line.replace(/^\s*\d+\s*/, '').trim() || line
+    const g = groups.get(key) ?? { display, incomes: [], values: [], homes: 0 }
+    g.homes++
+    const inc = details[i]?.income
+    if (typeof inc === 'number') g.incomes.push(inc)
+    const val = recordValue(r)
+    if (val) g.values.push(val)
+    groups.set(key, g)
+  })
+
+  const mean = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null)
+  const streets: StreetRow[] = [...groups.values()].map(g => {
+    const avg_income = mean(g.incomes)
+    const band = avg_income == null || countyMedian == null ? 'unknown'
+      : avg_income > countyMedian * 1.05 ? 'above' : avg_income < countyMedian * 0.95 ? 'below' : 'at'
+    return {
+      street: g.display,
+      homes: g.homes,
+      avg_income: avg_income != null ? Math.round(avg_income) : null,
+      income_band: band,
+      avg_value: (() => { const v = mean(g.values); return v != null ? Math.round(v) : null })(),
+    }
+  })
+
+  const incomeAvailable = streets.some(s => s.avg_income != null)
+  // Rank: by income if we have it, else by value; ties → more homes first.
+  streets.sort((a, b) => {
+    const av = incomeAvailable ? (a.avg_income ?? -1) : (a.avg_value ?? -1)
+    const bv = incomeAvailable ? (b.avg_income ?? -1) : (b.avg_value ?? -1)
+    return bv - av || b.homes - a.homes
+  })
+
+  return NextResponse.json({
+    streets: streets.slice(0, 50),
+    scanned: records.length,
+    income_available: incomeAvailable,
+    county_median: countyMedian,
   })
 }
 
@@ -426,7 +522,8 @@ async function send(body: Record<string, unknown>) {
 export async function POST(request: NextRequest) {
   const body = (await request.json()) as Record<string, unknown>
   const action = body.action
+  if (action === 'streets') return findStreets(body)
   if (action === 'preview') return preview(body)
   if (action === 'send') return send(body)
-  return NextResponse.json({ error: 'action must be preview or send' }, { status: 400 })
+  return NextResponse.json({ error: 'action must be streets, preview, or send' }, { status: 400 })
 }

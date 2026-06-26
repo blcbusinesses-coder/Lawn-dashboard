@@ -74,37 +74,57 @@ async function loadCounty(state: string, county: string): Promise<{ median: numb
   return null
 }
 
-/** Income band for a property's coordinates vs. its county median. */
-export async function incomeBandForLatLng(lat: number | null, lng: number | null): Promise<IncomeBand> {
-  // The Census ACS API requires a (free) key; without it, skip entirely so we
-  // don't waste geocoding calls on income we can't resolve.
-  if (!process.env.CENSUS_API_KEY) return 'unknown'
-  if (lat == null || lng == null) return 'unknown'
-  const geoid = await blockGroupForLatLng(lat, lng)
-  if (!geoid) return 'unknown'
-  const county = await loadCounty(geoid.slice(0, 2), geoid.slice(2, 5))
-  if (!county) return 'unknown'
-  const inc = county.byBG.get(geoid)
-  if (!valid(inc)) return 'unknown'
-  // "at" = within ±5% of county median.
-  if (inc > county.median * 1.05) return 'above'
-  if (inc < county.median * 0.95) return 'below'
-  return 'at'
+export interface IncomeDetail {
+  income: number | null      // block-group median household income
+  countyMedian: number | null
+  band: IncomeBand
 }
 
-/** Run a list through incomeBandForLatLng with bounded concurrency. */
-export async function incomeBandsBatch(
+/** Full income detail (raw value + band) for a property's coordinates. */
+export async function incomeDetailForLatLng(lat: number | null, lng: number | null): Promise<IncomeDetail> {
+  // The Census ACS API requires a (free) key; without it, skip entirely so we
+  // don't waste geocoding calls on income we can't resolve.
+  if (!process.env.CENSUS_API_KEY || lat == null || lng == null) return { income: null, countyMedian: null, band: 'unknown' }
+  const geoid = await blockGroupForLatLng(lat, lng)
+  if (!geoid) return { income: null, countyMedian: null, band: 'unknown' }
+  const county = await loadCounty(geoid.slice(0, 2), geoid.slice(2, 5))
+  if (!county) return { income: null, countyMedian: null, band: 'unknown' }
+  const inc = county.byBG.get(geoid)
+  if (!valid(inc)) return { income: null, countyMedian: county.median, band: 'unknown' }
+  // "at" = within ±5% of county median.
+  const band: IncomeBand = inc > county.median * 1.05 ? 'above' : inc < county.median * 0.95 ? 'below' : 'at'
+  return { income: inc, countyMedian: county.median, band }
+}
+
+/** Income band for a property's coordinates vs. its county median. */
+export async function incomeBandForLatLng(lat: number | null, lng: number | null): Promise<IncomeBand> {
+  return (await incomeDetailForLatLng(lat, lng)).band
+}
+
+async function runBatch<R>(
   coords: Array<{ lat: number | null; lng: number | null }>,
-  concurrency = 6,
-): Promise<IncomeBand[]> {
-  const out: IncomeBand[] = new Array(coords.length).fill('unknown')
+  fn: (lat: number | null, lng: number | null) => Promise<R>,
+  fallback: R,
+  concurrency: number,
+): Promise<R[]> {
+  const out: R[] = new Array(coords.length).fill(fallback)
   let i = 0
   async function worker() {
     while (i < coords.length) {
       const idx = i++
-      out[idx] = await incomeBandForLatLng(coords[idx].lat, coords[idx].lng)
+      out[idx] = await fn(coords[idx].lat, coords[idx].lng)
     }
   }
-  await Promise.all(Array.from({ length: Math.min(concurrency, coords.length) }, worker))
+  await Promise.all(Array.from({ length: Math.min(concurrency, Math.max(coords.length, 1)) }, worker))
   return out
+}
+
+/** Run a list through incomeBandForLatLng with bounded concurrency. */
+export function incomeBandsBatch(coords: Array<{ lat: number | null; lng: number | null }>, concurrency = 6): Promise<IncomeBand[]> {
+  return runBatch(coords, incomeBandForLatLng, 'unknown', concurrency)
+}
+
+/** Run a list through incomeDetailForLatLng with bounded concurrency. */
+export function incomeDetailsBatch(coords: Array<{ lat: number | null; lng: number | null }>, concurrency = 8): Promise<IncomeDetail[]> {
+  return runBatch(coords, incomeDetailForLatLng, { income: null, countyMedian: null, band: 'unknown' }, concurrency)
 }
