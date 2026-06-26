@@ -398,6 +398,7 @@ async function findStreets(body: Record<string, unknown>) {
     streets: streets.slice(0, 50),
     scanned: records.length,
     income_available: incomeAvailable,
+    census_key_set: !!process.env.CENSUS_API_KEY,
     county_median: countyMedian,
   })
 }

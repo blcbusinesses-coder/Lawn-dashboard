@@ -95,7 +95,7 @@ export default function AreaBlastPage() {
   const [streets, setStreets] = useState<StreetRow[]>([])
   const [pickedStreets, setPickedStreets] = useState<Set<string>>(new Set())
   const [findingStreets, setFindingStreets] = useState(false)
-  const [streetsMeta, setStreetsMeta] = useState<{ scanned: number; income_available: boolean } | null>(null)
+  const [streetsMeta, setStreetsMeta] = useState<{ scanned: number; income_available: boolean; census_key_set: boolean } | null>(null)
 
   const [previewing, setPreviewing] = useState(false)
   const [sending, setSending] = useState(false)
@@ -132,8 +132,12 @@ export default function AreaBlastPage() {
       const data = await res.json()
       if (!res.ok) { toast.error(data.error ?? 'Street search failed'); return }
       setStreets(data.streets ?? [])
-      setStreetsMeta({ scanned: data.scanned ?? 0, income_available: !!data.income_available })
-      if (!data.income_available) toast.info('No income data (set CENSUS_API_KEY) — streets ranked by home value instead.')
+      setStreetsMeta({ scanned: data.scanned ?? 0, income_available: !!data.income_available, census_key_set: !!data.census_key_set })
+      if (!data.income_available) {
+        toast.info(data.census_key_set
+          ? 'Census key is set but no income data came back — ranked by home value. Tell me and I\'ll dig in.'
+          : 'No CENSUS_API_KEY in the deployment yet — add it in Vercel + redeploy to rank by income.')
+      }
     } catch {
       toast.error('Street search failed')
     } finally {
@@ -375,7 +379,11 @@ export default function AreaBlastPage() {
             {streetsMeta && (
               <p className="text-xs text-zinc-500">
                 {streets.length} streets in {streetsMeta.scanned} homes ·{' '}
-                {streetsMeta.income_available ? 'ranked by neighborhood income' : 'ranked by home value (no income key)'} ·
+                {streetsMeta.income_available
+                  ? 'ranked by neighborhood income'
+                  : streetsMeta.census_key_set
+                    ? 'ranked by home value (income key set, but no income returned)'
+                    : 'ranked by home value — add CENSUS_API_KEY in Vercel + redeploy for income'} ·
                 {' '}<strong>{pickedStreets.size}</strong> picked
               </p>
             )}
