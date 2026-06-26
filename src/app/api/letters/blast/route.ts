@@ -18,7 +18,7 @@ import { computeQuote, generateAiCopy, type SettingsMap } from '@/lib/letters/ge
 import { normalizeAddress, sendLetterToLob } from '@/lib/letters/monitor'
 import { tidyName, looksLikeCompany } from '@/lib/property/owner'
 import { qualifyBatch, priorityForScore, INCOME_ABOVE_POINTS, type QualInput } from '@/lib/letters/qualify'
-import { incomeBandsBatch, incomeDetailsBatch } from '@/lib/letters/census'
+import { incomeBandsBatch, incomeDetailsBatch, getCensusDebug } from '@/lib/letters/census'
 
 export const maxDuration = 60
 
@@ -399,6 +399,7 @@ async function findStreets(body: Record<string, unknown>) {
     scanned: records.length,
     income_available: incomeAvailable,
     census_key_set: !!process.env.CENSUS_API_KEY,
+    census_debug: incomeAvailable ? null : getCensusDebug(),
     county_median: countyMedian,
   })
 }

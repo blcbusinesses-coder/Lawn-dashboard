@@ -95,7 +95,7 @@ export default function AreaBlastPage() {
   const [streets, setStreets] = useState<StreetRow[]>([])
   const [pickedStreets, setPickedStreets] = useState<Set<string>>(new Set())
   const [findingStreets, setFindingStreets] = useState(false)
-  const [streetsMeta, setStreetsMeta] = useState<{ scanned: number; income_available: boolean; census_key_set: boolean } | null>(null)
+  const [streetsMeta, setStreetsMeta] = useState<{ scanned: number; income_available: boolean; census_key_set: boolean; census_debug?: string | null } | null>(null)
 
   const [previewing, setPreviewing] = useState(false)
   const [sending, setSending] = useState(false)
@@ -132,7 +132,7 @@ export default function AreaBlastPage() {
       const data = await res.json()
       if (!res.ok) { toast.error(data.error ?? 'Street search failed'); return }
       setStreets(data.streets ?? [])
-      setStreetsMeta({ scanned: data.scanned ?? 0, income_available: !!data.income_available, census_key_set: !!data.census_key_set })
+      setStreetsMeta({ scanned: data.scanned ?? 0, income_available: !!data.income_available, census_key_set: !!data.census_key_set, census_debug: data.census_debug })
       if (!data.income_available) {
         toast.info(data.census_key_set
           ? 'Census key is set but no income data came back — ranked by home value. Tell me and I\'ll dig in.'
@@ -385,6 +385,11 @@ export default function AreaBlastPage() {
                     ? 'ranked by home value (income key set, but no income returned)'
                     : 'ranked by home value — add CENSUS_API_KEY in Vercel + redeploy for income'} ·
                 {' '}<strong>{pickedStreets.size}</strong> picked
+              </p>
+            )}
+            {streetsMeta && !streetsMeta.income_available && streetsMeta.census_key_set && streetsMeta.census_debug && (
+              <p className="text-xs font-mono break-all rounded bg-amber-50 border border-amber-200 text-amber-800 px-2 py-1">
+                Census: {streetsMeta.census_debug}
               </p>
             )}
 
