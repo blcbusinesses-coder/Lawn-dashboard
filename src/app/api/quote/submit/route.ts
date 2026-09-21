@@ -4,6 +4,7 @@
  */
 
 import { createAdminClient } from '@/lib/supabase/server'
+import { notifyNewLead } from '@/lib/pushover/client'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
@@ -34,11 +35,19 @@ export async function POST(request: NextRequest) {
       quoted_amount,
       addons:           addons ?? null,
       chosen_start_day: chosen_start_day ?? null,
+      source:           'self_service',
+      source_detail:    'Public self-service quote tool',
       quote_source:     'self_service',
     })
     .select()
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  notifyNewLead({
+    id: data.id, name: data.name, phone: data.phone, address: data.address,
+    source: 'self_service', quoted_amount,
+  }).catch(() => {})
+
   return NextResponse.json({ success: true, lead_id: data.id }, { status: 201 })
 }

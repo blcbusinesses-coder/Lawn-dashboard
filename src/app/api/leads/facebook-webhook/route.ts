@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server'
+import { notifyNewLead } from '@/lib/pushover/client'
 import { NextRequest, NextResponse } from 'next/server'
 
 const VERIFY_TOKEN = process.env.FACEBOOK_VERIFY_TOKEN ?? ''
@@ -85,6 +86,7 @@ export async function POST(request: NextRequest) {
             phone,
             address,
             source: 'facebook',
+            source_detail: 'Meta lead form',
             facebook_lead_id: leadgenId,
             status: 'new',
           },
@@ -94,6 +96,11 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (error || !lead) continue
+
+      // Ping the owner's phone + computer the instant the lead lands.
+      notifyNewLead({
+        id: lead.id, name, phone, address, source: 'facebook',
+      }).catch(() => {})
 
       // Kick off quote pipeline in the background (fire-and-forget)
       fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/leads/${lead.id}/quote`, {

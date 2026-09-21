@@ -204,10 +204,12 @@ export default function QuotePage() {
     if (!form.name.trim() || !form.phone.trim() || !form.address.trim()) return
     setStep('loading')
     try {
+      const utm_source = new URLSearchParams(window.location.search).get('utm_source')
+      const referrer = typeof document !== 'undefined' ? document.referrer : ''
       const leadRes = await fetch('/api/leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, utm_source, referrer }),
       })
       if (!leadRes.ok) throw new Error((await leadRes.json()).error ?? 'Failed to submit')
       const lead = await leadRes.json()

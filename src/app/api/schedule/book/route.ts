@@ -6,6 +6,7 @@
  */
 
 import { createAdminClient } from '@/lib/supabase/server'
+import { notifyNewLead } from '@/lib/pushover/client'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
@@ -48,6 +49,8 @@ export async function POST(request: NextRequest) {
       quoted_amount: typeof quote === 'number' && quote > 0 ? quote : null,
       chosen_start_day: isoDate,
       preferred_date: isoDate,
+      source: 'self_schedule',
+      source_detail: 'Self-scheduled (QR/website)',
       quote_source: 'self_schedule',
       notes: noteParts.join(' '),
     })
@@ -55,6 +58,11 @@ export async function POST(request: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  notifyNewLead({
+    id: data.id, name: data.name, phone: data.phone, address: data.address,
+    source: 'self_schedule', quoted_amount: data.quoted_amount,
+  }).catch(() => {})
 
   // Mark the mailed recipient as scheduled so it drops out of future outreach.
   if (recipient_id) {

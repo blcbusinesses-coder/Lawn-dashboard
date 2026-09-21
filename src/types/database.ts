@@ -529,7 +529,7 @@ export interface Database {
           email: string | null
           address: string
           preferred_date: string | null
-          status: 'new' | 'quoted' | 'converted' | 'lost'
+          status: 'new' | 'quoted' | 'followed_up' | 'closed' | 'converted' | 'lost'
           property_data: Json | null
           lot_size_sqft: number | null
           quoted_amount: number | null
@@ -538,6 +538,12 @@ export interface Database {
           addons: Json | null
           chosen_start_day: string | null
           quote_source: string
+          source: string
+          source_detail: string | null
+          facebook_lead_id: string | null
+          drafted_text: string | null
+          quote_low: number | null
+          quote_high: number | null
           created_at: string
         }
         Insert: {
@@ -547,7 +553,7 @@ export interface Database {
           email?: string | null
           address: string
           preferred_date?: string | null
-          status?: 'new' | 'quoted' | 'converted' | 'lost'
+          status?: 'new' | 'quoted' | 'followed_up' | 'closed' | 'converted' | 'lost'
           property_data?: Json | null
           lot_size_sqft?: number | null
           quoted_amount?: number | null
@@ -556,6 +562,12 @@ export interface Database {
           addons?: Json | null
           chosen_start_day?: string | null
           quote_source?: string
+          source?: string
+          source_detail?: string | null
+          facebook_lead_id?: string | null
+          drafted_text?: string | null
+          quote_low?: number | null
+          quote_high?: number | null
           created_at?: string
         }
         Update: {
@@ -564,7 +576,7 @@ export interface Database {
           email?: string | null
           address?: string
           preferred_date?: string | null
-          status?: 'new' | 'quoted' | 'converted' | 'lost'
+          status?: 'new' | 'quoted' | 'followed_up' | 'closed' | 'converted' | 'lost'
           property_data?: Json | null
           lot_size_sqft?: number | null
           quoted_amount?: number | null
@@ -573,6 +585,12 @@ export interface Database {
           addons?: Json | null
           chosen_start_day?: string | null
           quote_source?: string
+          source?: string
+          source_detail?: string | null
+          facebook_lead_id?: string | null
+          drafted_text?: string | null
+          quote_low?: number | null
+          quote_high?: number | null
         }
         Relationships: []
       }

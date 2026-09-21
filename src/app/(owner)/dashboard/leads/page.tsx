@@ -5,8 +5,8 @@ import { toast } from 'sonner'
 import { formatDistanceToNow } from 'date-fns'
 import { Copy, Check, RefreshCw, MessageSquare, ExternalLink, Zap, MapPin, Phone, Clock, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { sourceMeta } from '@/lib/leads/source'
 
 type Status = 'new' | 'quoted' | 'followed_up' | 'closed' | 'converted' | 'lost'
 
@@ -15,7 +15,8 @@ interface Lead {
   name: string
   phone: string
   address: string
-  source: 'facebook' | 'website'
+  source: string
+  source_detail: string | null
   status: Status
   quoted_amount: number | null
   drafted_text: string | null
@@ -58,6 +59,7 @@ export default function LeadsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [noteEdits, setNoteEdits] = useState<Record<string, string>>({})
   const [twilioEnabled, setTwilioEnabled] = useState(false)
+  const [sourceFilter, setSourceFilter] = useState<string>('all')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -138,6 +140,18 @@ export default function LeadsPage() {
     closed:  leads.filter(l => ['closed', 'converted'].includes(l.status)).length,
   }
 
+  // Source counts across all leads → drives the filter chips.
+  const sourceCounts = leads.reduce<Record<string, number>>((acc, l) => {
+    const key = l.source || 'website'
+    acc[key] = (acc[key] ?? 0) + 1
+    return acc
+  }, {})
+  const sourceKeys = Object.keys(sourceCounts).sort((a, b) => sourceCounts[b] - sourceCounts[a])
+
+  const visibleLeads = sourceFilter === 'all'
+    ? leads
+    : leads.filter(l => (l.source || 'website') === sourceFilter)
+
   return (
     <div className="p-4 md:p-8">
 
@@ -145,7 +159,7 @@ export default function LeadsPage() {
       <div className="flex items-center justify-between flex-wrap gap-y-2 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900">Lead Pipeline</h1>
-          <p className="text-sm text-zinc-500 mt-1">Facebook ads + website form submissions</p>
+          <p className="text-sm text-zinc-500 mt-1">Every new lead as it arrives — source auto-detected.</p>
         </div>
         <Button variant="outline" size="sm" onClick={load} className="gap-2">
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
@@ -167,6 +181,39 @@ export default function LeadsPage() {
           </div>
         ))}
       </div>
+
+      {/* Source filter chips */}
+      {leads.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-5">
+          <button
+            onClick={() => setSourceFilter('all')}
+            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+              sourceFilter === 'all'
+                ? 'bg-zinc-900 text-white border-zinc-900'
+                : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
+            }`}
+          >
+            All <span className="opacity-70">{leads.length}</span>
+          </button>
+          {sourceKeys.map(key => {
+            const meta = sourceMeta(key)
+            const active = sourceFilter === key
+            return (
+              <button
+                key={key}
+                onClick={() => setSourceFilter(key)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                  active ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
+                }`}
+              >
+                <span>{meta.emoji}</span>
+                {meta.label}
+                <span className="opacity-70">{sourceCounts[key]}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* Twilio banner */}
       <div className={`flex items-center gap-2 px-4 py-3 rounded-xl border text-sm mb-6 ${
@@ -194,8 +241,9 @@ export default function LeadsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {leads.map(lead => {
+          {visibleLeads.map(lead => {
             const expanded = expandedId === lead.id
+            const src = sourceMeta(lead.source)
             return (
               <div key={lead.id} className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
 
@@ -207,12 +255,11 @@ export default function LeadsPage() {
                     <div className="flex-1 min-w-0 space-y-1.5">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-semibold text-zinc-900">{lead.name}</span>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
-                          lead.source === 'facebook'
-                            ? 'bg-blue-50 text-blue-700 border-blue-200'
-                            : 'bg-zinc-100 text-zinc-600 border-zinc-200'
-                        }`}>
-                          {lead.source === 'facebook' ? 'Facebook' : 'Website'}
+                        <span
+                          title={lead.source_detail ?? undefined}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${src.badge}`}
+                        >
+                          <span>{src.emoji}</span>{src.label}
                         </span>
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border capitalize ${STATUS_CLASSES[lead.status]}`}>
                           {lead.status.replace('_', ' ')}

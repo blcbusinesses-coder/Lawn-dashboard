@@ -74,10 +74,12 @@ export default function GetAQuotePage() {
     setStep('submitting')
     const fullAddress = `${street.trim()}, ${city}, IN`
     try {
+      const utm_source = new URLSearchParams(window.location.search).get('utm_source')
+      const referrer = typeof document !== 'undefined' ? document.referrer : ''
       const res = await fetch('/api/leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), phone: phone.trim(), address: fullAddress, source: 'website' }),
+        body: JSON.stringify({ name: name.trim(), phone: phone.trim(), address: fullAddress, source: 'website', utm_source, referrer }),
       })
       if (!res.ok) throw new Error()
       setStep('done')

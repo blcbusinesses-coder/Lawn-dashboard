@@ -1,4 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { detectSource } from '@/lib/leads/source'
+import { notifyNewLead } from '@/lib/pushover/client'
 import { NextRequest, NextResponse } from 'next/server'
 
 // GET /api/leads — owner: list all leads
@@ -17,11 +19,19 @@ export async function POST(request: NextRequest) {
   // Use admin client so RLS doesn't block the public insert
   const adminClient = await createAdminClient()
   const body = await request.json()
-  const { name, phone, email, address, preferred_date, source } = body
+  const { name, phone, email, address, preferred_date, source, utm_source, referrer } = body
 
   if (!name?.trim() || !phone?.trim() || !address?.trim()) {
     return NextResponse.json({ error: 'name, phone, and address are required' }, { status: 400 })
   }
+
+  // Auto-detect where this lead actually came from (utm tag / referrer /
+  // explicit source) so it's tagged correctly in the pipeline.
+  const detected = detectSource({
+    explicit: source,
+    utmSource: utm_source,
+    referrer,
+  })
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (adminClient.from('leads') as any)
@@ -31,12 +41,19 @@ export async function POST(request: NextRequest) {
       email: email?.trim() || null,
       address: address.trim(),
       preferred_date: preferred_date || null,
-      source: source === 'facebook' ? 'facebook' : 'website',
+      source: detected.source,
+      source_detail: detected.detail,
       status: 'new',
     })
     .select()
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  notifyNewLead({
+    id: data.id, name: data.name, phone: data.phone, address: data.address,
+    source: detected.source, quoted_amount: data.quoted_amount,
+  }).catch(() => {})
+
   return NextResponse.json(data, { status: 201 })
 }
