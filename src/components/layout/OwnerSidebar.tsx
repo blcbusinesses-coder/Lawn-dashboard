@@ -74,6 +74,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/dashboard/customers',  label: 'Customers',  Icon: Users },
       { href: '/dashboard/properties', label: 'Properties', Icon: Home },
+      { href: '/dashboard/estimates',  label: 'Estimates',  Icon: FileText },
       { href: '/dashboard/jobs',       label: 'Jobs',       Icon: ClipboardCheck },
       { href: '/dashboard/equipment',  label: 'Equipment',  Icon: Wrench },
       { href: '/dashboard/weather',    label: 'Weather',    Icon: CloudSun },

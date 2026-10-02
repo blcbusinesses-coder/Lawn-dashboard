@@ -594,6 +594,88 @@ export interface Database {
         }
         Relationships: []
       }
+      estimates: {
+        Row: {
+          id: string
+          customer_id: string | null
+          customer_name: string
+          customer_email: string | null
+          address: string | null
+          job_type: string | null
+          status: 'draft' | 'sent' | 'accepted' | 'declined'
+          subtotal: number
+          cac_amount: number
+          total_amount: number
+          notes: string | null
+          property_data: Json | null
+          valid_until: string | null
+          sent_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          customer_id?: string | null
+          customer_name: string
+          customer_email?: string | null
+          address?: string | null
+          job_type?: string | null
+          status?: 'draft' | 'sent' | 'accepted' | 'declined'
+          subtotal?: number
+          cac_amount?: number
+          total_amount?: number
+          notes?: string | null
+          property_data?: Json | null
+          valid_until?: string | null
+          sent_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          customer_id?: string | null
+          customer_name?: string
+          customer_email?: string | null
+          address?: string | null
+          job_type?: string | null
+          status?: 'draft' | 'sent' | 'accepted' | 'declined'
+          subtotal?: number
+          cac_amount?: number
+          total_amount?: number
+          notes?: string | null
+          property_data?: Json | null
+          valid_until?: string | null
+          sent_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      estimate_line_items: {
+        Row: {
+          id: string
+          estimate_id: string
+          description: string
+          quantity: number
+          unit_price: number
+          line_total: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          estimate_id: string
+          description: string
+          quantity?: number
+          unit_price?: number
+          line_total?: number
+          created_at?: string
+        }
+        Update: {
+          description?: string
+          quantity?: number
+          unit_price?: number
+          line_total?: number
+        }
+        Relationships: []
+      }
       equipment: {
         Row: {
           id: string
