@@ -231,6 +231,15 @@ function CoreServices() {
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/lawn1.jpg" alt="" aria-hidden loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
       <div className="absolute inset-0 bg-white/80 backdrop-blur-2xl" />
+      {/* Faded cutout of the crew trimming, behind the glass cards (edges feathered in the file) */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/trimming-cutout.webp"
+        alt=""
+        aria-hidden
+        loading="lazy"
+        className="pointer-events-none select-none absolute -right-16 top-0 h-[80%] md:right-[3%] md:h-[108%] w-auto max-w-none opacity-55"
+      />
 
       <div className="relative max-w-6xl mx-auto px-5 py-20 md:py-24">
         <div className="max-w-2xl mb-12">
