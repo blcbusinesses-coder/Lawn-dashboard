@@ -13,17 +13,6 @@ import { createClient } from '@/lib/supabase/client'
 
 const NOBLE_TOWNS = ['Kendallville', 'Albion', 'Avilla', 'Rome City', 'Ligonier', 'Wolcottville', 'Cromwell', 'Wawaka']
 
-const WHY = [
-  { title: 'Never more than a third', desc: 'Cutting off too much at once stresses grass. A steady weekly schedule keeps every cut small and the lawn thick.' },
-  { title: 'Sharp blades, clean cut', desc: 'Dull blades tear grass and leave brown, frayed tips. We keep blades sharp so your lawn heals fast and looks even.' },
-  { title: 'Consistency beats catch-up', desc: 'Skipping a week in May means a scalped, stressed lawn. A fixed schedule means you never have to think about it.' },
-]
-
-const ADDONS = [
-  { img: '/lawn3.jpg', title: 'Yard cleanup', desc: 'Spring and fall cleanups, leaf removal and debris hauling.' },
-  { img: '/lawn2.jpg', title: 'Mulching', desc: 'Fresh mulch, edged and laid clean, so your beds match your lawn.' },
-]
-
 const FAQS = [
   { q: 'How does mowing pricing work?', a: 'Your price is based on the actual size of your lawn. We measure it with satellite and property data, so you get a real number up front. The price we text you is the price you pay.' },
   { q: 'Weekly or bi-weekly?', a: 'Weekly keeps grass shortest-cut and healthiest, and is what we recommend through the growing season. Bi-weekly works for slower-growing lawns or tighter budgets. You can change it any time.' },
@@ -108,7 +97,6 @@ function Nav() {
   const links = [
     ['#mowing', 'Lawn Mowing'],
     ['#how', 'How It Works'],
-    ['#addons', 'Add-ons'],
     ['/portfolio', 'Portfolio'],
     ['#areas', 'Service Areas'],
     ['#faq', 'FAQ'],
@@ -338,91 +326,22 @@ function OnlineQuote() {
   )
 }
 
-// ─── Why mowing right matters ──────────────────────────────────────────────────
-function WhyMowing() {
-  return (
-    <section className="py-20 md:py-28 bg-white">
-      <div className="max-w-6xl mx-auto px-5 grid md:grid-cols-2 gap-12 md:gap-20 items-center">
-        <div className="order-2 md:order-1 aspect-[4/3] md:aspect-[4/5]">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/lawn4.jpg" alt="Crisp trimmed edge along a driveway" loading="lazy" className="w-full h-full object-cover" />
-        </div>
-        <div className="order-1 md:order-2">
-          <Eyebrow>Why it matters</Eyebrow>
-          <h2 className="text-4xl md:text-[46px] font-extrabold tracking-tight leading-[1.06] text-gw-ink mb-10">
-            A great lawn is a mowing schedule.
-          </h2>
-          <div className="space-y-8">
-            {WHY.map(w => (
-              <div key={w.title} className="border-l-4 border-gw-forest pl-5">
-                <h3 className="font-bold text-[17px] mb-1.5 text-gw-ink">{w.title}</h3>
-                <p className="text-[15px] leading-relaxed text-gw-muted">{w.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-// ─── Add-ons (clearly secondary) ───────────────────────────────────────────────
-function AddOns() {
-  return (
-    <section id="addons" className="py-20 md:py-24 bg-gw-stone scroll-mt-20">
-      <div className="max-w-6xl mx-auto px-5">
-        <div className="max-w-2xl mb-10">
-          <Eyebrow>Add to your mowing</Eyebrow>
-          <h2 className="text-3xl md:text-[38px] font-extrabold tracking-tight leading-[1.08] text-gw-ink">
-            Need more than a mow? We have you covered.
-          </h2>
-        </div>
-        <div className="grid sm:grid-cols-2 gap-5 max-w-3xl">
-          {ADDONS.map(a => (
-            <div key={a.title} className="bg-white border border-gw-line">
-              <div className="aspect-[16/9] overflow-hidden">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={a.img} alt={`${a.title} by Gray Wolf Workers`} loading="lazy" className="w-full h-full object-cover" />
-              </div>
-              <div className="p-6">
-                <h3 className="text-lg font-bold tracking-tight mb-2 text-gw-ink">{a.title}</h3>
-                <p className="text-[14.5px] leading-relaxed text-gw-muted">{a.desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-// ─── Mid CTA ───────────────────────────────────────────────────────────────────
-function MidCTA() {
-  return (
-    <section className="py-16 md:py-20 bg-gw-pine">
-      <div className="max-w-6xl mx-auto px-5 lg:flex items-center justify-between gap-10">
-        <div className="mb-7 lg:mb-0 max-w-lg">
-          <h2 className="text-3xl md:text-[38px] font-extrabold text-white tracking-tight leading-tight mb-3">
-            Stop spending your weekends mowing.
-          </h2>
-          <p className="text-[15px] leading-relaxed text-white/75">
-            Your exact mowing price is one address away, and your first month is 25% off.
-          </p>
-        </div>
-        <div className="w-full lg:max-w-xl">
-          <AddressForm id="mid-address" />
-        </div>
-      </div>
-    </section>
-  )
-}
-
-// ─── Areas ─────────────────────────────────────────────────────────────────────
+// ─── Service areas: animated town carousel over a faded cutout ─────────────────
 function Areas() {
   return (
-    <section id="areas" className="py-20 md:py-24 bg-white scroll-mt-20">
-      <div className="max-w-6xl mx-auto px-5 grid md:grid-cols-2 gap-12 md:gap-20 items-center">
-        <div>
+    <section id="areas" className="relative overflow-hidden py-20 md:py-24 bg-white scroll-mt-20">
+      {/* Faded cutout of the crew blowing off a lawn (edges feathered in the file) */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/blower-cutout.webp"
+        alt=""
+        aria-hidden
+        loading="lazy"
+        className="pointer-events-none select-none absolute -right-24 top-0 h-[75%] md:right-[4%] md:h-[100%] w-auto max-w-none opacity-25 md:opacity-55"
+      />
+
+      <div className="relative max-w-6xl mx-auto px-5">
+        <div className="max-w-2xl mb-12">
           <Eyebrow>Where we mow</Eyebrow>
           <h2 className="text-4xl md:text-[46px] font-extrabold tracking-tight leading-[1.06] text-gw-ink mb-6">
             Proudly serving Noble County.
@@ -430,21 +349,37 @@ function Areas() {
           <p className="text-[15.5px] leading-relaxed text-gw-muted mb-4">
             We are based in Kendallville and mow for homeowners across Noble County. Staying local keeps schedules tight and prices honest.
           </p>
-          <p className="text-[15.5px] leading-relaxed text-gw-muted mb-8">
+          <p className="text-[15.5px] leading-relaxed text-gw-muted">
             Just outside the county line? Enter your address anyway. If we can get to you, we will.
           </p>
-          <CtaLink>Check My Address</CtaLink>
         </div>
-        <ul className="grid grid-cols-2 gap-3">
-          {NOBLE_TOWNS.map(t => (
-            <li key={t} className={`flex items-center gap-3 px-5 py-4 ${t === 'Kendallville' ? 'bg-gw-forest' : 'bg-gw-stone border border-gw-line'}`}>
-              <span className={`inline-block w-2 h-2 shrink-0 ${t === 'Kendallville' ? 'bg-gw-lime' : 'bg-gw-grass'}`} />
-              <span className={`font-bold text-[14.5px] ${t === 'Kendallville' ? 'text-white' : 'text-gw-ink'}`}>
-                {t}{t === 'Kendallville' ? ' (home base)' : ''}
-              </span>
-            </li>
+      </div>
+
+      {/* Carousel: two identical copies scroll left forever; the second is hidden from screen readers */}
+      <div className="relative town-marquee-mask" role="group" aria-label="Towns we serve">
+        <div className="town-marquee-track">
+          {[0, 1].map(copy => (
+            <ul key={copy} aria-hidden={copy === 1} className="flex shrink-0">
+              {NOBLE_TOWNS.map(t => (
+                <li key={t} className="mr-4">
+                  <div className={`flex items-center gap-3 px-8 py-6 min-w-[220px] backdrop-blur-md border ${
+                    t === 'Kendallville' ? 'bg-gw-forest border-gw-forest' : 'bg-gw-stone/85 border-gw-line shadow-[0_8px_30px_rgba(18,43,10,0.10)]'
+                  }`}>
+                    <span className={`inline-block w-2.5 h-2.5 shrink-0 ${t === 'Kendallville' ? 'bg-gw-lime' : 'bg-gw-grass'}`} />
+                    <span className={`font-extrabold text-[20px] tracking-tight whitespace-nowrap ${t === 'Kendallville' ? 'text-white' : 'text-gw-ink'}`}>
+                      {t}
+                    </span>
+                    {t === 'Kendallville' && <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-gw-lime whitespace-nowrap">Home base</span>}
+                  </div>
+                </li>
+              ))}
+            </ul>
           ))}
-        </ul>
+        </div>
+      </div>
+
+      <div className="relative max-w-6xl mx-auto px-5 mt-10">
+        <CtaLink>Check My Address</CtaLink>
       </div>
     </section>
   )
@@ -519,8 +454,7 @@ function Footer() {
             <p className="text-white font-bold text-sm mb-4">Services</p>
             <ul className="space-y-2.5 text-sm">
               <li><a href="#mowing" className="font-semibold text-gw-lime hover:text-white transition-colors">Lawn Mowing</a></li>
-              <li><a href="#addons" className="hover:text-white transition-colors">Yard Cleanup</a></li>
-              <li><a href="#addons" className="hover:text-white transition-colors">Mulching</a></li>
+              <li><a href="#mowing" className="hover:text-white transition-colors">Mulching</a></li>
               <li><Link href="/portfolio" className="hover:text-white transition-colors">Portfolio</Link></li>
             </ul>
           </div>
@@ -590,9 +524,6 @@ export default function HomePage() {
         <CoreServices />
         <Guarantees />
         <OnlineQuote />
-        <WhyMowing />
-        <AddOns />
-        <MidCTA />
         <Areas />
         <Faq />
         <FinalCTA />
