@@ -215,28 +215,6 @@ function Hero({ rating }: { rating: string | null }) {
   )
 }
 
-// ─── Proof strip: only real, owner-entered numbers ─────────────────────────────
-function ProofStrip({ stats }: { stats: { years: string | null; lawns: string | null; rating: string | null } }) {
-  const items = [
-    stats.lawns && [stats.lawns, 'Lawns mowed and maintained'],
-    stats.years && [stats.years, 'Years serving Northeast Indiana'],
-    stats.rating && [stats.rating, 'Average customer rating'],
-  ].filter(Boolean) as string[][]
-  if (items.length === 0) return null
-  return (
-    <section aria-label="By the numbers" className="bg-white border-b border-gw-line">
-      <div className="max-w-6xl mx-auto px-5 py-8 flex flex-wrap justify-center gap-x-14 gap-y-6">
-        {items.map(([n, l]) => (
-          <p key={l} className="flex items-baseline gap-3">
-            <span className="text-3xl font-extrabold text-gw-forest">{n}</span>
-            <span className="text-xs font-bold uppercase tracking-[0.08em] text-gw-subtle">{l}</span>
-          </p>
-        ))}
-      </div>
-    </section>
-  )
-}
-
 // ─── Core services (glassy white, directly under the hero) ─────────────────────
 // Photos are temporary stand-ins; swap the `img` paths when the real ones arrive.
 const CORE_SERVICES = [
@@ -291,10 +269,10 @@ function CoreServices() {
 
 // ─── Guarantees (thin band, uploaded photo behind frosted glass) ───────────────
 const GUARANTEES = [
-  { title: 'Accurate quotes', desc: 'Measured from satellite and property data. The price we text you is the price you pay.' },
-  { title: 'Full-service mowing', desc: 'Every mow includes trimming and edging, with driveways and walks blown clean.' },
-  { title: 'No contracts', desc: 'Cancel any time with a text. No cancellation fees.' },
-  { title: 'We make it right', desc: 'Not happy with a cut? Tell us within 24 hours and we will come back and fix it.' },
+  { title: 'Accurate Quotes', desc: 'Measured from satellite and property data. The price we text you is the price you pay.' },
+  { title: 'Full-Service Mowing', desc: 'Every mow includes trimming and edging, with driveways and walks blown clean.' },
+  { title: 'No Contracts', desc: 'Cancel anytime with a text. No cancellation fees.' },
+  { title: 'We Make It Right', desc: 'Not happy with a cut? Tell us within 24 hours and we will come back and fix it.' },
 ]
 
 function Guarantees() {
@@ -305,9 +283,9 @@ function Guarantees() {
       <div className="absolute inset-0 bg-gw-pine/55" />
 
       <div className="relative max-w-6xl mx-auto px-5 py-14 md:py-16">
-        <div className="bg-white/15 backdrop-blur-xl border border-white/30 px-6 py-8 md:px-10 md:py-10">
+        <div className="bg-white/[0.12] backdrop-blur-xl border border-white/25 px-6 py-8 md:px-10 md:py-10">
           <h2 id="guarantees-heading" className="text-2xl md:text-[30px] font-extrabold tracking-tight text-white mb-8">
-            The Gray Wolf guarantee
+            The Gray Wolf Guarantee
           </h2>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-7">
             {GUARANTEES.map(g => (
@@ -602,7 +580,6 @@ export default function HomePage() {
       <Nav />
       <main>
         <Hero rating={stats.rating} />
-        <ProofStrip stats={stats} />
         <CoreServices />
         <Guarantees />
         <HowItWorks />
