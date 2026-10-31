@@ -13,15 +13,6 @@ import { createClient } from '@/lib/supabase/client'
 
 const NOBLE_TOWNS = ['Kendallville', 'Albion', 'Avilla', 'Rome City', 'Ligonier', 'Wolcottville', 'Cromwell', 'Wawaka']
 
-const MOWING_INCLUDES = [
-  'Mowing at the right height, with sharp blades',
-  'Trimming and edging at every visit',
-  'Driveways and walks blown clean',
-  'Clippings handled',
-  'Weekly or bi-weekly, your choice',
-  'No contracts, cancel with a text',
-]
-
 const STEPS = [
   { n: '1', title: 'Enter your address', desc: 'That is all we need. No twelve-field form, no waiting for a callback.' },
   { n: '2', title: 'Get your mowing price', desc: 'We measure your lawn from satellite and property data and text you a real price, usually in under a minute.' },
@@ -246,37 +237,91 @@ function ProofStrip({ stats }: { stats: { years: string | null; lawns: string | 
   )
 }
 
-// ─── The mowing plan (pine band, immediately under the hero) ───────────────────
-function MowingPlan() {
+// ─── Core services (glassy white, directly under the hero) ─────────────────────
+// Photos are temporary stand-ins; swap the `img` paths when the real ones arrive.
+const CORE_SERVICES = [
+  { img: '/lawn1.jpg', title: 'Mowing', desc: 'Weekly or bi-weekly cuts with sharp blades, on a schedule you can count on.' },
+  { img: '/lawn2.jpg', title: 'Mulching', desc: 'Fresh mulch laid clean so your beds look as good as your lawn.' },
+  { img: '/lawn3.jpg', title: 'Bush Trimming', desc: 'Shrubs and hedges shaped neatly and the clippings cleaned up.' },
+  { img: '/lawn4.jpg', title: 'Edging', desc: 'Crisp lines along driveways, walks and beds, at every visit.' },
+]
+
+function CoreServices() {
   return (
-    <section id="mowing" className="bg-gw-pine scroll-mt-20">
-      <div className="max-w-6xl mx-auto px-5 py-20 md:py-28 grid md:grid-cols-2 gap-12 md:gap-16 items-center">
-        <div>
-          <Eyebrow light>Weekly lawn mowing</Eyebrow>
-          <h2 className="text-4xl md:text-[46px] font-extrabold tracking-tight leading-[1.06] text-white mb-5">
-            Mowing is what we do. Everything else is a bonus.
+    <section id="mowing" className="relative overflow-hidden scroll-mt-20">
+      {/* Soft lawn wash behind the glass so the blur has something to frost */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/lawn1.jpg" alt="" aria-hidden loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+      <div className="absolute inset-0 bg-white/80 backdrop-blur-2xl" />
+
+      <div className="relative max-w-6xl mx-auto px-5 py-20 md:py-24">
+        <div className="max-w-2xl mb-12">
+          <Eyebrow>What we do</Eyebrow>
+          <h2 className="text-4xl md:text-[46px] font-extrabold tracking-tight leading-[1.06] text-gw-ink mb-4">
+            Four things, done right.
           </h2>
-          <p className="text-[16px] leading-relaxed text-white/80 mb-8 max-w-lg">
-            One simple service done right: your lawn cut, trimmed and cleaned up on a schedule you never have to think about.
+          <p className="text-[16px] leading-relaxed text-gw-muted">
+            Mowing is the heart of what we do, and everything else keeps your property looking sharp all season.
           </p>
-          <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-3.5 mb-10">
-            {MOWING_INCLUDES.map(item => (
-              <li key={item} className="flex gap-3 text-[14.5px] font-medium text-white/90 leading-snug">
-                <svg aria-hidden className="w-5 h-5 shrink-0 text-gw-lime mt-px" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        </div>
+
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {CORE_SERVICES.map(s => (
+            <div key={s.title} className="bg-white/70 backdrop-blur-md border border-white shadow-[0_8px_30px_rgba(18,43,10,0.08)] flex flex-col">
+              <div className="aspect-[4/3] overflow-hidden">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={s.img} alt={`${s.title} by Gray Wolf Workers`} loading="lazy" className="w-full h-full object-cover" />
+              </div>
+              <div className="p-6">
+                <h3 className="text-xl font-bold tracking-tight mb-2 text-gw-ink">{s.title}</h3>
+                <p className="text-[14.5px] leading-relaxed text-gw-muted">{s.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-12 flex flex-col sm:flex-row sm:items-center gap-4">
+          <CtaLink>See My Mowing Price</CtaLink>
+          <p className="text-[13px] font-semibold text-gw-muted">New customers get 25% off their first month.</p>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─── Guarantees (thin band, uploaded photo behind frosted glass) ───────────────
+const GUARANTEES = [
+  { title: 'Accurate quotes', desc: 'Measured from satellite and property data. The price we text you is the price you pay.' },
+  { title: 'Full-service mowing', desc: 'Every mow includes trimming and edging, with driveways and walks blown clean.' },
+  { title: 'No contracts', desc: 'Cancel any time with a text. No cancellation fees.' },
+  { title: 'We make it right', desc: 'Not happy with a cut? Tell us within 24 hours and we will come back and fix it.' },
+]
+
+function Guarantees() {
+  return (
+    <section className="relative overflow-hidden" aria-labelledby="guarantees-heading">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/lawn-guarantee.jpg" alt="" aria-hidden loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+      <div className="absolute inset-0 bg-gw-pine/55" />
+
+      <div className="relative max-w-6xl mx-auto px-5 py-14 md:py-16">
+        <div className="bg-white/15 backdrop-blur-xl border border-white/30 px-6 py-8 md:px-10 md:py-10">
+          <h2 id="guarantees-heading" className="text-2xl md:text-[30px] font-extrabold tracking-tight text-white mb-8">
+            The Gray Wolf guarantee
+          </h2>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-7">
+            {GUARANTEES.map(g => (
+              <div key={g.title} className="flex gap-3">
+                <svg aria-hidden className="w-5 h-5 shrink-0 text-gw-lime mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                 </svg>
-                {item}
-              </li>
+                <div>
+                  <h3 className="font-bold text-[16px] text-white mb-1">{g.title}</h3>
+                  <p className="text-[13.5px] leading-relaxed text-white/90">{g.desc}</p>
+                </div>
+              </div>
             ))}
-          </ul>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            <CtaLink light>See My Mowing Price</CtaLink>
-            <p className="text-[13px] font-semibold text-gw-gold">New customers: 25% off your first month</p>
           </div>
-        </div>
-        <div className="aspect-[4/3] md:aspect-[4/5]">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/lawn1.jpg" alt="Freshly mowed stripes on a residential lawn" loading="lazy" className="w-full h-full object-cover" />
         </div>
       </div>
     </section>
@@ -558,7 +603,8 @@ export default function HomePage() {
       <main>
         <Hero rating={stats.rating} />
         <ProofStrip stats={stats} />
-        <MowingPlan />
+        <CoreServices />
+        <Guarantees />
         <HowItWorks />
         <WhyMowing />
         <AddOns />
