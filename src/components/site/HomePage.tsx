@@ -13,12 +13,6 @@ import { createClient } from '@/lib/supabase/client'
 
 const NOBLE_TOWNS = ['Kendallville', 'Albion', 'Avilla', 'Rome City', 'Ligonier', 'Wolcottville', 'Cromwell', 'Wawaka']
 
-const STEPS = [
-  { n: '1', title: 'Enter your address', desc: 'That is all we need. No twelve-field form, no waiting for a callback.' },
-  { n: '2', title: 'Get your mowing price', desc: 'We measure your lawn from satellite and property data and text you a real price, usually in under a minute.' },
-  { n: '3', title: 'We mow. You relax.', desc: 'Pick weekly or bi-weekly and your lawn stays sharp all season.' },
-]
-
 const WHY = [
   { title: 'Never more than a third', desc: 'Cutting off too much at once stresses grass. A steady weekly schedule keeps every cut small and the lawn thick.' },
   { title: 'Sharp blades, clean cut', desc: 'Dull blades tear grass and leave brown, frayed tips. We keep blades sharp so your lawn heals fast and looks even.' },
@@ -315,26 +309,30 @@ function Guarantees() {
   )
 }
 
-// ─── How it works ──────────────────────────────────────────────────────────────
-function HowItWorks() {
+// ─── Online quotes (replaces the three-step section) ──────────────────────────
+function OnlineQuote() {
   return (
-    <section id="how" className="py-20 md:py-24 bg-gw-stone scroll-mt-20">
-      <div className="max-w-6xl mx-auto px-5">
-        <div className="max-w-2xl mb-12">
-          <Eyebrow>How it works</Eyebrow>
-          <h2 className="text-4xl md:text-[46px] font-extrabold tracking-tight leading-[1.06] text-gw-ink">
-            From address to mowed lawn in three steps.
-          </h2>
-        </div>
-        <ol className="grid md:grid-cols-3 gap-10 md:gap-8">
-          {STEPS.map(s => (
-            <li key={s.n} className="border-t-4 border-gw-forest pt-6">
-              <p className="text-[56px] font-extrabold leading-none text-gw-forest mb-4" aria-hidden>{s.n}</p>
-              <h3 className="text-xl font-bold tracking-tight mb-3 text-gw-ink">{s.title}</h3>
-              <p className="text-[15px] leading-relaxed text-gw-muted">{s.desc}</p>
-            </li>
-          ))}
-        </ol>
+    <section id="how" className="py-20 md:py-28 bg-gw-stone scroll-mt-20">
+      <div className="max-w-4xl mx-auto px-5 text-center">
+        <Eyebrow>Online quotes</Eyebrow>
+        <h2 className="text-4xl md:text-[56px] font-extrabold tracking-tight leading-[1.04] text-gw-ink mb-6">
+          Your exact mowing price in under 1 minute.
+        </h2>
+        <p className="text-[18px] md:text-[20px] leading-relaxed text-gw-muted max-w-2xl mx-auto mb-4">
+          Completely online. No phone calls, no waiting for a callback, no salespeople at your door.
+          Just type your address and we measure your lawn from satellite and property data.
+        </p>
+        <p className="text-[18px] md:text-[20px] leading-relaxed font-semibold text-gw-ink max-w-2xl mx-auto mb-12">
+          The price we show you is the price you pay.
+        </p>
+
+        <Link
+          href="/get-a-quote"
+          className={`quote-wiggle flex w-full items-center justify-center min-h-24 md:min-h-28 px-6 text-2xl md:text-4xl font-extrabold tracking-tight text-white bg-gw-grass hover:bg-gw-forest transition-colors ${BTN_FOCUS}`}
+        >
+          Get My Quote in Under 1 Minute
+        </Link>
+        <p className="mt-4 text-[13px] font-medium text-gw-subtle">No contracts. New customers get 25% off their first month.</p>
       </div>
     </section>
   )
@@ -591,7 +589,7 @@ export default function HomePage() {
         <Hero rating={stats.rating} />
         <CoreServices />
         <Guarantees />
-        <HowItWorks />
+        <OnlineQuote />
         <WhyMowing />
         <AddOns />
         <MidCTA />

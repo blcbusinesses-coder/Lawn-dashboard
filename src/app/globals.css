@@ -138,3 +138,18 @@
     @apply font-sans;
   }
 }
+/* Quote button: a small wiggle every ~4s to draw the eye */
+@keyframes quote-wiggle {
+  0%, 82%, 100% { transform: rotate(0) scale(1); }
+  85% { transform: rotate(-1.2deg) scale(1.02); }
+  88% { transform: rotate(1.2deg) scale(1.02); }
+  91% { transform: rotate(-0.9deg) scale(1.02); }
+  94% { transform: rotate(0.9deg) scale(1.02); }
+  97% { transform: rotate(0) scale(1); }
+}
+.quote-wiggle {
+  animation: quote-wiggle 4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .quote-wiggle { animation: none; }
+}
